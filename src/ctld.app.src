@@ -1,0 +1,18 @@
+{application, ctld,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+		  crypto,
+                  sasl,
+		  eradius
+                 ]},
+  {mod, { ctld_app, []}},
+  {env, [
+	 {ipctld_port, 7744},
+	 {ipcp_ouraddr, {10,0,0,1}}
+	]}
+ ]}.
