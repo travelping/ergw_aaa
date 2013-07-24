@@ -42,7 +42,7 @@ authenticate(_From, Session, State0 = #state{auth_server = NAS}) ->
     Req = #radius_request{
       cmd = request,
       attrs = Attrs,
-      msg_hmac = true},
+      msg_hmac = false},
     {Verdict, SessionOpts0, State} =
 	radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
     SessionOpts =
@@ -74,7 +74,7 @@ start(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
     Req = #radius_request{
 	     cmd = accreq,
 	     attrs = Attrs,
-	     msg_hmac = true},
+	     msg_hmac = false},
     {ok, NAS} = application:get_env(radius_acct_server),
     eradius_client:send_request(NAS, Req),
 
@@ -104,7 +104,7 @@ interim(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
     Req = #radius_request{
 	     cmd = accreq,
 	     attrs = Attrs,
-	     msg_hmac = true},
+	     msg_hmac = false},
     eradius_client:send_request(NAS, Req),
 
     SessionOpts = [{'Last-Interim-Update', Now}],
@@ -133,7 +133,7 @@ stop(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
     Req = #radius_request{
 	     cmd = accreq,
 	     attrs = Attrs,
-	     msg_hmac = true},
+	     msg_hmac = false},
     eradius_client:send_request(NAS, Req),
 
     SessionOpts = [{'Accounting-Stop', Now}],
