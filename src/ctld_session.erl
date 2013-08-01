@@ -42,10 +42,10 @@ authorize(Session, SessionOpts) when is_list(SessionOpts) ->
     gen_server:call(Session, {authorize, SessionOpts}, ?AAA_TIMEOUT).
 
 start(Session, SessionOpts) when is_list(SessionOpts) ->
-    gen_server:cast(Session, {start, SessionOpts}, ?AAA_TIMEOUT).
+    gen_server:cast(Session, {start, SessionOpts}).
 
 stop(Session, SessionOpts) when is_list(SessionOpts) ->
-    gen_server:cast(Session, {stop, SessionOpts}, ?AAA_TIMEOUT).
+    gen_server:cast(Session, {stop, SessionOpts}).
 
 terminate(Session) ->
     gen_server:cast(Session, terminate).
