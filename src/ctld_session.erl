@@ -168,7 +168,8 @@ handle_info({'EXIT', From, _Reason}, State = #state{leader = From, auth_state = 
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(Reason, State) ->
+    lager:debug("ctld Session terminating with state ~p with reason ~p", [State, Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
