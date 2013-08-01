@@ -158,10 +158,10 @@ handle_info({timeout, TimerRef, session_timeout},
 
 handle_info({'EXIT', From, _Reason}, State = #state{leader = From, auth_state = AuthState}) ->
     if AuthState == running ->
-	    a3cast(stop, State),
-	    stop_session_timers(State);
+           a3cast(stop, State),
+           stop_session_timers(State);
        true ->
-	    ok
+           ok
     end,
     {stop, normal, State};
 

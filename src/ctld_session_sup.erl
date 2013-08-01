@@ -20,7 +20,7 @@ start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 new_session(LMod, Leader, A3Handler, A3Opts, SessionData) ->
-     supervisor:start_child(?SERVER, [LMod, Leader, A3Handler, A3Opts, SessionData]).
+    supervisor:start_child(?SERVER, [LMod, Leader, A3Handler, A3Opts, SessionData]).
 
 %% ===================================================================
 %% Supervisor callbacks

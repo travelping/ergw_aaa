@@ -123,7 +123,7 @@ stop(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
     ExtraAttrs0 = accounting_options(State, []),
     ExtraAttrs = session_options(Session, ExtraAttrs0),
     Attrs = [
-	     {?RStatus_Type,    ?RStatus_Type_Start},
+	     {?RStatus_Type,    ?RStatus_Type_Stop},
 	     {?User_Name,       UserName},
 	     {?Service_Type,    2},
 	     {?Framed_Protocol, 1},
