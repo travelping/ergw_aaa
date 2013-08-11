@@ -169,7 +169,7 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(Reason, State) ->
-    lager:debug("ctld Session terminating with state ~p with reason ~p", [State, Reason]),
+    error_logger:info_msg("ctld Session terminating with state ~p with reason ~p~n", [State, Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
