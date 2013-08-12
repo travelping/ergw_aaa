@@ -40,15 +40,15 @@ authenticate(_From, Session, State0 = #state{auth_server = NAS}) ->
 	     {?NAS_Identifier,  State0#state.nas_id}
 	     | ExtraAttrs],
     Req = #radius_request{
-      cmd = request,
-      attrs = Attrs,
-      msg_hmac = false},
+             cmd = request,
+             attrs = Attrs,
+             msg_hmac = false},
     {Verdict, SessionOpts0, State} =
-	radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
+        radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
     SessionOpts =
-	if Verdict /= success -> [];
-	   true               -> SessionOpts0
-	end,
+    if Verdict /= success -> [];
+       true               -> SessionOpts0
+    end,
     {reply, Verdict, SessionOpts, State#state{auth_state = Verdict}}.
 
 authorize(_From, _Session, State = #state{auth_state = Verdict}) ->
@@ -233,11 +233,11 @@ session_options(_Key, _Value, Acc) ->
 radius_response({ok, Response}, {_, _, Secret}, State) ->
     radius_reply(eradius_lib:decode_request(Response, Secret), State);
 radius_response(Response, _, State) ->
-    io:format("RADIUS failed with ~p~n", [Response]),
+    lager:error("RADIUS failed with ~p", [Response]),
     {fail, [], State}.
 
 radius_reply(#radius_request{cmd = accept} = Reply, State0) ->
-    io:format("RADIUS Reply: ~p~n", [Reply]),
+    lager:debug("RADIUS Reply: ~p", [Reply]),
     case process_radius_attrs(fun process_pap_attrs/2, Reply, success, State0) of
 	{success, _, _} = Result ->
 	    Result;
@@ -245,10 +245,10 @@ radius_reply(#radius_request{cmd = accept} = Reply, State0) ->
 	    {fail, [], State0}
     end;
 radius_reply(#radius_request{cmd = reject} = Reply, State) ->
-    io:format("RADIUS failed with ~p~n", [Reply]),
+    lager:debug("RADIUS failed with ~p", [Reply]),
     {fail, [], State};
 radius_reply(Reply, State) ->
-    io:format("RADIUS failed with ~p~n", [Reply]),
+    lager:debug("RADIUS failed with ~p", [Reply]),
     {fail, [], State}.
 
 %% iterate over the RADIUS attributes
@@ -314,13 +314,13 @@ process_gen_attrs({#attribute{id = ?TP_TLS_Pre_Shared_Key}, PSK}, Acc) ->
     session_opt('TLS-Pre-Shared-Key', PSK, Acc);
 
 process_gen_attrs({#attribute{name = Name}, Value} , Acc) ->
-    io:format("unhandled reply AVP: ~s: ~p~n", [Name, Value]),
+    lager:debug("unhandled reply AVP: ~s: ~p", [Name, Value]),
     Acc;
 
 process_gen_attrs({Attr, Value} , Acc) ->
-    io:format("unhandled undecoded reply AVP: ~w: ~p~n", [Attr, Value]),
+    lager:debug("unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
     Acc.
 
 process_unexpected_value({#attribute{name = Name}, Value} , Acc) ->
-    io:format("unexpected Value in AVP: ~s: ~p~n", [Name, Value]),
+    lager:debug("unexpected Value in AVP: ~s: ~p", [Name, Value]),
     verdict(fail, Acc).
