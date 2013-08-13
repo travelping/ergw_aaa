@@ -122,7 +122,8 @@ handle_cast({start, SessionOpts}, State0 = #state{session = Session}) ->
 handle_cast({stop, SessionOpts}, State0 = #state{session = Session}) ->
     State1 = a3cast(stop, State0#state{session = merge(Session, SessionOpts)}),
     State = stop_session_timers(State1),
-    {stop, normal, State#state{auth_state = stopped}};
+    %{stop, normal, State#state{auth_state = stopped}};
+    {noreply, State#state{auth_state = stopped}};
 
 handle_cast(terminate, State) ->
     lager:info("Handling terminate request: ~p", [State]),
