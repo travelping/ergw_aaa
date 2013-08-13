@@ -125,6 +125,7 @@ handle_cast({stop, SessionOpts}, State0 = #state{session = Session}) ->
     {noreply, State#state{auth_state = stopped}};
 
 handle_cast(terminate, State) ->
+    lager:info("Handling terminate request: ~p", [State]),
     {stop, normal, State};
 
 handle_cast(Event, State) ->
@@ -156,7 +157,8 @@ handle_info({timeout, TimerRef, session_timeout},
     LMod:session_timeout(Leader, SessionId, Session),
     {noreply, State#state{session_timeout = undefined}};
 
-handle_info({'EXIT', From, _Reason}, State = #state{leader = From, auth_state = AuthState}) ->
+handle_info({'EXIT', From, Reason}, State = #state{leader = From, auth_state = AuthState}) ->
+    lager:error("Received EXIT signal from ~p with reason ~p", [From, Reason]),
     if AuthState == running ->
            a3cast(stop, State),
            stop_session_timers(State);
