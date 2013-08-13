@@ -67,9 +67,9 @@ set(Session, Values) when is_list(Values) ->
 %%===================================================================
 
 init([LMod, Leader, A3Handler, A3Opts, SessionData]) ->
+    process_flag(trap_exit, true),
     case A3Handler:init(A3Opts) of
 	{ok, A3State} ->
-	    process_flag(trap_exit, true),
 
 %	    SessionId = session_id:new(),
 	    SessionId = 1,
@@ -122,7 +122,7 @@ handle_cast({start, SessionOpts}, State0 = #state{session = Session}) ->
 handle_cast({stop, SessionOpts}, State0 = #state{session = Session}) ->
     State1 = a3cast(stop, State0#state{session = merge(Session, SessionOpts)}),
     State = stop_session_timers(State1),
-    {noreply, State#state{auth_state = stopped}};
+    {stop, normal, State#state{auth_state = stopped}};
 
 handle_cast(terminate, State) ->
     lager:info("Handling terminate request: ~p", [State]),
@@ -167,7 +167,8 @@ handle_info({'EXIT', From, Reason}, State = #state{leader = From, auth_state = A
     end,
     {stop, normal, State};
 
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+    lager:warning("Received unhandled message ~p", [Info]),
     {noreply, State}.
 
 terminate(Reason, State) ->
