@@ -15,7 +15,7 @@
 %% API
 %%===================================================================
 association(StationMac, WtpIp, Opts) ->
-    NAS = proplists:get_value(radius_auth_server, Opts, {{127,0,0,1}, 1812, <<"secret">>}),
+    NAS = proplists:get_value(radius_auth_server, Opts, false),
     NasId = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
     Attrs = [
              {?Calling_Station_Id, StationMac},
@@ -28,7 +28,12 @@ association(StationMac, WtpIp, Opts) ->
              cmd = request,
              attrs = Attrs,
              msg_hmac = false},
-    radius_response(eradius_client:send_request(NAS, Req), NAS).
+    case NAS of
+        false ->
+            success;
+        _ ->
+            radius_response(eradius_client:send_request(NAS, Req), NAS)
+    end.
 
 radius_response({ok, Response}, {_, _, Secret}) ->
     radius_reply(eradius_lib:decode_request(Response, Secret));
