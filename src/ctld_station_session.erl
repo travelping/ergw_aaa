@@ -36,7 +36,7 @@ association(StationMac, WtpIp, Opts) ->
     end.
 
 disassociation(StationMac, WtpIp, Opts) ->
-    NAS = proplists:get_value(radius_auth_server, Opts, false),
+    NAS = proplists:get_value(radius_acct_server, Opts, false),
     NasId = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
     Attrs = [
              {?Calling_Station_Id, StationMac},
