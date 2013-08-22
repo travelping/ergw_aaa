@@ -1,7 +1,7 @@
 -module(ctld_station_session).
 
 %% AAA API
--export([association/3]).
+-export([association/3, disassociation/3]).
 
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
@@ -26,6 +26,27 @@ association(StationMac, WtpIp, Opts) ->
             ],
     Req = #radius_request{
              cmd = request,
+             attrs = Attrs,
+             msg_hmac = false},
+    case NAS of
+        false ->
+            success;
+        _ ->
+            radius_response(eradius_client:send_request(NAS, Req), NAS)
+    end.
+
+disassociation(StationMac, WtpIp, Opts) ->
+    NAS = proplists:get_value(radius_auth_server, Opts, false),
+    NasId = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
+    Attrs = [
+             {?Calling_Station_Id, StationMac},
+             {?TP_Location_Id, ip_to_bin(WtpIp)},
+             {?NAS_Identifier, NasId},
+             {?Acct_Terminate_Cause, ?RTCUser_Request},
+             {?RStatus_Type, ?RStatus_Type_Stop}
+            ],
+    Req = #radius_request{
+             cmd = accreq,
              attrs = Attrs,
              msg_hmac = false},
     case NAS of
