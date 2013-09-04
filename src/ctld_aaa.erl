@@ -15,4 +15,3 @@
     a3state() | {session(), a3state()}.
 -callback stop(Session :: session(), State :: a3state()) ->
     a3state() | {session(), a3state()}.
-

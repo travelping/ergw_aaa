@@ -18,15 +18,16 @@
 		lmod, leader,
 		a3handler, a3state,
 		session,
-
 		auth_state = stopped,
 		session_timeout,
 		interim_accounting
 }).
 
 -define(AAA_TIMEOUT, (30 * 1000)).      %% 30sec for all AAA gen_server:call timeouts
--define(SESSION_TIMERS, [{#state.session_timeout,    'Session-Timeout',    session_timeout},
-			 {#state.interim_accounting, 'Interim-Accounting', interim_accounting}]).
+-define(SESSION_TIMERS, [
+                         {#state.session_timeout, 'Session-Timeout', session_timeout},
+                         {#state.interim_accounting, 'Interim-Accounting', interim_accounting}
+                        ]).
 
 %%===================================================================
 %% API
@@ -234,11 +235,11 @@ a3cast(F, State = #state{a3handler = A3Handler,
 			 a3state = A3State0,
 			 session = Session}) ->
     case A3Handler:F(Session, A3State0) of
-	{SessionOpts, A3State} ->
-	    State#state{a3state = A3State,
-			session = merge(Session, SessionOpts)};
-	A3State ->
-	    State#state{a3state = A3State}
+        {SessionOpts, A3State} ->
+            State#state{a3state = A3State,
+                        session = merge(Session, SessionOpts)};
+        A3State ->
+            State#state{a3state = A3State}
     end.
 
 %%===================================================================

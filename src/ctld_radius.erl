@@ -110,21 +110,16 @@ interim(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
     SessionOpts = [{'Last-Interim-Update', Now}],
     {to_session(SessionOpts), State}.
 
-stop(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
+stop(Session, State = #state{acct_server = NAS}) ->
     Now = now_ticks(),
 
-    UserName0 = attr_get('Username', Session, <<>>),
-    UserName = case proplists:get_value('Username', Accounting) of
-		   undefined -> UserName0;
-		   Value -> Value
-	       end,
     Start = attr_get('Accounting-Start', Session, Now),
 
     ExtraAttrs0 = accounting_options(State, []),
     ExtraAttrs = session_options(Session, ExtraAttrs0),
     Attrs = [
 	     {?RStatus_Type,    ?RStatus_Type_Stop},
-	     {?User_Name,       UserName},
+	     {?User_Name,       attr_get('Username', Session, <<>>)},
 	     {?Service_Type,    2},
 	     {?Framed_Protocol, 1},
 	     {?NAS_Identifier,  State#state.nas_id},
@@ -134,7 +129,9 @@ stop(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
 	     cmd = accreq,
 	     attrs = Attrs,
 	     msg_hmac = false},
-    eradius_client:send_request(NAS, Req),
+
+    Res = eradius_client:send_request(NAS, Req),
+    lager:debug("Accounting stop response from ~p: ~p : ~p", [NAS, Req, Res]),
 
     SessionOpts = [{'Accounting-Stop', Now}],
     {to_session(SessionOpts), State}.
