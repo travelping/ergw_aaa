@@ -32,7 +32,7 @@ association(StationMac, WtpIp, Opts) ->
         false ->
             success;
         _ ->
-            radius_response(eradius_client:send_request(NAS, Req), NAS)
+            radius_response(Req, eradius_client:send_request(NAS, Req), NAS)
     end.
 
 disassociation(StationMac, WtpIp, Opts) ->
@@ -53,23 +53,23 @@ disassociation(StationMac, WtpIp, Opts) ->
         false ->
             success;
         _ ->
-            radius_response(eradius_client:send_request(NAS, Req), NAS)
+            radius_response(Req, eradius_client:send_request(NAS, Req), NAS)
     end.
 
-radius_response({ok, Response}, {_, _, Secret}) ->
-    radius_reply(eradius_lib:decode_request(Response, Secret));
-radius_response(Response, _) ->
-    lager:error("RADIUS failed with ~p", [Response]),
+radius_response(Req, {ok, Response}, {_, _, Secret}) ->
+    radius_reply(Req, eradius_lib:decode_request(Response, Secret));
+radius_response(Req, Response, _) ->
+    lager:error("RADIUS request ~p failed with ~p", [Req, Response]),
     fail.
 
-radius_reply(#radius_request{cmd = accept} = Reply) ->
+radius_reply(_, #radius_request{cmd = accept} = Reply) ->
     lager:debug("RADIUS Reply: ~p", [Reply]),
     success;
-radius_reply(#radius_request{cmd = reject} = Reply) ->
-    lager:debug("RADIUS failed with ~p", [Reply]),
+radius_reply(Req, #radius_request{cmd = reject} = Reply) ->
+    lager:debug("RADIUS request ~p failed with ~p", [Req, Reply]),
     fail;
-radius_reply(Reply) ->
-    lager:debug("RADIUS failed with ~p", [Reply]),
+radius_reply(Req, Reply) ->
+    lager:debug("RADIUS request ~p failed with ~p", [Req, Reply]),
     fail.
 
 ip_to_bin(Ip) when is_binary(Ip) ->
