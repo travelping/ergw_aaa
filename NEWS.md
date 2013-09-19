@@ -3,10 +3,11 @@ ctld
 
 Erlang CTLD Radius session implementation.
 
-Version 1.0.1 - xx Sep 2013
+Version 1.0.1 - 19 Sep 2013
 ---------------------------
 
 * Support for triggered interim and batched interim accounting updates
+* Support for Travelping CAPWAP Attributes in Accounting
 
 Version 1.0.0 - 17 Sep 2013
 ---------------------------

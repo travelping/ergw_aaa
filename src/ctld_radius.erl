@@ -223,6 +223,38 @@ session_options('Authentication-Method', {'TLS', 'Pre-Shared-Key'}, Acc) ->
 session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
 
+%% TP CAPWAP extensions - generic
+
+session_options('TP-CAPWAP-Timestamp', Value, Acc) ->
+    [{?TP_CAPWAP_Timestamp, Value}|Acc];
+session_options('TP-CAPWAP-WTP-Version', Value, Acc) ->
+    [{?TP_CAPWAP_WTP_Version, Value}|Acc];
+session_options('TP-CAPWAP-Session-Id', Value, Acc) ->
+    [{?TP_CAPWAP_Session_Id, Value}|Acc];
+session_options('TP-CAPWAP-Radio-Id', Value, Acc) ->
+    [{?TP_CAPWAP_Radio_Id, Value}|Acc];
+
+%% TP CAPWAP extensions - statistics
+
+session_options('TP-CAPWAP-WWAN-Id', Value, Acc) ->
+    [{?TP_CAPWAP_WWAN_Id, Value}|Acc];
+session_options('TP-CAPWAP-WWAN-RAT', VALUE, ACC) ->
+    [{?TP_CAPWAP_WWAN_RAT, VALUE}|ACC];
+session_options('TP-CAPWAP-WWAN-RSSi', Value, Acc) ->
+    [{?TP_CAPWAP_WWAN_RSSi, Value}|Acc];
+session_options('TP-CAPWAP-WWAN-CREG', VALUE, ACC) ->
+    [{?TP_CAPWAP_WWAN_CREG, VALUE}|ACC];
+session_options('TP-CAPWAP-WWAN-LAC', VALUE, ACC) ->
+    [{?TP_CAPWAP_WWAN_LAC, VALUE}|ACC];
+session_options('TP-CAPWAP-WWAN-Latency', Value, Acc) ->
+    [{?TP_CAPWAP_WWAN_Latency, Value}|Acc];
+session_options('TP-CAPWAP-WWAN-MCC', VALUE, ACC) ->
+    [{?TP_CAPWAP_WWAN_MCC, VALUE}|ACC];
+session_options('TP-CAPWAP-WWAN-MNC', VALUE, ACC) ->
+    [{?TP_CAPWAP_WWAN_MNC, VALUE}|ACC];
+session_options('TP-CAPWAP-WWAN-Cell-Id', Value, Acc) ->
+    [{?TP_CAPWAP_WWAN_Cell_Id, Value}|Acc];
+
 session_options(_Key, _Value, Acc) ->
     Acc.
 
