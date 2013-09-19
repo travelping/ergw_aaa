@@ -75,7 +75,6 @@ start(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
 	     cmd = accreq,
 	     attrs = Attrs,
 	     msg_hmac = false},
-    {ok, NAS} = application:get_env(radius_acct_server),
     eradius_client:send_request(NAS, Req),
 
     SessionOpts = [{'Accounting-Start', Now}],
