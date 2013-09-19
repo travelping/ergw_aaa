@@ -6,7 +6,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 %% Session Process API
--export([start_link/5, authenticate/2, authorize/2, start/2, stop/2, terminate/1, get/1, get/2, set/2, set/3]).
+-export([start_link/5, authenticate/2, authorize/2,
+	 start/2, interim/2, interim_batch/2, stop/2,
+	 terminate/1, get/1, get/2, set/2, set/3]).
 
 %% Session Object API
 -export([attr_get/2, attr_get/3, attr_set/3,
@@ -44,6 +46,12 @@ authorize(Session, SessionOpts) when is_list(SessionOpts) ->
 
 start(Session, SessionOpts) when is_list(SessionOpts) ->
     gen_server:cast(Session, {start, SessionOpts}).
+
+interim(Session, SessionOpts) when is_list(SessionOpts) ->
+    gen_server:cast(Session, {interim, SessionOpts}).
+
+interim_batch(Session, SessionOptsList) when is_list(SessionOptsList) ->
+    gen_server:cast(Session, {interim_batch, SessionOptsList}).
 
 stop(Session, SessionOpts) when is_list(SessionOpts) ->
     gen_server:cast(Session, {stop, SessionOpts}).
@@ -119,6 +127,23 @@ handle_cast({start, SessionOpts}, State0 = #state{session = Session}) ->
     State1 = a3cast(start, State0#state{session = merge(Session, SessionOpts)}),
     State = start_session_timers(State1),
     {noreply, State#state{auth_state = running}};
+
+handle_cast({interim, SessionOpts}, State0 = #state{session = Session}) ->
+    State1 = a3cast(interim, State0#state{session = merge(Session, SessionOpts)}),
+    State = start_session_timer(#state.interim_accounting, attr_get('Interim-Accounting', Session),
+					interim_accounting, State1),
+    {noreply, State};
+
+handle_cast({interim_batch, SessionOptsList}, State0 = #state{session = Session}) ->
+    State1 = lists:foldr(fun(SessionOpts, S0) ->
+				 %% don't persist the session attr
+				 #state{a3state = A3State} =
+				     a3cast(interim, S0#state{session = merge(Session, SessionOpts)}),
+				 S0#state{a3state = A3State}
+			 end, State0, SessionOptsList),
+    State = start_session_timer(#state.interim_accounting, attr_get('Interim-Accounting', Session),
+					interim_accounting, State1),
+    {noreply, State};
 
 handle_cast({stop, SessionOpts}, State0 = #state{session = Session}) ->
     State1 = a3cast(stop, State0#state{session = merge(Session, SessionOpts)}),
