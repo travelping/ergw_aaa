@@ -341,6 +341,20 @@ process_gen_attrs({#attribute{id = ?Alc_Secondary_Dns}, DNS}, Acc) ->
 process_gen_attrs({#attribute{id = ?TP_TLS_Pre_Shared_Key}, PSK}, Acc) ->
     session_opt('TLS-Pre-Shared-Key', PSK, Acc);
 
+%% LocationProfile attributes
+process_gen_attrs({#attribute{id = ?TP_CAPWAP_SSID}, SSID}, Acc) ->
+    session_opt('TP-CAPWAP-SSID', SSID, Acc);
+
+process_gen_attrs({#attribute{id = ?TP_CAPWAP_Max_WIFI_Clients}, MaxClients}, Acc) ->
+    session_opt('TP-CAPWAP-Max-WIFI-Clients', MaxClients, Acc);
+
+process_gen_attrs({#attribute{id = ?TP_CAPWAP_POWER_SAVE_IDLE_TIMEOUT}, WG}, Acc) ->
+    session_opt('TP-CAPWAP-Power-Save-Idle-Timeout', WG, Acc);
+
+process_gen_attrs({#attribute{id = ?TP_CAPWAP_POWER_SAVE_BUSY_TIMEOUT}, WG}, Acc) ->
+    session_opt('TP-CAPWAP-Power-Save-Busy-Timeout', WG, Acc);
+
+%% Handling undefined cases
 process_gen_attrs({#attribute{name = Name}, Value} , Acc) ->
     lager:debug("unhandled reply AVP: ~s: ~p", [Name, Value]),
     Acc;
