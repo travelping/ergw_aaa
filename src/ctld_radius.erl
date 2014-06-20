@@ -255,6 +255,19 @@ session_options('TP-CAPWAP-WWAN-MNC', VALUE, ACC) ->
 session_options('TP-CAPWAP-WWAN-Cell-Id', Value, Acc) ->
     [{?TP_CAPWAP_WWAN_Cell_Id, Value}|Acc];
 
+%% TP CAPWAP extensions - GPSATC
+
+session_options('TP-CAPWAP-GPS-Timestamp', Value, Acc) ->
+    [{?TP_CAPWAP_GPS_Timestamp, Value}| Acc];
+session_options('TP-CAPWAP-GPS-Latitude', Value, Acc) ->
+    [{?TP_CAPWAP_GPS_Latitude, Value} | Acc];
+session_options('TP-CAPWAP-GPS-Longitude', Value, Acc) ->
+    [{?TP_CAPWAP_GPS_Longitude, Value} | Acc];
+session_options('TP-CAPWAP-GPS-Altitude', Value, Acc) ->
+    [{?TP_CAPWAP_GPS_Altitude, Value} | Acc];
+session_options('TP-CAPWAP-GPS-Hdop', Value, Acc) ->
+    [{?TP_CAPWAP_GPS_Hdop, Value} | Acc];
+
 session_options(_Key, _Value, Acc) ->
     Acc.
 

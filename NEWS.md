@@ -3,6 +3,11 @@ ctld
 
 Erlang CTLD Radius session implementation.
 
+Version 1.1.0 - 20 Jun 2014
+---------------------------
+
+* Added Support for sending GPS Attributes to the PCS.
+
 Version 1.0.1 - 19 Sep 2013
 ---------------------------
 
