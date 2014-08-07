@@ -223,11 +223,22 @@ session_options('Authentication-Method', {'TLS', 'Pre-Shared-Key'}, Acc) ->
 session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
 
+%% CAPWAP WTP Versions
+
+session_options('CAPWAP-Hardware-Version', Version, Acc) ->
+    [{?TP_CAPWAP_Hardware_Version, Version}|Acc];
+session_options('CAPWAP-Software-Version', Version, Acc) ->
+    [{?TP_CAPWAP_Software_Version, Version}|Acc];
+session_options('CAPWAP-Boot-Version', Version, Acc) ->
+    [{?TP_CAPWAP_Boot_Version, Version}|Acc];
+session_options('CAPWAP-Other-Software-Version', Version, Acc) ->
+    [{?TP_CAPWAP_Other_Software_Version, Version}|Acc];
+
 %% TP CAPWAP extensions - generic
 
 session_options('TP-CAPWAP-Timestamp', Value, Acc) ->
     [{?TP_CAPWAP_Timestamp, Value}|Acc];
-session_options('TP-CAPWAP-WTP-Version', Value, Acc) ->
+session_options('TP-CAPWAP-Version', Value, Acc) ->
     [{?TP_CAPWAP_WTP_Version, Value}|Acc];
 session_options('TP-CAPWAP-Session-Id', Value, Acc) ->
     [{?TP_CAPWAP_Session_Id, Value}|Acc];
