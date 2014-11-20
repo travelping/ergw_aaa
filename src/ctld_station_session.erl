@@ -1,7 +1,7 @@
 -module(ctld_station_session).
 
 %% AAA API
--export([association/3, disassociation/3]).
+-export([association/4, disassociation/4]).
 
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
@@ -14,12 +14,13 @@
 %%===================================================================
 %% API
 %%===================================================================
-association(StationMac, WtpIp, Opts) ->
+association(StationMac, WtpId, SessionId, Opts) ->
     NAS = proplists:get_value(radius_auth_server, Opts, false),
     NasId = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
     Attrs = [
              {?Calling_Station_Id, StationMac},
-             {?TP_Location_Id,  ip_to_bin(WtpIp)},
+             {?TP_Location_Id,  WtpId},
+	     {?TP_CAPWAP_Session_Id, <<SessionId:128>>},
              {?Service_Type,    2},
              {?Framed_Protocol, 1},
              {?NAS_Identifier,  NasId}
@@ -35,14 +36,17 @@ association(StationMac, WtpIp, Opts) ->
             radius_response(Req, eradius_client:send_request(NAS, Req), NAS)
     end.
 
-disassociation(StationMac, WtpIp, Opts) ->
+disassociation(StationMac, WtpId, SessionId, Opts) ->
     NAS = proplists:get_value(radius_acct_server, Opts, false),
     NasId = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
     Attrs = [
              {?Calling_Station_Id, StationMac},
-             {?TP_Location_Id, ip_to_bin(WtpIp)},
-             {?NAS_Identifier, NasId},
-             {?Acct_Terminate_Cause, ?RTCUser_Request},
+             {?TP_Location_Id,  WtpId},
+	     {?TP_CAPWAP_Session_Id, <<SessionId:128>>},
+             {?Service_Type,    2},
+             {?Framed_Protocol, 1},
+	     {?NAS_Identifier,  NasId},
+            {?Acct_Terminate_Cause, ?RTCUser_Request},
              {?RStatus_Type, ?RStatus_Type_Stop}
             ],
     Req = #radius_request{
@@ -71,8 +75,3 @@ radius_reply(Req, #radius_request{cmd = reject} = Reply) ->
 radius_reply(Req, Reply) ->
     lager:debug("RADIUS request ~p failed with ~p", [Req, Reply]),
     fail.
-
-ip_to_bin(Ip) when is_binary(Ip) ->
-    Ip;
-ip_to_bin({_, _, _, _}=Ip) ->
-    erlang:list_to_binary(inet_parse:ntoa(Ip)).
