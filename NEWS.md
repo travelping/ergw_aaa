@@ -3,7 +3,7 @@ ctld
 
 Erlang CTLD Radius session implementation.
 
-Version 1.1.1 - 06 Nov 2014
+Version 1.2.1 - 06 Nov 2014
 ---------------------------
 
 * Changed ctld_station_session to take WTP-Id and Session-Id arguments
