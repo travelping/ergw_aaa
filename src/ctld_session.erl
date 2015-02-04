@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 %% Session Process API
--export([start_link/5, authenticate/2, authorize/2,
+-export([start_link/2, authenticate/2, authorize/2,
 	 start/2, interim/2, interim_batch/2, stop/2,
 	 terminate/1, get/1, get/2, set/2, set/3]).
 
@@ -16,44 +16,40 @@
 	 merge/2, to_session/1]).
 
 -record(state, {'$version' = 0,
-		id,
-		lmod, leader,
-		a3handler, a3state,
-		session,
-		auth_state = stopped,
-		session_timeout,
-		interim_accounting
-}).
+		owner,
+		authenticated = false,
+		started = false,
+		reply,
+		interim_timer,
+		session}).
 
 -define(AAA_TIMEOUT, (30 * 1000)).      %% 30sec for all AAA gen_server:call timeouts
--define(SESSION_TIMERS, [
-                         {#state.session_timeout, 'Session-Timeout', session_timeout},
-                         {#state.interim_accounting, 'Interim-Accounting', interim_accounting}
-                        ]).
+
+-include("include/ctld_profile.hrl").
 
 %%===================================================================
 %% API
 %%===================================================================
 
-start_link(LMod, Leader, A3Handler, A3Opts, SessionData) ->
-    gen_server:start_link(?MODULE, [LMod, Leader, A3Handler, A3Opts, SessionData], []).
+start_link(Owner, SessionData) ->
+    gen_server:start_link(?MODULE, [Owner, SessionData], []).
 
-authenticate(Session, SessionOpts) when is_list(SessionOpts) ->
+authenticate(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:call(Session, {authenticate, SessionOpts}, ?AAA_TIMEOUT).
 
-authorize(Session, SessionOpts) when is_list(SessionOpts) ->
+authorize(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:call(Session, {authorize, SessionOpts}, ?AAA_TIMEOUT).
 
-start(Session, SessionOpts) when is_list(SessionOpts) ->
+start(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:cast(Session, {start, SessionOpts}).
 
-interim(Session, SessionOpts) when is_list(SessionOpts) ->
+interim(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:cast(Session, {interim, SessionOpts}).
 
-interim_batch(Session, SessionOptsList) when is_list(SessionOptsList) ->
+interim_batch(Session, SessionOptsList) when is_map(SessionOptsList) ->
     gen_server:cast(Session, {interim_batch, SessionOptsList}).
 
-stop(Session, SessionOpts) when is_list(SessionOpts) ->
+stop(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:cast(Session, {stop, SessionOpts}).
 
 terminate(Session) ->
@@ -68,87 +64,84 @@ get(Session, Option) ->
 set(Session, Option, Value) ->
     gen_server:call(Session, {set, Option, Value}).
 
-set(Session, Values) when is_list(Values) ->
+set(Session, Values) when is_map(Values) ->
     gen_server:call(Session, {set, Values}).
 
 %%===================================================================
 %% gen_server callbacks
 %%===================================================================
 
-init([LMod, Leader, A3Handler, A3Opts, SessionData]) ->
+init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
-    case A3Handler:init(A3Opts) of
-	{ok, A3State} ->
+    DefaultSessionOpts = #{
+      'SessionId' => 1,
+      'Interim-Accounting' => 10 * 1000
+     },
+    Session = maps:merge(DefaultSessionOpts, SessionOpts),
+    State = #state{
+	       owner   = Owner,
+	       session = Session},
+    {ok, State}.
 
-%	    SessionId = session_id:new(),
-	    SessionId = 1,
-	    State = #state{
-	      lmod = LMod,
-	      leader = Leader,
-	      id = SessionId,
-	      a3handler = A3Handler,
-	      a3state = A3State,
-	      session = to_session([{'Session-Id', SessionId}|SessionData])
-	     },
-	    {ok, State};
-	Other ->
-	    {stop, Other}
-    end.
+handle_call({authenticate, SessionOpts}, From, State0) ->
+    NewSessionOpts = maps:merge(State0#state.session, SessionOpts),
+    {Reply, NewSession} = ?action('Authenticate', NewSessionOpts),
+    State1 = State0#state{session = NewSession},
+    case Reply of
+	ok    -> {noreply, State1#state{reply = From}};
+	Other -> {reply, Other, State1}
+    end;
 
-handle_call({authenticate, SessionOpts}, From,
-	    State = #state{session = Session}) ->
+handle_call({authorize, SessionOpts}, _From, State0) ->
+    State1 = State0#state{session = maps:merge(State0#state.session, SessionOpts)},
+    Reply =
+	if State1#state.authenticated -> ok;
+	    true                      -> not_authorized
+	end,
+    {reply, Reply, State1};
 
-    a3call(authenticate, From, State#state{session = merge(Session, SessionOpts)});
+handle_call(get, _From, State) ->
+    {reply, State#state.session, State};
 
-handle_call({authorize, SessionOpts}, From,
-	    State0 = #state{session = Session}) ->
+handle_call({get, Opt}, _From, State) ->
+    {reply, maps:find(Opt, State#state.session), State};
 
-    a3call(authorize, From, State0#state{session = merge(Session, SessionOpts)});
+handle_call({set, Opt, Value}, _From, State = #state{session = Session}) ->
+    {reply, ok, State#state{session = maps:put(Opt, Value, Session)}};
 
-handle_call(get, _From, State = #state{session = Session}) ->
-    {reply, Session, State};
-
-handle_call({get, Opt}, _From, State = #state{session = Session}) ->
-    {reply, attr_get(Opt, Session), State};
-
-handle_call({set, Opt, Value}, _From, State0 = #state{session = Session}) ->
-    State = State0#state{session = attr_set(Opt, Value, Session)},
-    {reply, ok, State};
-
-handle_call({set, Values}, _From, State0 = #state{session = Session}) ->
-    State = State0#state{session = merge(Session, Values)},
-    {reply, ok, State};
+handle_call({set, Values}, _From, State) ->
+    {reply, ok, State#state{session = maps:merge(State#state.session, Values)}};
 
 handle_call(Event, _From, State) ->
-    io:format("~p(~p): got ~p~n", [?MODULE, ?LINE, Event]),
+    lager:warning("unhandled call ~p", [Event]),
     {reply, ok, State}.
 
-handle_cast({start, SessionOpts}, State0 = #state{session = Session}) ->
-    State1 = a3cast(start, State0#state{session = merge(Session, SessionOpts)}),
-    State = start_session_timers(State1),
-    {noreply, State#state{auth_state = running}};
+handle_cast({start, SessionOpts}, State) ->
+    NewSessionOpts = maps:merge(State#state.session, SessionOpts),
+    {_, NewSession} = ?action('Account', 'Start', NewSessionOpts),
+    State0 = State#state{session = NewSession, started = true},
+    State1 = start_interim_accounting(State0),
+    {noreply, State1};
 
-handle_cast({interim, SessionOpts}, State0 = #state{session = Session}) ->
-    State1 = a3cast(interim, State0#state{session = merge(Session, SessionOpts)}),
-    State = start_session_timer(#state.interim_accounting, attr_get('Interim-Accounting', Session),
-					interim_accounting, State1),
-    {noreply, State};
+handle_cast({interim, SessionOpts}, State) ->
+    NewSessionOpts = maps:merge(State#state.session, SessionOpts),
+    {_, NewSession} = ?action('Account', 'Interim', NewSessionOpts),
+    {noreply, State#state{session = NewSession}};
 
-handle_cast({interim_batch, SessionOptsList}, State0 = #state{session = Session}) ->
-    State1 = lists:foldr(fun(SessionOpts, S0) ->
-				 %% don't persist the session attr
-				 #state{a3state = A3State} =
-				     a3cast(interim, S0#state{session = merge(Session, SessionOpts)}),
-				 S0#state{a3state = A3State}
-			 end, State0, SessionOptsList),
-    State = start_session_timer(#state.interim_accounting, attr_get('Interim-Accounting', Session),
-					interim_accounting, State1),
-    {noreply, State};
+handle_cast({interim_batch, SessionOptsList}, State) ->
+    NewSession =
+	lists:foldr(fun(SOOptsEntry, S0) ->
+			    NewS = maps:merge(S0, SOOptsEntry),
+			    {_, S1} = ?action('Account', 'Interim', NewS),
+			    S1
+		    end, State#state.session, SessionOptsList),
+    {noreply, State#state{session = NewSession}};
 
-handle_cast({stop, SessionOpts}, State0 = #state{session = Session}) ->
-    State1 = a3cast(stop, State0#state{session = merge(Session, SessionOpts)}),
-    State = stop_session_timers(State1),
-    {stop, normal, State#state{auth_state = stopped}};
+handle_cast({stop, SessionOpts}, State) ->
+    State0 = stop_interim_accounting(State),
+    NewSessionOpts = maps:merge(State#state.session, SessionOpts),
+    {_, NewSession} = ?action('Account', 'Stop', NewSessionOpts),
+    {noreply, State0#state{session = NewSession, started = false}};
 
 handle_cast(terminate, State) ->
     lager:info("Handling terminate request: ~p", [State]),
@@ -158,51 +151,79 @@ handle_cast(Event, State) ->
     io:format("~p(~p): got ~p~n", [?MODULE, ?LINE, Event]),
     {noreply, State}.
 
-handle_info({timeout, TimerRef, interim_accounting},
-	    State0 = #state{lmod = LMod,
-			    leader = Leader,
-			    id = SessionId,
-			    session = Session,
-			    interim_accounting = TimerRef}) ->
-    case LMod:interim_update(Leader, SessionId, Session) of
-	{ok, UpdateSessionOpts} ->
-	    State1 = a3cast(interim, State0#state{session = merge(Session, UpdateSessionOpts)}),
-	    State = start_session_timer(#state.interim_accounting, attr_get('Interim-Accounting', Session),
-					interim_accounting, State1),
-	    {noreply, State};
-	_ ->
-	    {noreply, State0}
-    end;
-
-handle_info({timeout, TimerRef, session_timeout},
-	    State = #state{lmod = LMod,
-			   leader = Leader,
-			   id = SessionId,
-			   session = Session,
-			   session_timeout = TimerRef}) ->
-    LMod:session_timeout(Leader, SessionId, Session),
-    {noreply, State#state{session_timeout = undefined}};
-
-handle_info({'EXIT', From, Reason}, State = #state{leader = From, auth_state = AuthState}) ->
+handle_info({'EXIT', From, Reason}, State = #state{owner = From}) ->
     lager:error("Received EXIT signal from ~p with reason ~p", [From, Reason]),
-    if AuthState == running ->
-           a3cast(stop, State),
-           stop_session_timers(State);
+    if
+	State#state.authenticated orelse State#state.started ->
+	    ?action('Account', 'Stop', State#state.session);
        true ->
            ok
     end,
     {stop, normal, State};
+
+handle_info({'EXIT', _From, _Reason}, State) ->
+    %% ignore EXIT from eradius client
+    {noreply, State};
+
+handle_info({'AuthenticationRequestReply', _AuthReply}, State = #state{authenticated = true}) ->
+    %% already authenticated, ignore
+    {noreply, State};
+
+handle_info(Ev = {'AuthenticationRequestReply', _AuthReply}, State0) ->
+    {Reply, NewSession} = ctld_profile:handle_reply(fun event/2, Ev, State0#state.session),
+    State1 = State0#state{session = NewSession, authenticated = true},
+    State2 = reply(Reply, State1),
+    {noreply, State2};
+
+handle_info({timeout, TimerRef, interim},
+	    State = #state{
+		       owner = Owner,
+		       interim_timer = TimerRef,
+		       session = Session}) ->
+    case Session of
+	#{'Accouting-Update-Fun' := UpdateFun}
+	  when is_function(UpdateFun, 2) ->
+	    NewSessionOpts = UpdateFun(Owner, Session),
+	    lager:debug("InternalInterimUpdate: ~p -> ~p", [Session, NewSessionOpts]),
+	    {_, NewSession} = ?action('Account', 'Interim', NewSessionOpts),
+	    State0 = State#state{session = NewSession},
+	    State1 = restart_interim_accounting(State0),
+	    {noreply, State1};
+	_ ->
+	    State0 = stop_interim_accounting(State),
+	    {noreply, State0}
+    end;
+
+handle_info({timeout, TimerRef, interim}, State = #state{interim_timer = TimerRef}) ->
+    State0 = stop_interim_accounting(State),
+    {noreply, State0};
 
 handle_info(Info, State) ->
     lager:warning("Received unhandled message ~p", [Info]),
     {noreply, State}.
 
 terminate(Reason, State) ->
-    error_logger:info_msg("ctld Session terminating with state ~p with reason ~p~n", [State, Reason]),
+    lager:error("ctld Session terminating with state ~p with reason ~p", [State, Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%%-------------------------------------------------------------------
+
+reply(Reply, State = #state{reply = undefined}) ->
+    State#state.owner ! Reply,
+    State;
+reply(Reply, State = #state{reply = ReplyTo}) ->
+    gen_server:reply(ReplyTo, Reply),
+    State#state{reply = undefined}.
+
+event({'AuthenticationRequestReply', {success, SessionOpts}}, Session) ->
+    NewSession = maps:merge(SessionOpts, Session),
+    {success, NewSession};
+
+event({'AuthenticationRequestReply', {Verdict, _}}, Session) ->
+    {Verdict, Session}.
 
 %%===================================================================
 %% Session Object API and Helpers
@@ -212,60 +233,28 @@ code_change(_OldVsn, State, _Extra) ->
 %%===================================================================
 
 to_session(Session) when is_list(Session) ->
-    orddict:from_list(Session).
+    maps:from_list(Session);
+to_session(Session) when is_map(Session) ->
+    Session.
 
--spec attr_get(Key :: term(), Value :: term()) -> {ok, Value :: any()} | error.
+-spec attr_get(Key :: term(), Session :: map()) -> {ok, Value :: any()} | error.
 attr_get(Key, Session) ->
-    orddict:find(Key, Session).
+    maps:find(Key, Session).
 
 attr_get(Key, Session, Default) ->
-    case orddict:find(Key, Session) of
-	{ok, Value} ->
-	    Value;
-	error ->
-	    Default
-    end.
+    maps:get(Key, Session, Default).
 
 attr_set(Key, Value, Session) ->
-    orddict:store(Key, Value, Session).
+    maps:put(Key, Value, Session).
 
 attr_append(Key, Value, Session) ->
-    orddict:append(Key, Value, Session).
+    maps:put(Key, Value, Session).
 
 attr_fold(Fun, Acc, Session) ->
-    orddict:fold(Fun, Acc, Session).
+    maps:fold(Fun, Acc, Session).
 
 merge(S1, S2) ->
-    orddict:merge(fun(_Key, _V1, V2) -> V2 end, S1, S2).
-
-%%===================================================================
-%% AAA Callback Module Helpers
-%%===================================================================
-
-a3call(F, From, State = #state{a3handler = A3Handler,
-			       a3state = A3State0,
-			       session = Session}) ->
-    case A3Handler:F(From, Session, A3State0) of
-	{noreply, A3State} ->
-	    {noreply, State#state{a3state = A3State}};
-	{reply, Value, A3State} ->
-	    {Value, State#state{a3state = A3State}};
-	{reply, Value, SessionOpts, A3State} ->
-	    {reply, Value, State#state{
-			     a3state = A3State,
-			     session = merge(Session, SessionOpts)}}
-    end.
-
-a3cast(F, State = #state{a3handler = A3Handler,
-			 a3state = A3State0,
-			 session = Session}) ->
-    case A3Handler:F(Session, A3State0) of
-        {SessionOpts, A3State} ->
-            State#state{a3state = A3State,
-                        session = merge(Session, SessionOpts)};
-        A3State ->
-            State#state{a3state = A3State}
-    end.
+    maps:merge(S1, S2).
 
 %%===================================================================
 %% internal helpers
@@ -286,32 +275,26 @@ cancel_timer(Ref) ->
             RemainingTime
     end.
 
-start_session_timer(Timer, {ok, Value}, Msg, State)
-  when is_integer(Value) ->
-    cancel_timer(element(Timer, State)),
-    setelement(Timer, State, start_timer(Value, Msg));
-start_session_timer(Timer, _, _, State) ->
-    setelement(Timer, State, undefined).
+start_interim_accounting(State) ->
+    cancel_timer(State#state.interim_timer),
+    case State#state.session of
+	#{'Interim-Accounting'   := InterimAccounting,
+	  'Accouting-Update-Fun' := UpdateFun}
+	  when is_integer(InterimAccounting), is_function(UpdateFun, 2) ->
+	    State#state{interim_timer = start_timer(InterimAccounting, interim)};
+	_ ->
+	    State
+    end.
 
-start_session_timers([], State) ->
-    State;
-start_session_timers([{Timer, Key, Msg}|R], State0 = #state{session = Session}) ->
-    Value = attr_get(Key, Session),
-    State = start_session_timer(Timer, Value, Msg, State0),
-    start_session_timers(R, State).
+stop_interim_accounting(State) ->
+    cancel_timer(State#state.interim_timer),
+    State#state{interim_timer = undefined}.
 
-stop_session_timer(Timer, State) ->
-    cancel_timer(element(Timer, State)),
-    setelement(Timer, State, undefined).
-
-stop_session_timers([], State) ->
-    State;
-stop_session_timers([{Timer, _, _}|R], State0) ->
-    State = stop_session_timer(Timer, State0),
-    stop_session_timers(R, State).
-
-start_session_timers(State) ->
-    start_session_timers(?SESSION_TIMERS, State).
-
-stop_session_timers(State) ->
-    stop_session_timers(?SESSION_TIMERS, State).
+restart_interim_accounting(State) ->
+    case State#state.session of
+	#{'Interim-Accounting' := InterimAccounting}
+	  when is_integer(InterimAccounting) ->
+	    State#state{interim_timer = start_timer(InterimAccounting, interim)};
+	_ ->
+	    State#state{interim_timer = undefined}
+    end.

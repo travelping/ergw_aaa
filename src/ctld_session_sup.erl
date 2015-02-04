@@ -5,7 +5,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, new_session/5]).
+-export([start_link/0, new_session/2]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -19,8 +19,8 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
-new_session(LMod, Leader, A3Handler, A3Opts, SessionData) ->
-    supervisor:start_child(?SERVER, [LMod, Leader, A3Handler, A3Opts, SessionData]).
+new_session(Owner, SessionOpts) ->
+    supervisor:start_child(?SERVER, [Owner, SessionOpts]).
 
 %% ===================================================================
 %% Supervisor callbacks

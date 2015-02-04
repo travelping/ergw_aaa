@@ -14,23 +14,22 @@
     {stop, Reason :: term(), NewState :: #{}} |
     {next_profile, NextProfileName :: atom(), NewState :: #{}}.
 
-
-action(Action, State) ->
-    lager:warning("TODO: implement action: ~p", [Action]),
-    {ok, State}.
-
-action('Authenticate', [AuthData], State) when is_map(AuthData) ->
-    lager:debug("Event: Authenticate ~p", [AuthData]),
+action('Authenticate', State) ->
+    lager:debug("Event: Authenticate ~p", [State]),
 
     %% get or / init ctld provider ref
     case init_provider(State) of
 	{ok, Provider, State1} ->
 	    %% send auth request
-	    start_authentication(Provider, AuthData, State1);
+	    start_authentication(Provider, State1);
 	{error, Error} ->
-	    ?queue_event('AuthenticationRequestReply', #{'Result' => failed, 'Reason' => Error}),
+	    ?queue_event('AuthenticationRequestReply', {failed, #{'Reason' => Error}}),
 	    {ok, State}
     end;
+
+action(Action, State) ->
+    lager:warning("TODO: implement action: ~p", [Action]),
+    {ok, State}.
 
 action('Account', [AcctType], State) ->
     lager:debug("Event: Account ~p", [AcctType]),
@@ -41,7 +40,7 @@ action('Account', [AcctType], State) ->
 	    %% send auth request
 	    request_accounting(Provider, AcctType, State1);
 	{error, Error} ->
-	    ?queue_event('AccountingRequestReply', #{'Result' => failed, 'Reason' => Error}),
+	    ?queue_event('AccountingRequestReply', {failed, #{'Reason' => Error}}),
 	    {ok, State}
     end;
 
@@ -80,12 +79,9 @@ init_provider(State) ->
             {error, Other}
     end.
 
-start_authentication(Provider,
-		  _AuthData = #{'Username' := Username, 'Password' := Password},
-		  State = #{'AuthProviderState' := PState}) ->
-    State1 = State#{'Username' => Username, 'Password' => Password},
-    {Reply, PState1} = Provider:start_authentication(self(), State1, PState),
-    {Reply, State1#{'AuthProviderState' := PState1}}.
+start_authentication(Provider, State = #{'AuthProviderState' := PState}) ->
+    {Reply, PState1} = Provider:start_authentication(self(), State, PState),
+    {Reply, State#{'AuthProviderState' := PState1}}.
 
 request_accounting(Provider, AcctType,
 		      State = #{'AuthProviderState' := PState}) ->

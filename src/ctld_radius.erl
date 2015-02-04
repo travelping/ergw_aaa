@@ -3,10 +3,12 @@
 -behaviour(ctld_aaa).
 
 %% AAA API
--export([init/1, authenticate/3, authorize/3, start/2, interim/2, stop/2]).
+-export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ctld_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
 
+-include("include/ctld_profile.hrl").
+-include("include/ctld_variable.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
@@ -29,7 +31,7 @@ init(Opts) ->
      },
     {ok, State}.
 
-authenticate(_From, Session, State0 = #state{auth_server = NAS}) ->
+start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     ExtraAttrs0 = accounting_options(State0, []),
     ExtraAttrs = session_options(Session, ExtraAttrs0),
     Attrs = [
@@ -43,27 +45,33 @@ authenticate(_From, Session, State0 = #state{auth_server = NAS}) ->
              cmd = request,
              attrs = Attrs,
              msg_hmac = false},
-    {Verdict, SessionOpts0, State} =
-        radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
-    SessionOpts =
-    if Verdict /= success -> [];
-       true               -> SessionOpts0
-    end,
-    {reply, Verdict, SessionOpts, State#state{auth_state = Verdict}}.
+
+    Pid = proc_lib:spawn_link(fun() ->
+				      {Verdict, SessionOpts0, State} =
+					  radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
+				      SessionOpts =
+					  if Verdict /= success -> #{};
+					     true               -> to_session(SessionOpts0)
+					  end,
+				      ?queue_event(From, {'AuthenticationRequestReply', {Verdict, SessionOpts, State#state{auth_state = Verdict}}})
+			      end),
+    {ok, State0#state{auth_state = Pid}}.
 
 authorize(_From, _Session, State = #state{auth_state = Verdict}) ->
     {reply, Verdict, to_session([]), State}.
 
-start(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
-    Now = now_ticks(),
-
+start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
     UserName0 = attr_get('Username', Session, <<>>),
     UserName = case proplists:get_value('Username', Accounting) of
 		   undefined -> UserName0;
 		   Value -> Value
 	       end,
-    ExtraAttrs0 = accounting_options(State, []),
-    ExtraAttrs = session_options(Session, ExtraAttrs0),
+    ExtraAttrs1 = accounting_options(State, []),
+    ExtraAttrs0 = session_options(Session, ExtraAttrs1),
+    ExtraAttrs = [X || X = {K, _} <- ExtraAttrs0,
+		       K /= ?Acct_Input_Octets, K /= ?Acct_Output_Octets,
+		       K /= ?Acct_Input_Gigawords, K /= ?Acct_Output_Gigawords,
+		       K /= ?Acct_Input_Packets, K /= ?Acct_Output_Packets],
     Attrs = [
 	     {?RStatus_Type,    ?RStatus_Type_Start},
 	     {?User_Name,       UserName},
@@ -75,13 +83,12 @@ start(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
 	     cmd = accreq,
 	     attrs = Attrs,
 	     msg_hmac = false},
-    eradius_client:send_request(NAS, Req),
+    proc_lib:spawn_link(fun() -> eradius_client:send_request(NAS, Req) end),
 
-    SessionOpts = [{'Accounting-Start', Now}],
-    {to_session(SessionOpts), State}.
+    {ok, State};
 
-interim(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
-    Now = now_ticks(),
+start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
+    Now = ctld_variable:now_ms(),
 
     UserName0 = attr_get('Username', Session, <<>>),
     UserName = case proplists:get_value('Username', Accounting) of
@@ -98,7 +105,7 @@ interim(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
 	     {?Service_Type,    2},
 	     {?Framed_Protocol, 1},
 	     {?NAS_Identifier,  State#state.nas_id},
-	     {?RSession_Time,   round((Now - Start) / 10)}
+	     {?RSession_Time,   round((Now - Start) / 1000)}
 	     | ExtraAttrs],
     Req = #radius_request{
 	     cmd = accreq,
@@ -106,11 +113,10 @@ interim(Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
 	     msg_hmac = false},
     eradius_client:send_request(NAS, Req),
 
-    SessionOpts = [{'Last-Interim-Update', Now}],
-    {to_session(SessionOpts), State}.
+    {ok, State};
 
-stop(Session, State = #state{acct_server = NAS}) ->
-    Now = now_ticks(),
+start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
+    Now = ctld_variable:now_ms(),
 
     Start = attr_get('Accounting-Start', Session, Now),
 
@@ -122,29 +128,27 @@ stop(Session, State = #state{acct_server = NAS}) ->
 	     {?Service_Type,    2},
 	     {?Framed_Protocol, 1},
 	     {?NAS_Identifier,  State#state.nas_id},
-	     {?RSession_Time,   round((Now - Start) / 10)}
+	     {?RSession_Time,   round((Now - Start) / 1000)}
 	     | ExtraAttrs],
     Req = #radius_request{
 	     cmd = accreq,
 	     attrs = Attrs,
 	     msg_hmac = false},
 
-    Res = eradius_client:send_request(NAS, Req),
-    lager:debug("Accounting stop response from ~p: ~p : ~p", [NAS, Req, Res]),
+    proc_lib:spawn(fun() -> eradius_client:send_request(NAS, Req) end),
 
-    SessionOpts = [{'Accounting-Stop', Now}],
-    {to_session(SessionOpts), State}.
+    {ok, State}.
 
 %%===================================================================
 %% Internal Helpers
 %%===================================================================
 
-%% get time with 100ms +/50ms presision
-now_ticks() ->
-    now_ticks(erlang:now()).
+%% %% get time with 100ms +/50ms presision
+%% now_ticks() ->
+%%     now_ticks(erlang:now()).
 
-now_ticks({MegaSecs, Secs, MicroSecs}) ->
-    MegaSecs * 10000000 + Secs * 10 + round(MicroSecs div 100000).
+%% now_ticks({MegaSecs, Secs, MicroSecs}) ->
+%%     MegaSecs * 10000000 + Secs * 10 + round(MicroSecs div 100000).
 
 accounting_options(#state{accounting = Accounting}, Acc) ->
     lists:foldl(fun({Key, Value}, Acc0) -> session_options(Key, Value, Acc0) end, Acc, Accounting).
