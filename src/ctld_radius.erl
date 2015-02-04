@@ -152,6 +152,9 @@ accounting_options(#state{accounting = Accounting}, Acc) ->
 session_options(Session, Acc) ->
     attr_fold(fun session_options/3, Acc, Session).
 
+session_options('IP', Value, Acc) ->
+    [{?Framed_IP_Address, Value}|Acc];
+
 session_options('Framed-IP-Address', Value, Acc) ->
     [{?Framed_IP_Address, Value}|Acc];
 session_options('Framed-Interface-Id', Value, Acc) ->
@@ -167,6 +170,25 @@ session_options('Called-Station', Value, Acc) ->
     [{?Called_Station_Id, Value}|Acc];
 session_options('Port-Id', Value, Acc) ->
     [{?NAS_Port_Id, Value}|Acc];
+
+session_options('InOctets', Octets, Acc) when is_integer(Octets) ->
+    [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
+session_options('InOctets', Value, Acc) when is_record(Value, var) ->
+    Octets = ctld_variable:get(Value),
+    [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
+session_options('InPackets', Packets, Acc) when is_integer(Packets) ->
+    [{?Acct_Input_Packets, Packets}|Acc];
+session_options('InPackets', Value, Acc) when is_record(Value, var) ->
+    [{?Acct_Input_Packets, ctld_variable:get(Value)}|Acc];
+session_options('OutOctets', Octets, Acc) when is_integer(Octets) ->
+    [{?Acct_Output_Octets, Octets}, {?Acct_Output_Gigawords, Octets bsr 32}|Acc];
+session_options('OutOctets', Value, Acc) when is_record(Value, var) ->
+    Octets = ctld_variable:get(Value),
+    [{?Acct_Output_Octets, Octets}, {?Acct_Output_Gigawords, Octets bsr 32}|Acc];
+session_options('OutPackets', Packets, Acc) when is_integer(Packets) ->
+    [{?Acct_Output_Packets, Packets}|Acc];
+session_options('OutPackets', Value, Acc) when is_record(Value, var) ->
+    [{?Acct_Output_Packets, ctld_variable:get(Value)}|Acc];
 
 session_options('Port-Type', pppoe_eth, Acc) ->
     [{?NAS_Port_Type, 32}|Acc];
@@ -223,8 +245,22 @@ session_options('Authentication-Method', {'TLS', 'Pre-Shared-Key'}, Acc) ->
 session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
 
-%% CAPWAP WTP Versions
+%% Travelping Extension
+session_options('Access-Group', Value, Acc) ->
+    [{?TP_Access_Group, list_to_binary(Value)}|Acc];
+session_options('NAT-Pool-Id', Value, Acc) ->
+    [{?TP_NAT_Pool_Id, Value}|Acc];
+session_options('NAT-IP-Address', Value, Acc) ->
+    [{?TP_NAT_IP_Address, Value}|Acc];
+session_options('NAT-Port-Start', Value, Acc) ->
+    [{?TP_NAT_Port_Start, Value}|Acc];
+session_options('NAT-Port-End', Value, Acc) ->
+    [{?TP_NAT_Port_End, Value}|Acc];
 
+%% TP CAPWAP extensions - Versions
+
+session_options('TP-CAPWAP-Version', Value, Acc) ->
+    [{?TP_CAPWAP_WTP_Version, Value}|Acc];
 session_options('CAPWAP-Hardware-Version', Version, Acc) ->
     [{?TP_CAPWAP_Hardware_Version, Version}|Acc];
 session_options('CAPWAP-Software-Version', Version, Acc) ->
@@ -238,8 +274,6 @@ session_options('CAPWAP-Other-Software-Version', Version, Acc) ->
 
 session_options('TP-CAPWAP-Timestamp', Value, Acc) ->
     [{?TP_CAPWAP_Timestamp, Value}|Acc];
-session_options('TP-CAPWAP-Version', Value, Acc) ->
-    [{?TP_CAPWAP_WTP_Version, Value}|Acc];
 session_options('TP-CAPWAP-Session-Id', Value, Acc) ->
     [{?TP_CAPWAP_Session_Id, Value}|Acc];
 session_options('TP-CAPWAP-Radio-Id', Value, Acc) ->
@@ -334,6 +368,10 @@ process_gen_attrs({#attribute{id = ?Acct_Interim_Interval}, InterimAccounting}, 
 process_gen_attrs({#attribute{id = ?Session_Timeout}, TimeOut}, Acc) ->
     session_opt('Session-Timeout', TimeOut * 1000, Acc);
 
+%% Idle-Timeout
+process_gen_attrs({#attribute{id = ?Idle_Timeout}, TimeOut}, Acc) ->
+    session_opt('Idle-Timeout', TimeOut * 1000, Acc);
+
 %% Service-Type = Framed-User
 process_gen_attrs({#attribute{id = ?Service_Type}, 2}, Acc) ->
     Acc;
@@ -361,11 +399,48 @@ process_gen_attrs({#attribute{id = ?Alc_Primary_Dns}, DNS}, Acc) ->
 process_gen_attrs({#attribute{id = ?Alc_Secondary_Dns}, DNS}, Acc) ->
     session_opt_append('DNS', DNS, Acc);
 
+%% TP-Access-Rule
+process_gen_attrs({#attribute{id = ?TP_Access_Rule}, Value}, Acc) ->
+    Rule = list_to_tuple([binary_to_list(V) || V <- binary:split(Value, <<":">>, [global])]),
+    session_opt_append('Access-Rules', Rule, Acc);
+
+%% TP-Access-Group
+process_gen_attrs({#attribute{id = ?TP_Access_Group}, Value}, Acc) ->
+    session_opt('Access-Group', binary_to_list(Value), Acc);
+
+%% TP-NAT-Pool-Id
+process_gen_attrs({#attribute{id = ?TP_NAT_Pool_Id}, Value}, Acc) ->
+    session_opt('NAT-Pool-Id', Value, Acc);
+
+%% TP-NAT-IP-Address
+process_gen_attrs({#attribute{id = ?TP_NAT_IP_Address}, Value}, Acc) ->
+    session_opt('NAT-IP-Address', Value, Acc);
+
+%% TP-NAT-Port-Start
+process_gen_attrs({#attribute{id = ?TP_NAT_Port_Start}, Value}, Acc) ->
+    session_opt('NAT-Port-Start', Value, Acc);
+
+%% TP-NAT-Port-End
+process_gen_attrs({#attribute{id = ?TP_NAT_Port_End}, Value}, Acc) ->
+    session_opt('NAT-Port-End', Value, Acc);
+
+%% TP-Max-Input-Octets
+process_gen_attrs({#attribute{id = ?TP_Max_Total_Octets}, Value}, Acc) ->
+    session_opt('Max-Input-Octets', Value, Acc);
+
+%% TP-Max-Output-Octets
+process_gen_attrs({#attribute{id = ?TP_Max_Output_Octets}, Value}, Acc) ->
+    session_opt('Max-Output-Octets', Value, Acc);
+
+%% TP-Max-Total-Octets
+process_gen_attrs({#attribute{id = ?TP_Max_Input_Octets}, Value}, Acc) ->
+    session_opt('Max-Total-Octets', Value, Acc);
+
 %% TP-TLS-Pre-Shared-Key
 process_gen_attrs({#attribute{id = ?TP_TLS_Pre_Shared_Key}, PSK}, Acc) ->
     session_opt('TLS-Pre-Shared-Key', PSK, Acc);
 
-%% LocationProfile attributes
+%% CAPWAP LocationProfile attributes
 process_gen_attrs({#attribute{id = ?TP_CAPWAP_SSID}, SSID}, Acc) ->
     session_opt('TP-CAPWAP-SSID', SSID, Acc);
 
