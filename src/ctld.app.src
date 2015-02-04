@@ -8,6 +8,7 @@
                   stdlib,
 		  crypto,
                   sasl,
+		  lager,
 		  eradius
                  ]},
   {mod, { ctld_app, []}},
