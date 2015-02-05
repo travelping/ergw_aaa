@@ -451,10 +451,10 @@ process_gen_attrs({#attribute{id = ?TP_CAPWAP_SSID}, SSID}, Acc) ->
 process_gen_attrs({#attribute{id = ?TP_CAPWAP_Max_WIFI_Clients}, MaxClients}, Acc) ->
     session_opt('CAPWAP-Max-WIFI-Clients', MaxClients, Acc);
 
-process_gen_attrs({#attribute{id = ?TP_CAPWAP_POWER_SAVE_IDLE_TIMEOUT}, WG}, Acc) ->
+process_gen_attrs({#attribute{id = ?TP_CAPWAP_Power_Save_Idle_Timeout}, WG}, Acc) ->
     session_opt('CAPWAP-Power-Save-Idle-Timeout', WG, Acc);
 
-process_gen_attrs({#attribute{id = ?TP_CAPWAP_POWER_SAVE_BUSY_TIMEOUT}, WG}, Acc) ->
+process_gen_attrs({#attribute{id = ?TP_CAPWAP_Power_Save_Busy_Timeout}, WG}, Acc) ->
     session_opt('CAPWAP-Power-Save-Busy-Timeout', WG, Acc);
 
 %% Handling undefined cases
