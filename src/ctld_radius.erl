@@ -93,6 +93,7 @@ start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, acco
 	     cmd = accreq,
 	     attrs = Attrs,
 	     msg_hmac = false},
+
     proc_lib:spawn_link(fun() -> eradius_client:send_request(NAS, Req) end),
 
     {ok, State};
@@ -121,7 +122,8 @@ start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, ac
 	     cmd = accreq,
 	     attrs = Attrs,
 	     msg_hmac = false},
-    eradius_client:send_request(NAS, Req),
+
+    proc_lib:spawn_link(fun() -> eradius_client:send_request(NAS, Req) end),
 
     {ok, State};
 
