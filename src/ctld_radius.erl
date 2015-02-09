@@ -206,19 +206,28 @@ session_options('OutPackets', Packets, Acc) when is_integer(Packets) ->
 session_options('OutPackets', Value, Acc) when is_record(Value, var) ->
     [{?Acct_Output_Packets, ctld_variable:get(Value)}|Acc];
 
-session_options('Port-Type', pppoe_eth, Acc) ->
-    [{?NAS_Port_Type, 32}|Acc];
-session_options('Port-Type', pppoe_vlan, Acc) ->
-    [{?NAS_Port_Type, 33}|Acc];
-session_options('Port-Type', pppoe_qinq, Acc) ->
-    [{?NAS_Port_Type, 34}|Acc];
+session_options('Port-Type', Value, Acc) ->
+    [{?NAS_Port_Type, port_type(Value)}|Acc];
 
-session_options('Tunnel-Type', 'CAPWAP', Acc) ->
-    [{?Tunnel_Type, 16#ff00}|Acc];
-session_options('Tunnel-Medium-Type', 'IPv4', Acc) ->
-    [{?Tunnel_Medium_Type, 1}|Acc];
-session_options('Tunnel-Medium-Type', 'IPv6', Acc) ->
-    [{?Tunnel_Medium_Type, 2}|Acc];
+session_options(Type, Value, Acc)
+  when is_list(Value) andalso
+       (Type == 'Tunnel-Type' orelse
+	Type == 'Tunnel-Medium-Type' orelse
+	Type == 'Tunnel-Client-Endpoint') ->
+    lists:foldl(fun(V, A) -> session_options(Type, V, A) end, Acc, Value);
+
+session_options('Tunnel-Type', {Tag, Type}, Acc) ->
+    [{?Tunnel_Type, {Tag, tunnel_type(Type)}}|Acc];
+session_options('Tunnel-Type', Type, Acc) ->
+    [{?Tunnel_Type, tunnel_type(Type)}|Acc];
+
+session_options('Tunnel-Medium-Type', {Tag, Type}, Acc) ->
+    [{?Tunnel_Medium_Type, {Tag, tunnel_medium_type(Type)}}|Acc];
+session_options('Tunnel-Medium-Type', Type, Acc) ->
+    [{?Tunnel_Medium_Type, tunnel_medium_type(Type)}|Acc];
+
+session_options('Tunnel-Client-Endpoint', {Tag, Value}, Acc) ->
+    [{?Tunnel_Client_Endpoint, {Tag, Value}}|Acc];
 session_options('Tunnel-Client-Endpoint', Value, Acc) ->
     [{?Tunnel_Client_Endpoint, Value}|Acc];
 
@@ -333,6 +342,15 @@ session_options('CAPWAP-GPS-Hdop', Value, Acc) ->
 
 session_options(_Key, _Value, Acc) ->
     Acc.
+
+port_type(pppoe_eth)  -> 32;
+port_type(pppoe_vlan) -> 33;
+port_type(pppoe_qinq) -> 34.
+
+tunnel_type('CAPWAP') -> 16#ff00.
+
+tunnel_medium_type('IPv4') -> 1;
+tunnel_medium_type('IPv6') -> 2.
 
 radius_response({ok, Response}, {_, _, Secret}, State) ->
     radius_reply(eradius_lib:decode_request(Response, Secret), State);
