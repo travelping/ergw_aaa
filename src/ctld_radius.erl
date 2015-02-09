@@ -262,6 +262,8 @@ session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
 
 %% Travelping Extension
+session_options('Location-Id', Value, Acc) ->
+    [{?TP_Location_Id, Value}|Acc];
 session_options('Access-Group', Value, Acc) ->
     [{?TP_Access_Group, list_to_binary(Value)}|Acc];
 session_options('NAT-Pool-Id', Value, Acc) ->
