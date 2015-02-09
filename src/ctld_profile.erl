@@ -19,9 +19,9 @@ action('Authenticate', State) ->
 
     %% get or / init ctld provider ref
     case init_provider(State) of
-	{ok, Provider, State1} ->
+	{ok, State1} ->
 	    %% send auth request
-	    start_authentication(Provider, State1);
+	    start_authentication(State1);
 	{error, Error} ->
 	    ?queue_event('AuthenticationRequestReply', {failed, #{'Reason' => Error}}),
 	    {ok, State}
@@ -36,9 +36,9 @@ action('Account', [AcctType], State) ->
 
     %% get or / init ctld provider ref
     case init_provider(State) of
-	{ok, Provider, State1} ->
+	{ok, State1} ->
 	    %% send auth request
-	    request_accounting(Provider, AcctType, State1);
+	    request_accounting(AcctType, State1);
 	{error, Error} ->
 	    ?queue_event('AccountingRequestReply', {failed, #{'Reason' => Error}}),
 	    {ok, State}
@@ -58,9 +58,13 @@ handle_reply(Fun, Ev, State)
 %%===================================================================
 %% Internal
 %%===================================================================
+invoke_provider(F, A,
+		State = #{'AuthProvider' := Provider, 'AuthProviderState' := PState}) ->
+    {Reply, PState1} = apply(Provider, F, A ++ [State, PState]),
+    {Reply, State#{'AuthProviderState' := PState1}}.
 
-init_provider(State = #{'AuthProvider' := Provider}) ->
-    {ok, Provider, State};
+init_provider(State = #{'AuthProvider' := _Provider}) ->
+    {ok, State};
 init_provider(State) ->
     lager:debug("Application: ~p", [application:get_application()]),
     lager:debug("Env: ~p", [application:get_all_env()]),
@@ -68,26 +72,19 @@ init_provider(State) ->
 
     case Provider:init(ProviderOpts) of
         {ok, PState} ->
-%           SessionId = session_id:new(),
-            SessionId = 1,
 	    State1 = State#{'AuthProvider'      => Provider,
-			    'AuthProviderState' => PState,
-			    'Session-Id'        => SessionId
-			   },
-            {ok, Provider, State1};
+			    'AuthProviderState' => PState},
+            {ok, State1};
         Other ->
             {error, Other}
     end.
 
-start_authentication(Provider, State = #{'AuthProviderState' := PState}) ->
-    {Reply, PState1} = Provider:start_authentication(self(), State, PState),
-    {Reply, State#{'AuthProviderState' := PState1}}.
+start_authentication(State) ->
+    invoke_provider(start_authentication, [self()], State).
 
-request_accounting(Provider, AcctType,
-		      State = #{'AuthProviderState' := PState}) ->
+request_accounting(AcctType, State) ->
     State1 = update_accounting_state(AcctType, State),
-    {Reply, PState1} = Provider:start_accounting(self(), AcctType, State1, PState),
-    {Reply, State1#{'AuthProviderState' := PState1}}.
+    invoke_provider(start_accounting, [self(), AcctType], State1).
 
 update_accounting_state('Start', State) ->
     State#{ 'Accounting-Start' => ctld_variable:now_ms() };
