@@ -74,10 +74,15 @@ init_provider(State) ->
         {ok, PState} ->
 	    State1 = State#{'AuthProvider'      => Provider,
 			    'AuthProviderState' => PState},
-            {ok, State1};
+	    State2 = session_id(State1),
+            {ok, State2};
         Other ->
             {error, Other}
     end.
+
+session_id(State0) ->
+    {SessionId, State1} = invoke_provider(session_id, [], State0),
+    State1#{'Session-Id' => SessionId}.
 
 start_authentication(State) ->
     invoke_provider(start_authentication, [self()], State).

@@ -73,8 +73,8 @@ set(Session, Values) when is_map(Values) ->
 
 init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
+    AcctAppId = maps:get('AAA-Application-Id', SessionOpts, default),
     DefaultSessionOpts = #{
-      'SessionId' => 1,
       'Interim-Accounting' => 10 * 1000
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),

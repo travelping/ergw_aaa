@@ -3,7 +3,7 @@
 -behaviour(ctld_aaa).
 
 %% AAA API
--export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
+-export([init/1, session_id/2, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ctld_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
 
@@ -17,8 +17,11 @@
 -include_lib("eradius/include/dictionary_alcatel_sr.hrl").
 -include_lib("eradius/include/dictionary_travelping.hrl").
 
--record(state, {nas_id, auth_server, acct_server,
-		auth_state, accounting = []}).
+-record(state, {nas_id,
+		auth_server, acct_server,
+		auth_state,
+		accounting = [],
+		acct_app_id = default}).
 
 %%===================================================================
 %% API
@@ -30,6 +33,13 @@ init(Opts) ->
       acct_server = proplists:get_value(radius_acct_server, Opts, {{127,0,0,1}, 1813, <<"secret">>})
      },
     {ok, State}.
+
+session_id(#{'Session-Id' := SessionId}, State) ->
+    {SessionId, State};
+session_id(#{'AAA-Application-Id' := AcctAppId}, State) ->
+    {ctld_session_seq:inc(AcctAppId), State};
+session_id(_Session, State = #state{acct_app_id = AcctAppId}) ->
+    {ctld_session_seq:inc(AcctAppId), State}.
 
 start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     ExtraAttrs0 = accounting_options(State0, []),
