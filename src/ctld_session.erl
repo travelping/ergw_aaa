@@ -46,7 +46,7 @@ start(Session, SessionOpts) when is_map(SessionOpts) ->
 interim(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:cast(Session, {interim, SessionOpts}).
 
-interim_batch(Session, SessionOptsList) when is_map(SessionOptsList) ->
+interim_batch(Session, SessionOptsList) when is_list(SessionOptsList) ->
     gen_server:cast(Session, {interim_batch, SessionOptsList}).
 
 stop(Session, SessionOpts) when is_map(SessionOpts) ->
