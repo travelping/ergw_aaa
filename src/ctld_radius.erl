@@ -54,7 +54,7 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     Req = #radius_request{
              cmd = request,
              attrs = Attrs,
-             msg_hmac = false},
+             msg_hmac = true},
 
     Pid = proc_lib:spawn_link(fun() ->
 				      {Verdict, SessionOpts0, State} =
@@ -352,8 +352,8 @@ tunnel_type('CAPWAP') -> 16#ff00.
 tunnel_medium_type('IPv4') -> 1;
 tunnel_medium_type('IPv6') -> 2.
 
-radius_response({ok, Response}, {_, _, Secret}, State) ->
-    radius_reply(eradius_lib:decode_request(Response, Secret), State);
+radius_response({ok, Response, RequestAuthenticator}, {_, _, Secret}, State) ->
+    radius_reply(eradius_lib:decode_request(Response, Secret, RequestAuthenticator), State);
 radius_response(Response, _, State) ->
     lager:error("RADIUS failed with ~p", [Response]),
     {fail, [], State}.
