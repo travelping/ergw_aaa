@@ -3,6 +3,19 @@ ctld
 
 Erlang CTLD Radius session implementation.
 
+Version 1.3.0 - xx Feb 2015
+---------------------------
+
+* description abstract session FSM and implement framework
+* moved ctld_session to new FSM
+* add more RADIUS attributes
+* strip TP- prefix from session internal state
+* fix case of CAPWAP Power attributes in Travelping dictionary
+* generalize AAA provider invokation
+* Session-Ids for AAA providers
+* Interim-Accounting is now asynchron
+* adjust API for eradius 0.6.0
+
 Version 1.2.1 - 06 Nov 2014
 ---------------------------
 
