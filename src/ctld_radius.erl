@@ -3,7 +3,7 @@
 -behaviour(ctld_aaa).
 
 %% AAA API
--export([init/1, session_id/2, authorize/3, start_authentication/3, start_accounting/4]).
+-export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ctld_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
 
@@ -34,12 +34,10 @@ init(Opts) ->
      },
     {ok, State}.
 
-session_id(#{'Session-Id' := SessionId}, State) ->
-    {SessionId, State};
-session_id(#{'AAA-Application-Id' := AcctAppId}, State) ->
-    {ctld_session_seq:inc(AcctAppId), State};
-session_id(_Session, State = #state{acct_app_id = AcctAppId}) ->
-    {ctld_session_seq:inc(AcctAppId), State}.
+copy_session_id(#{'Session-Id' := SessionId}, Opts) ->
+    Opts#{'Session-Id' => SessionId};
+copy_session_id(_, Opts) ->
+    Opts.
 
 start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     ExtraAttrs0 = radius_session_options(State0, []),
@@ -59,11 +57,12 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     Pid = proc_lib:spawn_link(fun() ->
 				      {Verdict, SessionOpts0, State} =
 					  radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
-				      SessionOpts =
+				      NewSessionOpts0 =
 					  if Verdict /= success -> #{};
 					     true               -> to_session(SessionOpts0)
 					  end,
-				      ?queue_event(From, {'AuthenticationRequestReply', {Verdict, SessionOpts, State#state{auth_state = Verdict}}})
+				      NewSessionOpts1 = copy_session_id(Session, NewSessionOpts0),
+				      ?queue_event(From, {'AuthenticationRequestReply', {Verdict, NewSessionOpts1, State#state{auth_state = Verdict}}})
 			      end),
     {ok, State0#state{auth_state = Pid}}.
 
@@ -178,6 +177,9 @@ session_options('Framed-Interface-Id', Value, Acc) ->
 session_options('Session-Id', Value, Acc) ->
     Id = io_lib:format("~40.16.0B", [Value]),
     [{?Acct_Session_Id, Id}|Acc];
+session_options('Multi-Session-Id', Value, Acc) ->
+    Id = io_lib:format("~40.16.0B", [Value]),
+    [{?Acct_Multi_Session_Id, Id}|Acc];
 session_options('Class', Class, Acc) ->
     [{?Class, Class}|Acc];
 session_options('Calling-Station', Value, Acc) ->

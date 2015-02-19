@@ -73,8 +73,13 @@ set(Session, Values) when is_map(Values) ->
 
 init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
+
     AcctAppId = maps:get('AAA-Application-Id', SessionOpts, default),
+    SessionId = ctld_session_seq:inc(AcctAppId),
+
     DefaultSessionOpts = #{
+      'Session-Id'         => SessionId,
+      'Multi-Session-Id'   => SessionId,
       'Interim-Accounting' => 10 * 1000
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),
@@ -84,7 +89,7 @@ init([Owner, SessionOpts]) ->
     {ok, State}.
 
 handle_call({authenticate, SessionOpts}, From, State0) ->
-    NewSessionOpts = maps:merge(State0#state.session, SessionOpts),
+    NewSessionOpts = prepare_next_session_id(maps:merge(State0#state.session, SessionOpts)),
     {Reply, NewSession} = ?action('Authenticate', NewSessionOpts),
     State1 = State0#state{session = NewSession},
     case Reply of
@@ -259,6 +264,9 @@ merge(S1, S2) ->
 %%===================================================================
 %% internal helpers
 %%===================================================================
+prepare_next_session_id(State) ->
+    AcctAppId = maps:get('AAA-Application-Id', State, default),
+    State#{'Session-Id' => ctld_session_seq:inc(AcctAppId)}.
 
 start_timer(Time, Msg) ->
     erlang:start_timer(Time, self(), Msg).

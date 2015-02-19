@@ -3,7 +3,7 @@
 -behaviour(ctld_aaa).
 
 %% AAA API
--export([init/1, session_id/2, authorize/3, start_authentication/3, start_accounting/4]).
+-export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ctld_session, [to_session/1]).
 
@@ -23,15 +23,13 @@ init(Opts) ->
      },
     {ok, State}.
 
-session_id(#{'Session-Id' := SessionId}, State) ->
-    {SessionId, State};
-session_id(#{'AAA-Application-Id' := AcctAppId}, State) ->
-    {ctld_session_seq:inc(AcctAppId), State};
-session_id(_Session, State = #state{acct_app_id = AcctAppId}) ->
-    {ctld_session_seq:inc(AcctAppId), State}.
+copy_session_id(#{'Session-Id' := SessionId}, Opts) ->
+    Opts#{'Session-Id' => SessionId};
+copy_session_id(_, Opts) ->
+    Opts.
 
-start_authentication(From, _Session, State = #state{shared_secret = Secret}) ->
-    SessionOpts =  to_session([{'TLS-Pre-Shared-Key', Secret}]),
+start_authentication(From, Session, State = #state{shared_secret = Secret}) ->
+    SessionOpts = copy_session_id(Session, to_session([{'TLS-Pre-Shared-Key', Secret}])),
     Verdict = success,
     ?queue_event(From, {'AuthenticationRequestReply', {Verdict, SessionOpts, State}}),
     {ok, State}.
