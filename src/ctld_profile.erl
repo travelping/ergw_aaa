@@ -31,6 +31,10 @@ action(Action, State) ->
     lager:warning("TODO: implement action: ~p", [Action]),
     {ok, State}.
 
+action('Authenticate', [AuthData], State)
+  when is_map(AuthData) ->
+    action('Authenticate', maps:merge(State, AuthData));
+
 action('Account', [AcctType], State) ->
     lager:debug("Event: Account ~p", [AcctType]),
 

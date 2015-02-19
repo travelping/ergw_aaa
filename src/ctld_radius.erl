@@ -283,10 +283,14 @@ session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
 
 %% Travelping Extension
+session_options('Zone-Id', Value, Acc) ->
+    [{?TP_Zone_Id, Value}|Acc];
 session_options('Location-Id', Value, Acc) ->
     [{?TP_Location_Id, Value}|Acc];
 session_options('Access-Group', Value, Acc) ->
     [{?TP_Access_Group, list_to_binary(Value)}|Acc];
+session_options('Access-Class-Id', Value, Acc) ->
+    [{?TP_Access_Class_Id, list_to_binary(Value)}|Acc];
 session_options('NAT-Pool-Id', Value, Acc) ->
     [{?TP_NAT_Pool_Id, Value}|Acc];
 session_options('NAT-IP-Address', Value, Acc) ->
@@ -295,6 +299,11 @@ session_options('NAT-Port-Start', Value, Acc) ->
     [{?TP_NAT_Port_Start, Value}|Acc];
 session_options('NAT-Port-End', Value, Acc) ->
     [{?TP_NAT_Port_End, Value}|Acc];
+
+session_options('DHCP-Parameter-Request-List', Value, Acc) ->
+    [{?TP_DHCP_Parameter_Request_List, Value}|Acc];
+session_options('DHCP-Request-Option-List', Value, Acc) ->
+    [{?TP_DHCP_Request_Option_List, Value}|Acc];
 
 %% TP CAPWAP extensions - Versions
 
