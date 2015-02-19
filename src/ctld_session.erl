@@ -80,6 +80,8 @@ init([Owner, SessionOpts]) ->
     DefaultSessionOpts = #{
       'Session-Id'         => SessionId,
       'Multi-Session-Id'   => SessionId,
+      'Service-Type'       => 'Framed-User',
+      'Framed-Protocol'    => 'PPP',
       'Interim-Accounting' => 10 * 1000
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),

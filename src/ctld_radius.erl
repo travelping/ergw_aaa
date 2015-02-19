@@ -45,8 +45,6 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     Attrs = [
 	     {?User_Name,       attr_get('Username', Session, <<>>)},
 	     {?User_Password ,  attr_get('Password', Session, <<>>)},
-	     {?Service_Type,    2},
-	     {?Framed_Protocol, 1},
 	     {?NAS_Identifier,  State0#state.nas_id}
 	     | ExtraAttrs],
     Req = #radius_request{
@@ -84,8 +82,6 @@ start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, radi
     Attrs = [
 	     {?RStatus_Type,    ?RStatus_Type_Start},
 	     {?User_Name,       UserName},
-	     {?Service_Type,    2},
-	     {?Framed_Protocol, 1},
 	     {?NAS_Identifier,  State#state.nas_id}
 	     | ExtraAttrs],
     Req = #radius_request{
@@ -112,8 +108,6 @@ start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, ra
     Attrs = [
 	     {?RStatus_Type,    ?RStatus_Type_Update},
 	     {?User_Name,       UserName},
-	     {?Service_Type,    2},
-	     {?Framed_Protocol, 1},
 	     {?NAS_Identifier,  State#state.nas_id},
 	     {?RSession_Time,   round((Now - Start) / 1000)}
 	     | ExtraAttrs],
@@ -169,6 +163,11 @@ session_options(Session, Acc) ->
 
 session_options('IP', Value, Acc) ->
     [{?Framed_IP_Address, Value}|Acc];
+
+session_options('Service-Type', Value, Acc) ->
+    [{?Service_Type, service_type(Value)}|Acc];
+session_options('Framed-Protocol', Value, Acc) ->
+    [{?Framed_Protocol, framed_protocol(Value)}|Acc];
 
 session_options('Framed-IP-Address', Value, Acc) ->
     [{?Framed_IP_Address, Value}|Acc];
@@ -353,6 +352,36 @@ tunnel_type('CAPWAP') -> 16#ff00.
 
 tunnel_medium_type('IPv4') -> 1;
 tunnel_medium_type('IPv6') -> 2.
+
+service_type('Login-User')              -> 1;
+service_type('Framed-User')             -> 2;
+service_type('Callback-Login-User')     -> 3;
+service_type('Callback-Framed-User')    -> 4;
+service_type('Outbound-User')           -> 5;
+service_type('Administrative-User')     -> 6;
+service_type('NAS-Prompt-User')         -> 7;
+service_type('Authenticate-Only')       -> 8;
+service_type('Callback-NAS-Prompt')     -> 9;
+service_type('Call-Check')              -> 10;
+service_type('Callback-Administrative') -> 11;
+service_type('Voice')                   -> 12;
+service_type('Fax')                     -> 13;
+service_type('Modem-Relay')             -> 14;
+service_type('IAPP-Register')           -> 15;
+service_type('IAPP-AP-Check')           -> 16;
+service_type('TP-CAPWAP-WTP')           -> 16#48f90001;
+service_type('TP-CAPWAP-STA')           -> 16#48f90002;
+service_type(_)                         -> 2.
+
+framed_protocol('PPP')               -> 1;
+framed_protocol('SLIP')              -> 2;
+framed_protocol('ARAP')              -> 3;
+framed_protocol('Gandalf-SLML')      -> 4;
+framed_protocol('Xylogics-IPX-SLIP') -> 5;
+framed_protocol('X.75-Synchronous')  -> 6;
+framed_protocol('GPRS-PDP-Context')  -> 7;
+framed_protocol('TP-CAPWAP')         -> 16#48f90001;
+framed_protocol(_)                   -> 1.
 
 radius_response({ok, Response, RequestAuthenticator}, {_, _, Secret}, State) ->
     radius_reply(eradius_lib:decode_request(Response, Secret, RequestAuthenticator), State);
