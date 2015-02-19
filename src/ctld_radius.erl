@@ -49,7 +49,7 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
 	     | ExtraAttrs],
     Req = #radius_request{
              cmd = request,
-             attrs = Attrs,
+             attrs = remove_accounting_attrs(Attrs),
              msg_hmac = true},
 
     Pid = proc_lib:spawn_link(fun() ->
@@ -181,6 +181,8 @@ session_options('Multi-Session-Id', Value, Acc) ->
     [{?Acct_Multi_Session_Id, Id}|Acc];
 session_options('Class', Class, Acc) ->
     [{?Class, Class}|Acc];
+session_options('RADIUS-State', State, Acc) ->
+    [{?State, State}|Acc];
 session_options('Calling-Station', Value, Acc) ->
     [{?Calling_Station_Id, Value}|Acc];
 session_options('Called-Station', Value, Acc) ->
@@ -231,6 +233,15 @@ session_options('Tunnel-Client-Endpoint', {Tag, Value}, Acc) ->
     [{?Tunnel_Client_Endpoint, {Tag, Value}}|Acc];
 session_options('Tunnel-Client-Endpoint', Value, Acc) ->
     [{?Tunnel_Client_Endpoint, Value}|Acc];
+
+session_options('Acct-Authentic', 'RADIUS', Acc) ->
+    [{?Acct_Authentic, 1}|Acc];
+session_options('Acct-Authentic', 'Local', Acc) ->
+    [{?Acct_Authentic, 2}|Acc];
+session_options('Acct-Authentic', 'Remote', Acc) ->
+    [{?Acct_Authentic, 3}|Acc];
+session_options('Acct-Authentic', 'Diameter', Acc) ->
+    [{?Acct_Authentic, 4}|Acc];
 
 %% DSL-Forum PPPoE Intermediate Agent Attributes
 session_options('ADSL-Agent-Circuit-Id', Value, Acc) ->
@@ -393,7 +404,7 @@ radius_reply(#radius_request{cmd = accept} = Reply, State0) ->
     lager:debug("RADIUS Reply: ~p", [Reply]),
     case process_radius_attrs(fun process_pap_attrs/2, Reply, success, State0) of
 	{success, _, _} = Result ->
-	    Result;
+	    session_opt('Acct-Authentic', 'RADIUS', Result);
 	_ ->
 	    {fail, [], State0}
     end;
@@ -424,6 +435,10 @@ radius_session_opt(Key, Opt, {Verdict, Opts, State = #state{radius_session = Rad
 %% Class
 process_gen_attrs({#attribute{id = ?Class}, Class}, Acc) ->
     radius_session_opt('Class', Class, Acc);
+
+%% State
+process_gen_attrs({#attribute{id = ?State}, State}, Acc) ->
+    radius_session_opt('RADIUS-State', State, Acc);
 
 %% User-Name
 process_gen_attrs({#attribute{id = ?User_Name}, UserName}, Acc) ->
@@ -533,3 +548,25 @@ process_gen_attrs({Attr, Value} , Acc) ->
 process_unexpected_value({#attribute{name = Name}, Value} , Acc) ->
     lager:debug("unexpected Value in AVP: ~s: ~p", [Name, Value]),
     verdict(fail, Acc).
+
+remove_accounting_attrs(Attrs) ->
+    FilterOpts = radius_accounting_opts(),
+    lists:filter(fun({Opt, _}) -> not gb_sets:is_member(Opt, FilterOpts) end, Attrs).
+
+radius_accounting_opts() ->
+    gb_sets:from_list([?Acct_Type,
+		       ?Acct_Session_Start_Time,
+		       ?Acct_Interim_Interval,
+		       ?Acct_Tunnel_Connection,
+		       ?Acct_Output_Gigawords,
+		       ?Acct_Input_Gigawords,
+		       ?Acct_Link_Count,
+		       ?Acct_Terminate_Cause,
+		       ?Acct_Output_Packets,
+		       ?Acct_Input_Packets,
+		       ?Acct_Session_Time,
+		       ?Acct_Authentic,
+		       ?Acct_Output_Octets,
+		       ?Acct_Input_Octets,
+		       ?Acct_Delay_Time,
+		       ?Acct_Status_Type]).
