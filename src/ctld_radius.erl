@@ -20,7 +20,7 @@
 -record(state, {nas_id,
 		auth_server, acct_server,
 		auth_state,
-		accounting = [],
+		radius_session = [],
 		acct_app_id = default}).
 
 %%===================================================================
@@ -42,7 +42,7 @@ session_id(_Session, State = #state{acct_app_id = AcctAppId}) ->
     {ctld_session_seq:inc(AcctAppId), State}.
 
 start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
-    ExtraAttrs0 = accounting_options(State0, []),
+    ExtraAttrs0 = radius_session_options(State0, []),
     ExtraAttrs = session_options(Session, ExtraAttrs0),
     Attrs = [
 	     {?User_Name,       attr_get('Username', Session, <<>>)},
@@ -70,13 +70,13 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
 authorize(_From, _Session, State = #state{auth_state = Verdict}) ->
     {reply, Verdict, to_session([]), State}.
 
-start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
+start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, radius_session = RadiusSession}) ->
     UserName0 = attr_get('Username', Session, <<>>),
-    UserName = case proplists:get_value('Username', Accounting) of
+    UserName = case proplists:get_value('Username', RadiusSession) of
 		   undefined -> UserName0;
 		   Value -> Value
 	       end,
-    ExtraAttrs1 = accounting_options(State, []),
+    ExtraAttrs1 = radius_session_options(State, []),
     ExtraAttrs0 = session_options(Session, ExtraAttrs1),
     ExtraAttrs = [X || X = {K, _} <- ExtraAttrs0,
 		       K /= ?Acct_Input_Octets, K /= ?Acct_Output_Octets,
@@ -98,17 +98,17 @@ start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, acco
 
     {ok, State};
 
-start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, accounting = Accounting}) ->
+start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, radius_session = RadiusSession}) ->
     Now = ctld_variable:now_ms(),
 
     UserName0 = attr_get('Username', Session, <<>>),
-    UserName = case proplists:get_value('Username', Accounting) of
+    UserName = case proplists:get_value('Username', RadiusSession) of
 		   undefined -> UserName0;
 		   Value -> Value
 	       end,
     Start = attr_get('Accounting-Start', Session, Now),
 
-    ExtraAttrs0 = accounting_options(State, []),
+    ExtraAttrs0 = radius_session_options(State, []),
     ExtraAttrs = session_options(Session, ExtraAttrs0),
     Attrs = [
 	     {?RStatus_Type,    ?RStatus_Type_Update},
@@ -132,7 +132,7 @@ start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
 
     Start = attr_get('Accounting-Start', Session, Now),
 
-    ExtraAttrs0 = accounting_options(State, []),
+    ExtraAttrs0 = radius_session_options(State, []),
     ExtraAttrs = session_options(Session, ExtraAttrs0),
     Attrs = [
 	     {?RStatus_Type,    ?RStatus_Type_Stop},
@@ -162,8 +162,8 @@ start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
 %% now_ticks({MegaSecs, Secs, MicroSecs}) ->
 %%     MegaSecs * 10000000 + Secs * 10 + round(MicroSecs div 100000).
 
-accounting_options(#state{accounting = Accounting}, Acc) ->
-    lists:foldl(fun({Key, Value}, Acc0) -> session_options(Key, Value, Acc0) end, Acc, Accounting).
+radius_session_options(#state{radius_session = RadiusSession}, Acc) ->
+    lists:foldl(fun({Key, Value}, Acc0) -> session_options(Key, Value, Acc0) end, Acc, RadiusSession).
 
 session_options(Session, Acc) ->
     attr_fold(fun session_options/3, Acc, Session).
@@ -386,16 +386,17 @@ session_opt(Key, Opt, {Verdict, Opts, State}) ->
     {Verdict, attr_set(Key, Opt, Opts), State}.
 session_opt_append(Key, Opt, {Verdict, Opts, State}) ->
     {Verdict, attr_append(Key, Opt, Opts), State}.
-accounting_opt(Opt, {Verdict, Opts, State = #state{accounting = Accounting}}) ->
-    {Verdict, Opts, State#state{accounting = [Opt|Accounting]}}.
+
+radius_session_opt(Key, Opt, {Verdict, Opts, State = #state{radius_session = RadiusSession}}) ->
+    {Verdict, Opts, State#state{radius_session = [{Key, Opt}|RadiusSession]}}.
 
 %% Class
 process_gen_attrs({#attribute{id = ?Class}, Class}, Acc) ->
-    accounting_opt({class, Class}, Acc);
+    radius_session_opt('Class', Class, Acc);
 
 %% User-Name
 process_gen_attrs({#attribute{id = ?User_Name}, UserName}, Acc) ->
-    accounting_opt({username, UserName}, Acc);
+    radius_session_opt('Username', UserName, Acc);
 
 process_gen_attrs({#attribute{id = ?Acct_Interim_Interval}, InterimAccounting}, Acc) ->
     session_opt('Interim-Accounting', InterimAccounting * 1000, Acc);
