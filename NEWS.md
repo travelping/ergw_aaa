@@ -3,7 +3,7 @@ ctld
 
 Erlang CTLD Radius session implementation.
 
-Version 1.3.0 - xx Feb 2015
+Version 1.3.0 - 23 Apr 2015
 ---------------------------
 
 * description abstract session FSM and implement framework
