@@ -16,7 +16,7 @@ now_ms() ->
     now_ms(erlang:now()).
 
 now_ms({MegaSecs,Secs,MicroSecs}) ->
-        MegaSecs * 1000000 + Secs * 1000 + round(MicroSecs / 1000.0).
+        MegaSecs * 1000000000 + Secs * 1000 + round(MicroSecs / 1000.0).
 
 new(Name, Type, Value, TriggerDefs) ->
     Now = now_ms(),
