@@ -3,7 +3,7 @@
 -compile({parse_transform, cut}).
 
 -export([now_ms/0, now_ms/1]).
--export([new/4, set/2, get/1, update/2, stop_timers/1, rearm_timer/1]).
+-export([new/4, set/2, get/1, update/2, stop_timers/1, rearm_timer/1, clear_triggers/1]).
 
 -include("include/ctld_variable.hrl").
 
@@ -45,6 +45,10 @@ rearm_timer(Var0 = #var{type = Type, name = Name, triggers = Triggers0}) ->
     {TriggerDefs, Var} = lists:mapfoldl(stop_timer(Now, _, _), Var0, Triggers0),
     Triggers1 = lists:map(init_trigger(Now, Name, Type, 0, _), TriggerDefs),
     Var#var{triggers = Triggers1}.
+
+clear_triggers(Var = #var{triggers = Triggers}) ->
+    lists:foreach(clear_trigger(_), Triggers),
+    Var#var{triggers = []}.
 
 %%===================================================================
 %% Internal Helpers
@@ -89,3 +93,10 @@ stop_timer(Now, Trigger = {Event, limit, TimeOut, StartTime, TimerRef}, Var = #v
 
 stop_timer(_Now, Trigger, Var) ->
     {Trigger, Var}.
+
+clear_trigger({_Event, limit, _TimeOut, _StartTime, TimerRef}) ->
+    cancel_timer(TimerRef);
+clear_trigger({Event, limit, _Limit}) ->
+    receive Event -> ok
+    after 0 -> ok
+    end.
