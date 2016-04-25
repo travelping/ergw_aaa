@@ -3,6 +3,12 @@ ctld
 
 Erlang CTLD Radius session implementation.
 
+Version 1.3.1 - 25 Apr 2016
+---------------------------
+
+* fix bogus milli seconds calculation
+* monitor session owner to properly shutdown when it does
+
 Version 1.3.0 - 23 Apr 2015
 ---------------------------
 
