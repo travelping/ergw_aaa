@@ -17,6 +17,7 @@
 
 -record(state, {'$version' = 0,
 		owner,
+		owner_monitor,
 		authenticated = false,
 		started = false,
 		reply,
@@ -76,6 +77,7 @@ init([Owner, SessionOpts]) ->
 
     AcctAppId = maps:get('AAA-Application-Id', SessionOpts, default),
     SessionId = ctld_session_seq:inc(AcctAppId),
+    MonRef = erlang:monitor(process, Owner),
 
     DefaultSessionOpts = #{
       'Session-Id'         => SessionId,
@@ -86,8 +88,9 @@ init([Owner, SessionOpts]) ->
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),
     State = #state{
-	       owner   = Owner,
-	       session = Session},
+	       owner         = Owner,
+	       owner_monitor = MonRef,
+	       session       = Session},
     {ok, State}.
 
 handle_call({authenticate, SessionOpts}, From, State0) ->
@@ -158,14 +161,15 @@ handle_cast(Event, State) ->
     io:format("~p(~p): got ~p~n", [?MODULE, ?LINE, Event]),
     {noreply, State}.
 
-handle_info({'EXIT', From, Reason}, State = #state{owner = From}) ->
-    lager:error("Received EXIT signal from ~p with reason ~p", [From, Reason]),
-    if
-	State#state.authenticated orelse State#state.started ->
-	    ?action('Account', 'Stop', State#state.session);
-       true ->
-           ok
-    end,
+handle_info({'DOWN', _Ref, process, Owner, Info},
+	    State = #state{owner = Owner}) ->
+    lager:error("Received DOWN information for ~p with info ~p", [Owner, Info]),
+    handle_owner_exit(State),
+    {stop, normal, State};
+
+handle_info({'EXIT', Owner, Reason}, State = #state{owner = Owner}) ->
+    lager:error("Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
+    handle_owner_exit(State),
     {stop, normal, State};
 
 handle_info({'EXIT', _From, _Reason}, State) ->
@@ -308,3 +312,9 @@ restart_interim_accounting(State) ->
 	_ ->
 	    State#state{interim_timer = undefined}
     end.
+
+handle_owner_exit(State)
+  when State#state.authenticated orelse State#state.started ->
+    ?action('Account', 'Stop', State#state.session);
+handle_owner_exit(_State) ->
+    ok.
