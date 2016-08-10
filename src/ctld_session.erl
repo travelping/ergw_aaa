@@ -181,8 +181,8 @@ handle_info({'AuthenticationRequestReply', _AuthReply}, State = #state{authentic
     {noreply, State};
 
 handle_info(Ev = {'AuthenticationRequestReply', _AuthReply}, State0) ->
-    {Reply, NewSession} = ctld_profile:handle_reply(fun event/2, Ev, State0#state.session),
-    State1 = State0#state{session = NewSession, authenticated = true},
+    {Reply, Authenticated, NewSession} = ctld_profile:handle_reply(fun event/2, Ev, State0#state.session),
+    State1 = State0#state{session = NewSession, authenticated = Authenticated},
     State2 = reply(Reply, State1),
     {noreply, State2};
 
@@ -229,12 +229,10 @@ reply(Reply, State = #state{reply = ReplyTo}) ->
     gen_server:reply(ReplyTo, Reply),
     State#state{reply = undefined}.
 
-event({'AuthenticationRequestReply', {success, SessionOpts}}, Session) ->
-    NewSession = maps:merge(SessionOpts, Session),
-    {success, NewSession};
-
-event({'AuthenticationRequestReply', {Verdict, _}}, Session) ->
-    {Verdict, Session}.
+event({'AuthenticationRequestReply', {Verdict, SessionOpts}}, Session0) ->
+    Session1 = maps:without(['EAP-Data'], Session0),
+    Session = maps:merge(Session1, SessionOpts),
+    {Verdict, Verdict == success, Session}.
 
 %%===================================================================
 %% Session Object API and Helpers

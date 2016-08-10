@@ -39,26 +39,29 @@ copy_session_id(#{'Session-Id' := SessionId}, Opts) ->
 copy_session_id(_, Opts) ->
     Opts.
 
+session_auth_options('PAP', Session, Attrs) ->
+    [{?User_Password , attr_get('Password', Session, <<>>)} | Attrs];
+session_auth_options(_, _Session, Attrs) ->
+    Attrs.
+
 start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
-    ExtraAttrs0 = radius_session_options(State0, []),
-    ExtraAttrs = session_options(Session, ExtraAttrs0),
-    Attrs = [
-	     {?User_Name,       attr_get('Username', Session, <<>>)},
-	     {?User_Password ,  attr_get('Password', Session, <<>>)},
-	     {?NAS_Identifier,  State0#state.nas_id}
-	     | ExtraAttrs],
+    Attrs0 = [{?User_Name,       attr_get('Username', Session, <<>>)},
+	      {?NAS_Identifier,  State0#state.nas_id}],
+    Attrs1 = session_auth_options(attr_get('Authentication-Method', Session, 'PAP'), Session, Attrs0),
+    Attrs2 = radius_session_options(State0, Attrs1),
+    Attrs3 = session_options(Session, Attrs2),
+    Attrs = remove_accounting_attrs(Attrs3),
+
     Req = #radius_request{
              cmd = request,
-             attrs = remove_accounting_attrs(Attrs),
-             msg_hmac = true},
+             attrs = Attrs,
+	     msg_hmac = true,
+	     eap_msg = attr_get('EAP-Data', Session, <<>>)},
 
     Pid = proc_lib:spawn_link(fun() ->
 				      {Verdict, SessionOpts0, State} =
 					  radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
-				      NewSessionOpts0 =
-					  if Verdict /= success -> #{};
-					     true               -> to_session(SessionOpts0)
-					  end,
+				      NewSessionOpts0 = to_session(SessionOpts0),
 				      NewSessionOpts1 = copy_session_id(Session, NewSessionOpts0),
 				      ?queue_event(From, {'AuthenticationRequestReply', {Verdict, NewSessionOpts1, State#state{auth_state = Verdict}}})
 			      end),
@@ -281,6 +284,8 @@ session_options('Authentication-Method', {'TLS', 'Pre-Shared-Key'}, Acc) ->
     [{?TP_TLS_Auth_Type, 0}|Acc];
 session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
+session_options('Authentication-Method', 'EAP', Acc) ->
+    Acc;
 
 %% Travelping Extension
 session_options('Zone-Id', Value, Acc) ->
@@ -412,23 +417,44 @@ radius_response(Response, _, State) ->
 radius_reply(#radius_request{cmd = accept} = Reply, State0) ->
     lager:debug("RADIUS Reply: ~p", [Reply]),
     case process_radius_attrs(fun process_pap_attrs/2, Reply, success, State0) of
-	{success, _, _} = Result ->
+	{success, _, _} = Result0 ->
+	    Result = handle_eap_msg(Reply, Result0),
 	    session_opt('Acct-Authentic', 'RADIUS', Result);
 	_ ->
 	    {fail, [], State0}
     end;
+
+radius_reply(#radius_request{cmd = challenge} = Reply, State0) ->
+    lager:debug("RADIUS Challenge: ~p", [lager:pr(Reply, ?MODULE)]),
+    case process_radius_attrs(fun process_chap_attrs/2, Reply, challenge, State0) of
+	{challenge, _, _} = Result ->
+	    handle_eap_msg(Reply, Result);
+	_ ->
+	    {fail, [], State0}
+    end;
+
 radius_reply(#radius_request{cmd = reject} = Reply, State) ->
     lager:debug("RADIUS failed with ~p", [Reply]),
-    {fail, [], State};
+    handle_eap_msg(Reply, {fail, to_session([]), State});
+
 radius_reply(Reply, State) ->
     lager:debug("RADIUS failed with ~p", [Reply]),
     {fail, [], State}.
+
+handle_eap_msg(#radius_request{eap_msg = EAP}, Result)
+  when EAP /= <<>> ->
+    session_opt('EAP-Data', EAP, Result);
+handle_eap_msg(_, Result) ->
+    Result.
 
 %% iterate over the RADIUS attributes
 process_radius_attrs(Fun, #radius_request{attrs = Attrs}, Verdict, State) ->
     lists:foldr(Fun, {Verdict, to_session([]), State}, Attrs).
 
 process_pap_attrs(AVP, {_Verdict, _Opts, _State} = Acc0) ->
+    process_gen_attrs(AVP, Acc0).
+
+process_chap_attrs(AVP, {_Verdict, _Opts, _State} = Acc0) ->
     process_gen_attrs(AVP, Acc0).
 
 verdict(Verdict, {_, Opts, State}) ->
@@ -439,7 +465,7 @@ session_opt_append(Key, Opt, {Verdict, Opts, State}) ->
     {Verdict, attr_append(Key, Opt, Opts), State}.
 
 radius_session_opt(Key, Opt, {Verdict, Opts, State = #state{radius_session = RadiusSession}}) ->
-    {Verdict, Opts, State#state{radius_session = [{Key, Opt}|RadiusSession]}}.
+    {Verdict, Opts, State#state{radius_session = lists:keystore(Key, 1, RadiusSession, {Key, Opt})}}.
 
 %% Class
 process_gen_attrs({#attribute{id = ?Class}, Class}, Acc) ->
