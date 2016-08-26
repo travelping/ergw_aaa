@@ -16,6 +16,7 @@ start(_StartType, _StartArgs) ->
 			      dictionary_tunnel,
 			      dictionary_rfc4679,
 			      dictionary_alcatel_sr,
+			      dictionary_microsoft,
 			      dictionary_travelping]),
     ctld_sup:start_link().
 

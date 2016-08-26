@@ -15,6 +15,7 @@
 -include_lib("eradius/include/dictionary_tunnel.hrl").
 -include_lib("eradius/include/dictionary_rfc4679.hrl").
 -include_lib("eradius/include/dictionary_alcatel_sr.hrl").
+-include_lib("eradius/include/dictionary_microsoft.hrl").
 -include_lib("eradius/include/dictionary_travelping.hrl").
 
 -record(state, {nas_id,
@@ -284,8 +285,6 @@ session_options('Authentication-Method', {'TLS', 'Pre-Shared-Key'}, Acc) ->
     [{?TP_TLS_Auth_Type, 0}|Acc];
 session_options('Authentication-Method', {'TLS', 'X509-Subject-CN'}, Acc) ->
     [{?TP_TLS_Auth_Type, 1}|Acc];
-session_options('Authentication-Method', 'EAP', Acc) ->
-    Acc;
 
 %% Travelping Extension
 session_options('Zone-Id', Value, Acc) ->
@@ -516,6 +515,19 @@ process_gen_attrs({#attribute{id = ?Alc_Primary_Dns}, DNS}, Acc) ->
 %% Alc-Secondary-Dns
 process_gen_attrs({#attribute{id = ?Alc_Secondary_Dns}, DNS}, Acc) ->
     session_opt_append('DNS', DNS, Acc);
+
+
+%% Microsoft MPPE Keys
+
+%% MS-MPPE-Send-Key
+process_gen_attrs({#attribute{id = ?MS_MPPE_Send_Key}, Value}, Acc) ->
+    session_opt('MS-MPPE-Send-Key', Value, Acc);
+
+%% MS-MPPE-Recv-Key
+process_gen_attrs({#attribute{id = ?MS_MPPE_Recv_Key}, Value}, Acc) ->
+    session_opt('MS-MPPE-Recv-Key', Value, Acc);
+
+%% Travelping Extensions
 
 %% TP-Access-Rule
 process_gen_attrs({#attribute{id = ?TP_Access_Rule}, Value}, Acc) ->
