@@ -1,6 +1,6 @@
 %% Copyright 2010-2012, Travelping GmbH <info@travelping.com>
 
--module(ctld_app).
+-module(ergw_aaa_app).
 
 -behaviour(application).
 
@@ -18,7 +18,7 @@ start(_StartType, _StartArgs) ->
 			      dictionary_alcatel_sr,
 			      dictionary_microsoft,
 			      dictionary_travelping]),
-    ctld_sup:start_link().
+    ergw_aaa_sup:start_link().
 
 stop(_State) ->
     ok.

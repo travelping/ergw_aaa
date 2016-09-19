@@ -1,4 +1,4 @@
--module(ctld_session).
+-module(ergw_aaa_session).
 
 -behaviour(gen_server).
 
@@ -26,7 +26,7 @@
 
 -define(AAA_TIMEOUT, (30 * 1000)).      %% 30sec for all AAA gen_server:call timeouts
 
--include("include/ctld_profile.hrl").
+-include("include/ergw_aaa_profile.hrl").
 
 %%===================================================================
 %% API
@@ -76,7 +76,7 @@ init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
 
     AcctAppId = maps:get('AAA-Application-Id', SessionOpts, default),
-    SessionId = ctld_session_seq:inc(AcctAppId),
+    SessionId = ergw_aaa_session_seq:inc(AcctAppId),
     MonRef = erlang:monitor(process, Owner),
 
     DefaultSessionOpts = #{
@@ -181,7 +181,7 @@ handle_info({'AuthenticationRequestReply', _AuthReply}, State = #state{authentic
     {noreply, State};
 
 handle_info(Ev = {'AuthenticationRequestReply', _AuthReply}, State0) ->
-    {Reply, Authenticated, NewSession} = ctld_profile:handle_reply(fun event/2, Ev, State0#state.session),
+    {Reply, Authenticated, NewSession} = ergw_aaa_profile:handle_reply(fun event/2, Ev, State0#state.session),
     State1 = State0#state{session = NewSession, authenticated = Authenticated},
     State2 = reply(Reply, State1),
     {noreply, State2};
@@ -270,7 +270,7 @@ merge(S1, S2) ->
 %%===================================================================
 prepare_next_session_id(State) ->
     AcctAppId = maps:get('AAA-Application-Id', State, default),
-    State#{'Session-Id' => ctld_session_seq:inc(AcctAppId)}.
+    State#{'Session-Id' => ergw_aaa_session_seq:inc(AcctAppId)}.
 
 start_timer(Time, Msg) ->
     erlang:start_timer(Time, self(), Msg).

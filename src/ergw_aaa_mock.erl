@@ -1,13 +1,13 @@
--module(ctld_mock).
+-module(ergw_aaa_mock).
 
--behaviour(ctld_aaa).
+-behaviour(ergw_aaa).
 
 %% AAA API
 -export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
--import(ctld_session, [to_session/1]).
+-import(ergw_aaa_session, [to_session/1]).
 
--include("include/ctld_profile.hrl").
+-include("include/ergw_aaa_profile.hrl").
 
 -record(state, {shared_secret,
 		auth_state,

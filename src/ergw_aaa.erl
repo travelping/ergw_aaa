@@ -1,4 +1,4 @@
--module(ctld_aaa).
+-module(ergw_aaa).
 
 -type session() :: list({atom(), term()}) | map().
 -type a3state() :: term().

@@ -1,6 +1,6 @@
 %% Copyright 2015, Travelping GmbH <info@travelping.com>
 
--module(ctld_sup).
+-module(ergw_aaa_sup).
 
 -behaviour(supervisor).
 
@@ -27,6 +27,6 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, {{one_for_one, 30, 60}, [?CHILD(ctld_session_seq, worker),
-				  ?CHILD(ctld_session_sup, supervisor)]}}.
+    {ok, {{one_for_one, 30, 60}, [?CHILD(ergw_aaa_session_seq, worker),
+				  ?CHILD(ergw_aaa_session_sup, supervisor)]}}.
 

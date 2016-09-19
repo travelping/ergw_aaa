@@ -1,6 +1,6 @@
 %% Copyright 2010-2012, Travelping GmbH <info@travelping.com>
 
--module(ctld_session_sup).
+-module(ergw_aaa_session_sup).
 
 -behaviour(supervisor).
 
@@ -28,4 +28,4 @@ new_session(Owner, SessionOpts) ->
 
 init([]) ->
     {ok, {{simple_one_for_one, 5, 10},
-	  [{ctld_session, {ctld_session, start_link, []}, temporary, 1000, worker, [ctld_session]}]}}.
+	  [{ergw_aaa_session, {ergw_aaa_session, start_link, []}, temporary, 1000, worker, [ergw_aaa_session]}]}}.

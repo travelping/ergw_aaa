@@ -6,7 +6,7 @@
 %                           /_/            /____/
 %
 % Copyright (c) Travelping GmbH <info@travelping.com>
--module(ctld_radius_handler).
+-module(ergw_aaa_radius_handler).
 
 -behaviour(eradius_server).
 

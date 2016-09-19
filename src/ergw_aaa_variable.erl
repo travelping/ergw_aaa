@@ -1,11 +1,11 @@
--module(ctld_variable).
+-module(ergw_aaa_variable).
 
 -compile({parse_transform, cut}).
 
 -export([now_ms/0, now_ms/1]).
 -export([new/4, set/2, get/1, update/2, stop_timers/1, rearm_timer/1, clear_triggers/1]).
 
--include("include/ctld_variable.hrl").
+-include("include/ergw_aaa_variable.hrl").
 
 %%===================================================================
 %% API

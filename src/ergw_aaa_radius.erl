@@ -1,14 +1,14 @@
--module(ctld_radius).
+-module(ergw_aaa_radius).
 
--behaviour(ctld_aaa).
+-behaviour(ergw_aaa).
 
 %% AAA API
 -export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
--import(ctld_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
+-import(ergw_aaa_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
 
--include("include/ctld_profile.hrl").
--include("include/ctld_variable.hrl").
+-include("include/ergw_aaa_profile.hrl").
+-include("include/ergw_aaa_variable.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
@@ -98,7 +98,7 @@ start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, radi
     {ok, State};
 
 start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, radius_session = RadiusSession}) ->
-    Now = ctld_variable:now_ms(),
+    Now = ergw_aaa_variable:now_ms(),
 
     UserName0 = attr_get('Username', Session, <<>>),
     UserName = case proplists:get_value('Username', RadiusSession) of
@@ -125,7 +125,7 @@ start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, ra
     {ok, State};
 
 start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
-    Now = ctld_variable:now_ms(),
+    Now = ergw_aaa_variable:now_ms(),
 
     Start = attr_get('Accounting-Start', Session, Now),
 
@@ -197,21 +197,21 @@ session_options('Port-Id', Value, Acc) ->
 session_options('InOctets', Octets, Acc) when is_integer(Octets) ->
     [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
 session_options('InOctets', Value, Acc) when is_record(Value, var) ->
-    Octets = ctld_variable:get(Value),
+    Octets = ergw_aaa_variable:get(Value),
     [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
 session_options('InPackets', Packets, Acc) when is_integer(Packets) ->
     [{?Acct_Input_Packets, Packets}|Acc];
 session_options('InPackets', Value, Acc) when is_record(Value, var) ->
-    [{?Acct_Input_Packets, ctld_variable:get(Value)}|Acc];
+    [{?Acct_Input_Packets, ergw_aaa_variable:get(Value)}|Acc];
 session_options('OutOctets', Octets, Acc) when is_integer(Octets) ->
     [{?Acct_Output_Octets, Octets}, {?Acct_Output_Gigawords, Octets bsr 32}|Acc];
 session_options('OutOctets', Value, Acc) when is_record(Value, var) ->
-    Octets = ctld_variable:get(Value),
+    Octets = ergw_aaa_variable:get(Value),
     [{?Acct_Output_Octets, Octets}, {?Acct_Output_Gigawords, Octets bsr 32}|Acc];
 session_options('OutPackets', Packets, Acc) when is_integer(Packets) ->
     [{?Acct_Output_Packets, Packets}|Acc];
 session_options('OutPackets', Value, Acc) when is_record(Value, var) ->
-    [{?Acct_Output_Packets, ctld_variable:get(Value)}|Acc];
+    [{?Acct_Output_Packets, ergw_aaa_variable:get(Value)}|Acc];
 
 session_options('Port-Type', Value, Acc) ->
     [{?NAS_Port_Type, port_type(Value)}|Acc];

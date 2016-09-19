@@ -1,4 +1,4 @@
-{application, ctld,
+{application, ergw_aaa,
  [
   {description, ""},
   {vsn, "1"},
@@ -11,7 +11,7 @@
 		  lager,
 		  eradius
                  ]},
-  {mod, { ctld_app, []}},
+  {mod, { ergw_aaa_app, []}},
   {env, [
 	 {ipctld_port, 7744},
 	 {ipcp_ouraddr, {10,0,0,1}}

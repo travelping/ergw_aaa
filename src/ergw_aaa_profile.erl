@@ -1,8 +1,8 @@
--module(ctld_profile).
+-module(ergw_aaa_profile).
 
 -export([action/2, action/3, handle_reply/3]).
 
--include("include/ctld_profile.hrl").
+-include("include/ergw_aaa_profile.hrl").
 
 -callback enter(State :: #{}) ->
     {ok, NewState :: #{}} |
@@ -72,7 +72,7 @@ init_provider(State = #{'AuthProvider' := _Provider}) ->
 init_provider(State) ->
     lager:debug("Application: ~p", [application:get_application()]),
     lager:debug("Env: ~p", [application:get_all_env()]),
-    {ok, {Provider, ProviderOpts}} = application:get_env(ctld_provider),
+    {ok, {Provider, ProviderOpts}} = application:get_env(ergw_aaa_provider),
 
     case Provider:init(ProviderOpts) of
         {ok, PState} ->
@@ -91,10 +91,10 @@ request_accounting(AcctType, State) ->
     invoke_provider(start_accounting, [self(), AcctType], State1).
 
 update_accounting_state('Start', State) ->
-    State#{ 'Accounting-Start' => ctld_variable:now_ms() };
+    State#{ 'Accounting-Start' => ergw_aaa_variable:now_ms() };
 update_accounting_state('Interim', State) ->
-    State#{ 'Last-Interim-Update' => ctld_variable:now_ms() };
+    State#{ 'Last-Interim-Update' => ergw_aaa_variable:now_ms() };
 update_accounting_state('Stop', State) ->
-    State#{ 'Accounting-Stop' => ctld_variable:now_ms() };
+    State#{ 'Accounting-Stop' => ergw_aaa_variable:now_ms() };
 update_accounting_state(_AcctType, State) ->
     State.

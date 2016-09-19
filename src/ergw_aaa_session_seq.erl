@@ -1,4 +1,4 @@
--module(ctld_session_seq).
+-module(ergw_aaa_session_seq).
 
 -behaviour(gen_server).
 
