@@ -56,7 +56,7 @@ clear_triggers(Var = #var{triggers = Triggers}) ->
 
 process_trigger(_Now, _Name, _Type, OldValue, NewValue, Trigger = {Event, limit, Limit}) ->
     if OldValue < Limit andalso NewValue >= Limit ->
-	    ctld_behavior:send_event(self(), Event);
+	    self() ! Event;
        true ->
 	    ok
     end,
