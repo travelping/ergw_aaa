@@ -1,7 +1,12 @@
-ctld
-====
+ergw-aaa
+========
 
-Erlang CTLD Radius session implementation.
+Erlang AAA session implementation for ERGW.
+
+Version 2.0.0 - 23 Sep 2016
+---------------------------
+
+* release as version 2.0 under GPL for ERGW
 
 Version 1.3.1 - 25 Apr 2016
 ---------------------------
