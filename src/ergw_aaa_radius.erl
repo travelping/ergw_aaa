@@ -19,6 +19,7 @@
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
+-include_lib("eradius/include/dictionary_3gpp.hrl").
 -include_lib("eradius/include/dictionary_tunnel.hrl").
 -include_lib("eradius/include/dictionary_rfc4679.hrl").
 -include_lib("eradius/include/dictionary_alcatel_sr.hrl").
@@ -253,6 +254,81 @@ session_options('Acct-Authentic', 'Remote', Acc) ->
     [{?Acct_Authentic, 3}|Acc];
 session_options('Acct-Authentic', 'Diameter', Acc) ->
     [{?Acct_Authentic, 4}|Acc];
+
+%% 3GPP TS 29.061 Attributes
+session_options('3GPP-IMSI', Value, ACC) ->
+    [{?X_3GPP_IMSI, Value}|ACC];
+session_options('3GPP-Charging-ID', Value, Acc) ->
+    [{?X_3GPP_Charging_ID, Value}|Acc];
+
+session_options('3GPP-PDP-Type', 'IPv4', Acc) ->
+    [{?X_3GPP_PDP_Type, 0}|Acc];
+session_options('3GPP-PDP-Type', 'IPv6', Acc) ->
+    [{?X_3GPP_PDP_Type, 2}|Acc];
+session_options('3GPP-PDP-Type', 'IPv4v6', Acc) ->
+    [{?X_3GPP_PDP_Type, 3}|Acc];
+session_options('3GPP-PDP-Type', 'PPP', Acc) ->
+    [{?X_3GPP_PDP_Type, 1}|Acc];
+
+session_options('3GPP-Charging-Gateway-Address', Value, Acc) ->
+    [{?X_3GPP_Charging_Gateway_Address, Value}|Acc];
+session_options('3GPP-GPRS-Negotiated-QoS-Profile', QoS, Acc) ->
+    Value0 = iolist_to_binary([io_lib:format("~2.16.0B", [X]) || <<X>> <= QoS ]),
+    Value =
+	case byte_size(QoS) of
+	    3  -> ["98", Value0];
+	    11 -> ["99", Value0];
+	    14 -> ["05", Value0];
+	    _  -> ["07", Value0]
+	end,
+    [{?X_3GPP_GPRS_Negotiated_QoS_profile, Value}|Acc];
+
+
+session_options('3GPP-SGSN-Address', Value, Acc) ->
+    [{?X_3GPP_SGSN_Address, Value}|Acc];
+session_options('3GPP-GGSN-Address', Value, Acc) ->
+    [{?X_3GPP_GGSN_Address, Value}|Acc];
+session_options('3GPP-IMSI-MCC-MNC', Value, ACC) ->
+    [{?X_3GPP_IMSI_MCC_MNC, Value}|ACC];
+session_options('3GPP-GGSN-MCC-MNC', Value, ACC) ->
+    [{?X_3GPP_GGSN_MCC_MNC, Value}|ACC];
+session_options('3GPP-NSAPI', Value, ACC) ->
+    [{?X_3GPP_NSAPI, io_lib:format("~1.16B", [Value])}|ACC];
+session_options('3GPP-Session-Stop-Indicator', Value, Acc) ->
+    [{?X_3GPP_Session_Stop_Indicator, Value}|Acc];
+session_options('3GPP-Selection-Mode', Value, Acc) ->
+    [{?X_3GPP_Selection_Mode, io_lib:format("~1.16B", [Value])}|Acc];
+session_options('3GPP-Charging-Characteristics', Value, Acc) ->
+    Hex = [ io_lib:format("~2.16.0B", [X]) || <<X>> <= Value ],
+    [{?X_3GPP_Charging_Characteristics, Hex}|Acc];
+session_options('3GPP-Charging-Gateway-IPv6-Address', Value, Acc) ->
+    [{?X_3GPP_Charging_Gateway_IPv6_Address, Value}|Acc];
+session_options('3GPP-SGSN-IPv6-Address', Value, Acc) ->
+    [{?X_3GPP_SGSN_IPv6_Address, Value}|Acc];
+session_options('3GPP-GGSN-IPv6-Address', Value, Acc) ->
+    [{?X_3GPP_GGSN_IPv6_Address, Value}|Acc];
+session_options('3GPP-IPv6-DNS-Servers', Value, Acc) ->
+    [{?X_3GPP_IPv6_DNS_Servers, Value}|Acc];
+session_options('3GPP-SGSN-MCC-MNC', Value, ACC) ->
+    [{?X_3GPP_SGSN_MCC_MNC, Value}|ACC];
+session_options('3GPP-Teardown-Indicator', Value, Acc) ->
+    [{?X_3GPP_Teardown_Indicator, Value}|Acc];
+session_options('3GPP-IMEISV', Value, ACC) ->
+    [{?X_3GPP_IMEISV, Value}|ACC];
+session_options('3GPP-RAT-Type', Value, Acc) ->
+    [{?X_3GPP_RAT_Type, Value}|Acc];
+session_options('3GPP-User-Location-Info', Value, Acc) ->
+    [{?X_3GPP_User_Location_Info, Value}|Acc];
+session_options('3GPP-MS-TimeZone', {TZ, DST}, Acc) ->
+    [{?X_3GPP_MS_TimeZone, <<TZ:8, DST:8>>}|Acc];
+session_options('3GPP-Camel-Charging', Value, Acc) ->
+    [{?X_3GPP_Camel_Charging, Value}|Acc];
+session_options('3GPP-Packet-Filter', Value, Acc) ->
+    [{?X_3GPP_Packet_Filter, Value}|Acc];
+session_options('3GPP-Negotiated-DSCP', Value, Acc) ->
+    [{?X_3GPP_Negotiated_DSCP, Value}|Acc];
+session_options('3GPP-PDN-Type', Value, Acc) ->
+    [{?X_3GPP_PDN_Type, Value}|Acc];
 
 %% DSL-Forum PPPoE Intermediate Agent Attributes
 session_options('ADSL-Agent-Circuit-Id', Value, Acc) ->
@@ -505,6 +581,9 @@ process_gen_attrs(AVP = {#attribute{id = ?Service_Type}, _}, Acc) ->
 %% Framed-Protocol = PPP
 process_gen_attrs({#attribute{id = ?Framed_Protocol}, 1}, Acc) ->
     Acc;
+%% Framed-Protocol = GPRS-PDP-Context
+process_gen_attrs({#attribute{id = ?Framed_Protocol}, 7}, Acc) ->
+    session_opt('Framed-Protocol', 'GPRS-PDP-Context', Acc);
 process_gen_attrs(AVP = {#attribute{id = ?Framed_Protocol}, _}, Acc) ->
     process_unexpected_value(AVP, Acc);
 
@@ -523,6 +602,9 @@ process_gen_attrs({#attribute{id = ?Alc_Primary_Dns}, DNS}, Acc) ->
 process_gen_attrs({#attribute{id = ?Alc_Secondary_Dns}, DNS}, Acc) ->
     session_opt_append('DNS', DNS, Acc);
 
+%% 3GPP TS 29.061 Attributes
+
+%% TODO: 3GPP-Ipv6-DNSServers
 
 %% Microsoft MPPE Keys
 
@@ -533,6 +615,22 @@ process_gen_attrs({#attribute{id = ?MS_MPPE_Send_Key}, Value}, Acc) ->
 %% MS-MPPE-Recv-Key
 process_gen_attrs({#attribute{id = ?MS_MPPE_Recv_Key}, Value}, Acc) ->
     session_opt('MS-MPPE-Recv-Key', Value, Acc);
+
+%% MS-Primary-DNS-Server
+process_gen_attrs({#attribute{id = ?MS_Primary_DNS_Server}, Value}, Acc) ->
+    session_opt('MS-Primary-DNS-Server', Value, Acc);
+
+%% MS-Secondary-DNS-Server
+process_gen_attrs({#attribute{id = ?MS_Secondary_DNS_Server}, Value}, Acc) ->
+    session_opt('MS-Secondary-DNS-Server', Value, Acc);
+
+%% MS-Primary-NBNS-Server
+process_gen_attrs({#attribute{id = ?MS_Primary_NBNS_Server}, Value}, Acc) ->
+    session_opt('MS-Primary-NBNS-Server', Value, Acc);
+
+%% MS-Secondary-NBNS-Server
+process_gen_attrs({#attribute{id = ?MS_Secondary_NBNS_Server}, Value}, Acc) ->
+    session_opt('MS-Secondary-NBNS-Server', Value, Acc);
 
 %% Travelping Extensions
 

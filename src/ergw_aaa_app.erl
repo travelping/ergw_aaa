@@ -18,6 +18,7 @@
 
 start(_StartType, _StartArgs) ->
     eradius_dict:load_tables([dictionary,
+			      dictionary_3gpp,
 			      dictionary_tunnel,
 			      dictionary_rfc4679,
 			      dictionary_alcatel_sr,
