@@ -195,9 +195,9 @@ session_options('Class', Class, Acc) ->
     [{?Class, Class}|Acc];
 session_options('RADIUS-State', State, Acc) ->
     [{?State, State}|Acc];
-session_options('Calling-Station', Value, Acc) ->
+session_options('Calling-Station-Id', Value, Acc) ->
     [{?Calling_Station_Id, Value}|Acc];
-session_options('Called-Station', Value, Acc) ->
+session_options('Called-Station-Id', Value, Acc) ->
     [{?Called_Station_Id, Value}|Acc];
 session_options('Port-Id', Value, Acc) ->
     [{?NAS_Port_Id, Value}|Acc];
