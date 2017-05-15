@@ -26,6 +26,15 @@
 -define(RADIUS_CFG(Key, Value),
 	lists:keystore(Key, 1, ?RADIUS_OK_CFG, {Key, Value})).
 
+-define(DIAMETER_OK_CFG,
+	[{nas_identifier,<<"NAS-Identifier">>},
+	 {host, <<"127.0.0.1">>},
+	 {realm, <<"example.com">>},
+	 {connect_to, <<"aaa://127.0.0.1:3868">>}]).
+
+-define(DIAMETER_CFG(Key, Value),
+	lists:keystore(Key, 1, ?DIAMETER_OK_CFG, {Key, Value})).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -58,5 +67,16 @@ config(_Config)  ->
 
     ?ok_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_OK_CFG}}]),
     ?ok_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"localhost",1812,<<"secret">>})}}]),
+
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, []}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, [{invalid_option, []} | ?DIAMETER_OK_CFG]}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(nas_identifier, invalid_id)}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(host, invalid_host)}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(realm, invalid_realm)}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, invalid_uri)}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(host, <<"undefined.example.net">>)}}]),
+    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, <<"http://example.com:12345">>)}}]),
+
+    ?ok_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_OK_CFG}}]),
 
     ok.
