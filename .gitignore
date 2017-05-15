@@ -1,5 +1,11 @@
 *~
 *.beam
 /ebin/*.app
+/_build
+/log*
 
 /tetrapak/.local.cache
+
+# diameter compiler atrifacts
+/src/diameter_*
+/include/diameter_*
