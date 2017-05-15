@@ -10,7 +10,8 @@
                   sasl,
 		  lager,
 		  setup,
-		  eradius
+		  eradius,
+		  diameter
                  ]},
   {mod, { ergw_aaa_app, []}},
   {env, [
