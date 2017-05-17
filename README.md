@@ -21,10 +21,9 @@ Using tetrapak:
 
     # tetrapak build check
 
-Using rebar:
+Using rebar3:
 
-    # rebar get-deps
-    # rebar compile
+    # rebar3 compile
 
 
 [1]: https://github.com/travelping/ergw
