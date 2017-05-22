@@ -10,12 +10,14 @@
 -behaviour(ergw_aaa).
 
 %% AAA API
--export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
+-export([validate_options/1,
+	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ergw_aaa_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
 
 -include("include/ergw_aaa_profile.hrl").
 -include("include/ergw_aaa_variable.hrl").
+-include_lib("kernel/include/inet.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
@@ -32,9 +34,18 @@
 		radius_session = [],
 		acct_app_id = default}).
 
+-define(DefaultOptions, [{nas_identifier, undefined},
+			 {radius_auth_server, undefined},
+			 {radius_acct_server, undefined}
+			]).
+
 %%===================================================================
 %% API
 %%===================================================================
+
+validate_options(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions).
+
 init(Opts) ->
     State = #state{
       nas_id = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
@@ -156,9 +167,53 @@ start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
 
     {ok, State}.
 
+
+%%%===================================================================
+%%% Options Validation
+%%%===================================================================
+
+validate_ip(Opt, Host) when is_list(Host) ->
+    case gethostbyname(Host) of
+	{ok, #hostent{h_addr_list = [IP | _]}} ->
+	    IP;
+	_ ->
+	    lager:error("can't resolve remote RADIUS server name '~s'", [Host]),
+	    throw({error, {options, {Opt, Host}}})
+    end;
+validate_ip(_Opt, {_,_,_,_} = IP) ->
+    IP;
+validate_ip(_Opt, {_,_,_,_,_,_,_,_} = IP) ->
+    IP;
+validate_ip(Opt, IP) ->
+    throw({error, {options, {Opt, IP}}}).
+
+validate_server_spec(Opt, {IP, Port, Secret} = Value)
+  when is_integer(Port), is_binary(Secret) ->
+    validate_ip(Opt, IP),
+    Value;
+validate_server_spec(Opt, Value) ->
+    throw({error, {options, {Opt, Value}}}).
+
+validate_option(nas_identifier, Value) when is_binary(Value) ->
+    Value;
+validate_option(radius_auth_server, Value) ->
+    validate_server_spec(radius_auth_server, Value);
+validate_option(radius_acct_server, Value) ->
+    validate_server_spec(radius_auth_server, Value);
+validate_option(Opt, Value) ->
+    throw({error, {options, {Opt, Value}}}).
+
 %%===================================================================
 %% Internal Helpers
 %%===================================================================
+
+gethostbyname(Name) ->
+    case inet:gethostbyname(Name, inet6) of
+        {error, nxdomain} ->
+            inet:gethostbyname(Name, inet);
+        Other ->
+            Other
+    end.
 
 %% %% get time with 100ms +/50ms presision
 %% now_ticks() ->

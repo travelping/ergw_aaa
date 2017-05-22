@@ -24,6 +24,7 @@ start(_StartType, _StartArgs) ->
 			      dictionary_alcatel_sr,
 			      dictionary_microsoft,
 			      dictionary_travelping]),
+    ergw_aaa_config:load_config(setup:get_all_env(ergw_aaa)),
     ergw_aaa_sup:start_link().
 
 stop(_State) ->

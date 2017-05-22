@@ -11,6 +11,8 @@
 -type a3state() :: term().
 -export_type([session/0, a3state/0]).
 
+-callback validate_options(Options :: term()) -> term().
+
 -callback init(proplists:proplist()) -> {ok, a3state()} | {error, term()}.
 -callback start_authentication(From :: term(), Session :: session(), State :: a3state()) ->
     {reply, a3state()}.

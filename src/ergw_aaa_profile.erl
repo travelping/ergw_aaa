@@ -77,9 +77,7 @@ invoke_provider(F, A,
 init_provider(State = #{'AuthProvider' := _Provider}) ->
     {ok, State};
 init_provider(State) ->
-    lager:debug("Application: ~p", [application:get_application()]),
-    lager:debug("Env: ~p", [application:get_all_env()]),
-    {ok, {Provider, ProviderOpts}} = application:get_env(ergw_aaa_provider),
+    {ok, {Provider, ProviderOpts}} = setup:get_env(ergw_aaa, ergw_aaa_provider),
 
     case Provider:init(ProviderOpts) of
         {ok, PState} ->
