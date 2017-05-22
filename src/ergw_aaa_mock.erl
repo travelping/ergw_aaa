@@ -10,7 +10,8 @@
 -behaviour(ergw_aaa).
 
 %% AAA API
--export([init/1, authorize/3, start_authentication/3, start_accounting/4]).
+-export([validate_options/1,
+	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ergw_aaa_session, [to_session/1]).
 
@@ -24,6 +25,10 @@
 %%===================================================================
 %% API
 %%===================================================================
+
+validate_options(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts).
+
 init(Opts) ->
     State = #state{
       shared_secret = proplists:get_value(shared_secret, Opts, <<"secret">>)
@@ -53,3 +58,12 @@ start_accounting(_From, 'Interim', _Session, State) ->
 
 start_accounting(_From, 'Stop', _Session, State) ->
     {ok, State}.
+
+%%%===================================================================
+%%% Options Validation
+%%%===================================================================
+
+validate_option(shared_secret, Value) when is_binary(Value) ->
+    Value;
+validate_option(Opt, Value) ->
+    throw({error, {options, {Opt, Value}}}).
