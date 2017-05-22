@@ -17,15 +17,9 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    eradius_dict:load_tables([dictionary,
-			      dictionary_3gpp,
-			      dictionary_tunnel,
-			      dictionary_rfc4679,
-			      dictionary_alcatel_sr,
-			      dictionary_microsoft,
-			      dictionary_travelping]),
-    ergw_aaa_config:load_config(setup:get_all_env(ergw_aaa)),
-    ergw_aaa_sup:start_link().
+    Config = ergw_aaa_config:load_config(setup:get_all_env(ergw_aaa)),
+    {ok, ProviderSupSpecs} = ergw_aaa_profile:initialize_provider(Config),
+    ergw_aaa_sup:start_link(ProviderSupSpecs).
 
 stop(_State) ->
     ok.

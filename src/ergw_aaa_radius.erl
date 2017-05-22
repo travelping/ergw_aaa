@@ -10,7 +10,7 @@
 -behaviour(ergw_aaa).
 
 %% AAA API
--export([validate_options/1,
+-export([validate_options/1, initialize_provider/1,
 	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ergw_aaa_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
@@ -42,6 +42,16 @@
 %%===================================================================
 %% API
 %%===================================================================
+
+initialize_provider(_Opts) ->
+    eradius_dict:load_tables([dictionary,
+			      dictionary_3gpp,
+			      dictionary_tunnel,
+			      dictionary_rfc4679,
+			      dictionary_alcatel_sr,
+			      dictionary_microsoft,
+			      dictionary_travelping]),
+    {ok, []}.
 
 validate_options(Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions).
