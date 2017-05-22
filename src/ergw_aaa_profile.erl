@@ -7,7 +7,7 @@
 
 -module(ergw_aaa_profile).
 
--export([action/2, action/3, handle_reply/3]).
+-export([initialize_provider/1, action/2, action/3, handle_reply/3]).
 
 -include("include/ergw_aaa_profile.hrl").
 
@@ -20,6 +20,10 @@
     {ok, NewState :: #{}} |
     {stop, Reason :: term(), NewState :: #{}} |
     {next_profile, NextProfileName :: atom(), NewState :: #{}}.
+
+initialize_provider(Config) ->
+    {Handler, HandlerOpts} = proplists:get_value(ergw_aaa_provider, Config),
+    Handler:initialize_provider(HandlerOpts).
 
 action('Authenticate', State) ->
     lager:debug("Event: Authenticate ~p", [State]),

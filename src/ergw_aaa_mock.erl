@@ -10,7 +10,7 @@
 -behaviour(ergw_aaa).
 
 %% AAA API
--export([validate_options/1,
+-export([validate_options/1, initialize_provider/1,
 	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
 
 -import(ergw_aaa_session, [to_session/1]).
@@ -25,6 +25,9 @@
 %%===================================================================
 %% API
 %%===================================================================
+
+initialize_provider(_Opts) ->
+    {ok, []}.
 
 validate_options(Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts).
