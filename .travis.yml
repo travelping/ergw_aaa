@@ -15,9 +15,8 @@ before_install:
 
 script:
   - env
-  - ./rebar3 plugins list
   - ./rebar3 compile
-  - ./rebar3 xref
+  - ./rebar3 do xref, ct, coveralls send
 
 notifications:
   slack:
