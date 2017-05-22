@@ -45,5 +45,8 @@ validate_option(ergw_aaa_provider, {Handler, Opts} = Value)
 	    throw({error, {options, Value}})
     end,
     {Handler, Handler:validate_options(Opts)};
-validate_option(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+validate_option(Opt, Value)
+  when Opt == ergw_aaa_provider ->
+    throw({error, {options, {Opt, Value}}});
+validate_option(_Opt, Value) ->
+    Value.

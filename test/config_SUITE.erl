@@ -16,7 +16,7 @@
 	?match({error,{options, _}}, (catch ergw_aaa_config:load_config(Config)))).
 
 -define(ok_option(Config),
-	?match([_], ergw_aaa_config:load_config(Config))).
+	?match([_|_], ergw_aaa_config:load_config(Config))).
 
 -define(RADIUS_OK_CFG,
 	[{nas_identifier,<<"NAS-Identifier">>},
@@ -36,7 +36,8 @@ all() ->
 config() ->
     [{doc, "Test the config validation"}].
 config(_Config)  ->
-    ?error_option([{invalid_option, []}]),
+    ?ok_option([{vsn, "1.0.0"}]),
+
     ?error_option([{ergw_aaa_provider, invalid_option}]),
     ?error_option([{ergw_aaa_provider, {invalid_handler, []}}]),
 
