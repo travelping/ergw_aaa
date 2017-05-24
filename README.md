@@ -4,7 +4,7 @@ erGW-AAA - AAA component for the [erGW project][1]
 [![Coverage Status][coveralls badge]][coveralls]
 [![Erlang Versions][erlang version badge]][travis]
 
-This is a companion project for the [erGW project][1] to provide an abstract AAA (Authentication, Authorisation and Accounting) interface for protocols based on erGW.
+This is a companion project for the [erGW project][1] to provide an abstract AAA (Authentication, Authorization and Accounting) interface for protocols based on erGW.
 
 Supported backend providers are:
 
@@ -14,7 +14,7 @@ Supported backend providers are:
 In the future possible other providers are:
 
 * DIAMETER
-* LDAP (Authentication and Authorisation only)
+* LDAP (Authentication and Authorization only)
 
 BUILDING
 --------
