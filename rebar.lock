@@ -8,7 +8,7 @@
   1},
  {<<"eradius">>,
   {git,"https://github.com/travelping/eradius.git",
-       {ref,"19f06c3812482d479ec3982849a271291f439edb"}},
+       {ref,"d81a208f1317ae40f66f6667d2ca7b0c8e112cab"}},
   0},
  {<<"erlando">>,
   {git,"https://github.com/travelping/erlando.git",
