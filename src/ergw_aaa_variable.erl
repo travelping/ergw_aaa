@@ -94,7 +94,7 @@ init_trigger(Now, Name, timer, _Value, {Event, limit, TimeOut}) ->
 init_trigger(_Now, _Name, _Type, _Value, Trigger) ->
     Trigger.
 
-stop_timer(Now, Trigger = {Event, limit, TimeOut, StartTime, TimerRef}, Var = #var{type = timer}) ->
+stop_timer(Now, _Trigger = {Event, limit, TimeOut, StartTime, TimerRef}, Var = #var{type = timer}) ->
     cancel_timer(TimerRef),
     {{Event, limit, TimeOut}, Var#var{value = Now - StartTime}};
 
