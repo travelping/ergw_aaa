@@ -201,7 +201,7 @@ validate_option(nas_identifier, Value) when is_binary(Value) ->
     Value;
 validate_option(connect_to = Opt, Value) when is_binary(Value) ->
     try
-        #diameter_uri{} = diameter_types:'DiameterURI'(decode, Value)
+        #diameter_uri{} = decode_diameter_uri(Value)
     catch _:_ -> validate_option_error(Opt, Value)
     end;
 validate_option(host = Opt, Value) when is_binary(Value) ->
@@ -217,6 +217,13 @@ validate_option(Opt, Value) ->
 
 validate_option_error(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
+
+decode_diameter_uri(Value) ->
+    Module = diameter_types, % trick to stop xref complains about undef function
+    try
+        apply(Module, 'DiameterURI', [decode, Value, #{rfc => 6733}]) % OTP 20
+    catch _:_ -> apply(Module, 'DiameterURI', [decode, Value])
+    end.
 
 inc_number(#state{accounting_record_number = Number} = State) ->
     State#state{accounting_record_number = Number + 1}.
