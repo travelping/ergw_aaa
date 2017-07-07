@@ -65,5 +65,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 new_id(Id) ->
-    Start = (crypto:rand_uniform(0, 4294967296)) bsl 128,
+    Start = (rand:uniform(4294967296) - 1) bsl 128,
     ets:insert(?MODULE, {Id, Start}).
