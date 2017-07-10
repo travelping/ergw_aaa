@@ -76,5 +76,22 @@ handle_answer(_Packet, _Request, _SvcName, _Peer) ->
 handle_error(_Reason, _Request, _SvcName, _Peer) ->
     ?UNEXPECTED.
 
+handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps}) 
+  when is_record(Msg, diameter_nasreq_ACR) ->
+    #diameter_caps{origin_host = {OH, _},
+                   origin_realm = {OR, _}} = Caps,
+    #diameter_nasreq_ACR{'Session-Id' = Id,
+                         'Accounting-Record-Type' = Type,
+                         'Accounting-Record-Number' = Number,
+                         'Acct-Application-Id' = AppId} = Msg,
+    {reply, #diameter_nasreq_ACA{'Session-Id' = Id,
+                                 'Result-Code' = 2001,
+                                 'Origin-Host' = OH,
+                                 'Origin-Realm' = OR,
+                                 'Acct-Interim-Interval' = [1],
+                                 'Accounting-Record-Type' = Type,
+                                 'Accounting-Record-Number' = Number,
+                                 'Acct-Application-Id' = AppId}};
+
 handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED

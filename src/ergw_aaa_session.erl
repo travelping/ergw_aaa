@@ -193,6 +193,11 @@ handle_info(Ev = {'AuthenticationRequestReply', _AuthReply}, State0) ->
     State2 = reply(Reply, State1),
     {noreply, State2};
 
+handle_info(Ev = {'ChangeInterimAccouting', _AuthReply}, State0) ->
+    NewSession = ergw_aaa_profile:handle_reply(fun event/2, Ev, State0#state.session),
+    State = start_interim_accounting(State0#state{session = NewSession}),
+    {noreply, State};
+
 handle_info({timeout, TimerRef, interim},
 	    State = #state{
 		       owner = Owner,
@@ -235,6 +240,9 @@ reply(Reply, State = #state{reply = undefined}) ->
 reply(Reply, State = #state{reply = ReplyTo}) ->
     gen_server:reply(ReplyTo, Reply),
     State#state{reply = undefined}.
+
+event({'ChangeInterimAccouting', Interval}, Session) ->
+    maps:put('Interim-Accounting', Interval, Session);
 
 event({'AuthenticationRequestReply', {Verdict, SessionOpts}}, Session0) ->
     Session1 = maps:without(['EAP-Data'], Session0),
