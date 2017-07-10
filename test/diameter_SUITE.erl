@@ -13,7 +13,7 @@
          end_per_suite/1]).
 
 %% Test cases
--export([check_CER_CEA/1, accounting/1]).
+-export([check_CER_CEA/1, accounting/1, acct_interim_interval/1]).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -23,7 +23,8 @@
 
 all() ->
     [check_CER_CEA,
-     accounting].
+     accounting,
+     acct_interim_interval].
 
 
 init_per_suite(Config) ->
@@ -70,7 +71,31 @@ accounting(_Config) ->
     % check that client has sent ACR
     1 = proplists:get_value({{1, 271, 1}, send}, Statistics),
     % check that client has received ACA
-    %1 = proplists:get_value({{1, 271, 0}, recv}, Statistics),
+    1 = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics),
+    ok.
+
+% test diameter provider can reset interim interval 
+% by data from ACA Acct-Interim-Interval
+acct_interim_interval(_Config) ->
+    Fun = fun(_, S) -> S end,
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'Accouting-Update-Fun' => Fun}),
+    success = ergw_aaa_session:authenticate(Session, #{}),
+    ergw_aaa_session:start(Session, #{}),
+
+    Count0 = proplists:get_value({{1, 271, 1}, send}, get_stats()),
+    
+    % wait a little to be sure that values is set in session
+    timer:sleep(100),
+    {state, _, _, _, _, _, _, _, SessionMap} = sys:get_state(Session),
+    1 = maps:get('Interim-Accounting', SessionMap),
+
+    % In ACA we have Acct-Interim-Interval = 100
+    % that means for 2 seconds at least 2 ACR Interim reqs will be sent.
+    % We can check it via statistics counter.
+    timer:sleep(2000),
+    Count = proplists:get_value({{1, 271, 1}, send}, get_stats()),
+    true = (2 =< Count - Count0),
+
     ok.
 
 get_stats() ->

@@ -16,17 +16,18 @@
 %% diameter callbacks
 -export([peer_up/3,
          peer_down/3,
-         pick_peer/4,
-         prepare_request/3,
-         prepare_retransmit/3,
-         handle_answer/4,
+         pick_peer/4, pick_peer/5,
+         prepare_request/3, prepare_request/4,
+         prepare_retransmit/3, prepare_retransmit/4,
+         handle_answer/4, handle_answer/5,
          handle_error/4,
          handle_request/3]).
 
--export([stop/0, call/1, cast/1]).
+-export([stop/0, call/1, cast/1, cast/2]).
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
+-include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_profile.hrl").
 -include("include/ergw_aaa_variable.hrl").
 -include("include/diameter_nasreq_rfc7155.hrl").
@@ -107,7 +108,7 @@ authorize(_From, _Session, State) ->
     Verdict = success,
     {reply, Verdict, ergw_aaa_session:to_session([]), State}.
 
-start_accounting(_From, 'Start', Session, State) ->
+start_accounting(From, 'Start', Session, State) ->
     Request0 = create_ACR(Session, ?Start, State),
     Request = Request0#diameter_nasreq_ACR{
                 'Accounting-Input-Octets' = [],
@@ -115,27 +116,27 @@ start_accounting(_From, 'Start', Session, State) ->
                 'Accounting-Output-Octets' = [],
                 'Accounting-Output-Packets' = []
               },
-    cast(Request),
+    cast(Request, From),
     {ok, inc_number(State)};
 
-start_accounting(_From, 'Interim', Session, State) ->
+start_accounting(From, 'Interim', Session, State) ->
     Request0 = create_ACR(Session, ?Interim, State),
     Now = ergw_aaa_variable:now_ms(),
     Start = ergw_aaa_session:attr_get('Accounting-Start', Session, Now),
     Request = Request0#diameter_nasreq_ACR{
                 'Acct-Session-Time' = [round((Now - Start) / 1000)]
               },
-    cast(Request),
+    cast(Request, From),
     {ok, inc_number(State)};
 
-start_accounting(_From, 'Stop', Session, State) ->
+start_accounting(From, 'Stop', Session, State) ->
     Request0 = create_ACR(Session, ?Stop, State),
     Now = ergw_aaa_variable:now_ms(),
     Start = ergw_aaa_session:attr_get('Accounting-Start', Session, Now),
     Request = Request0#diameter_nasreq_ACR{
                 'Acct-Session-Time' = [round((Now - Start) / 1000)]
               },
-    cast(Request),
+    cast(Request, From),
     {ok, inc_number(State)}.
 
 % will be used in tests
@@ -146,8 +147,10 @@ stop() ->
 call(Request) ->
     diameter:call(?MODULE, nasreq, Request, []).
 
-cast(Request) ->
-    diameter:call(?MODULE, nasreq, Request, [detach]).
+cast(Request) -> cast(Request, self()).
+
+cast(Request, From) ->
+    diameter:call(?MODULE, nasreq, Request, [detach, {extra, [From]}]).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -165,6 +168,9 @@ pick_peer([Peer | _], _, _SvcName, _State) ->
     lager:debug("pick_peer: ~p~n", [Peer]),
     {ok, Peer}.
 
+pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
+    pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
+
 prepare_request(#diameter_packet{msg = #diameter_nasreq_ACR{} = Rec}, _, {_, Caps}) ->
     #diameter_caps{origin_host = {OH, DH},
                    origin_realm = {OR, DR},
@@ -181,10 +187,24 @@ prepare_request(_Packet, _, _Peer) ->
     lager:debug("unexpected request: ~p~n", [_Packet]),
     erlang:error({unexpected, ?MODULE, ?LINE}).
 
+prepare_request(Packet, SvcName, Peer, _From) ->
+    prepare_request(Packet, SvcName, Peer).
+
 prepare_retransmit(Packet, SvcName, Peer) ->
     prepare_request(Packet, SvcName, Peer).
 
+prepare_retransmit(Packet, SvcName, Peer, _From) ->
+    prepare_request(Packet, SvcName, Peer).
+
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
+    {ok, Msg}.
+
+handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, From)
+  when is_record(Msg, diameter_nasreq_ACA) and is_pid(From) ->
+    handle_aca(From, Msg),
+    {ok, Msg};
+
+handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
     {ok, Msg}.
 
 handle_error(Reason, _Request, _SvcName, _Peer) ->
@@ -197,6 +217,14 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%===================================================================
 %% internal helpers
 %%===================================================================
+handle_aca(From, Answer) ->
+    #diameter_nasreq_ACA{'Result-Code' = Code,
+                         'Acct-Interim-Interval' = Interval} = Answer,
+    if Code == ?'DIAMETER_BASE_RESULT-CODE_SUCCESS' andalso length(Interval) > 0 ->
+           ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
+       true -> ok
+    end.
+
 validate_option(nas_identifier, Value) when is_binary(Value) ->
     Value;
 validate_option(connect_to = Opt, Value) when is_binary(Value) ->
