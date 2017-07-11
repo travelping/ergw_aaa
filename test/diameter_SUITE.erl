@@ -13,7 +13,7 @@
          end_per_suite/1]).
 
 %% Test cases
--export([check_CER_CEA/1, accounting/1, acct_interim_interval/1]).
+-export([check_CER_CEA/1, accounting/1, acct_interim_interval/1, attrs_3gpp/1]).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -24,7 +24,8 @@
 all() ->
     [check_CER_CEA,
      accounting,
-     acct_interim_interval].
+     acct_interim_interval,
+     attrs_3gpp].
 
 
 init_per_suite(Config) ->
@@ -96,6 +97,33 @@ acct_interim_interval(_Config) ->
     timer:sleep(2000),
     Count = proplists:get_value({{1, 271, 1}, send}, get_stats()),
     true = (2 =< Count - Count0),
+
+    ok.
+
+attrs_3gpp(_Config) ->
+    Attrs = #{
+      '3GPP-IMSI'               => <<"250071234567890">>,
+      '3GPP-Charging-ID'        => <<214, 208, 226, 238>>,
+      '3GPP-PDP-Type'           => 'PPP',
+      '3GPP-SGSN-Address'       => {10, 10, 10, 10},
+      '3GPP-IMSI-MCC-MNC'       => <<"250999">>,
+      '3GPP-GGSN-MCC-MNC'       => <<"250888">>,
+      '3GPP-SGSN-IPv6-Address'  => {100, 10, 10, 10},
+      '3GPP-GGSN-IPv6-Address'  => {200, 10, 10, 10},
+      '3GPP-SGSN-MCC-MNC'       => <<"250777">>,
+      '3GPP-IMEISV'             => <<"3566190531472414">>,
+      '3GPP-RAT-Type'           => <<1>>
+     },
+
+    Count0 = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, get_stats()),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(), Attrs),
+    success = ergw_aaa_session:authenticate(Session, #{}),
+    ergw_aaa_session:start(Session, #{}),
+
+    timer:sleep(100),
+    Count = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, get_stats()),
+    1 = Count - Count0,
 
     ok.
 
