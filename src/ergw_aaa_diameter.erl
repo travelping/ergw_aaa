@@ -30,7 +30,7 @@
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_profile.hrl").
 -include("include/ergw_aaa_variable.hrl").
--include("include/diameter_nasreq_rfc7155.hrl").
+-include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
@@ -65,11 +65,11 @@ initialize_provider(Opts) ->
                {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
                                         ?VENDOR_ID_ETSI,
                                         ?VENDOR_ID_TP]},
-               {'Auth-Application-Id', [diameter_nasreq_rfc7155:id()]},
-               {'Acct-Application-Id', [diameter_nasreq_rfc7155:id()]},
+               {'Auth-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
+               {'Acct-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
                {string_decode, false},
                {application, [{alias, nasreq},
-                              {dictionary, diameter_nasreq_rfc7155},
+                              {dictionary, diameter_3gpp_ts29_061_sgi},
                               {module, ?MODULE}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
@@ -110,7 +110,7 @@ authorize(_From, _Session, State) ->
 
 start_accounting(From, 'Start', Session, State) ->
     Request0 = create_ACR(Session, ?Start, State),
-    Request = Request0#diameter_nasreq_ACR{
+    Request = Request0#diameter_sgi_ACR{
                 'Accounting-Input-Octets' = [],
                 'Accounting-Input-Packets' = [],
                 'Accounting-Output-Octets' = [],
@@ -123,7 +123,7 @@ start_accounting(From, 'Interim', Session, State) ->
     Request0 = create_ACR(Session, ?Interim, State),
     Now = ergw_aaa_variable:now_ms(),
     Start = ergw_aaa_session:attr_get('Accounting-Start', Session, Now),
-    Request = Request0#diameter_nasreq_ACR{
+    Request = Request0#diameter_sgi_ACR{
                 'Acct-Session-Time' = [round((Now - Start) / 1000)]
               },
     cast(Request, From),
@@ -133,7 +133,7 @@ start_accounting(From, 'Stop', Session, State) ->
     Request0 = create_ACR(Session, ?Stop, State),
     Now = ergw_aaa_variable:now_ms(),
     Start = ergw_aaa_session:attr_get('Accounting-Start', Session, Now),
-    Request = Request0#diameter_nasreq_ACR{
+    Request = Request0#diameter_sgi_ACR{
                 'Acct-Session-Time' = [round((Now - Start) / 1000)]
               },
     cast(Request, From),
@@ -171,17 +171,17 @@ pick_peer([Peer | _], _, _SvcName, _State) ->
 pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
     pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
 
-prepare_request(#diameter_packet{msg = #diameter_nasreq_ACR{} = Rec}, _, {_, Caps}) ->
+prepare_request(#diameter_packet{msg = #diameter_sgi_ACR{} = Rec}, _, {_, Caps}) ->
     #diameter_caps{origin_host = {OH, DH},
                    origin_realm = {OR, DR},
                    acct_application_id = {[Ids], _}}
         = Caps,
 
-    {send, Rec#diameter_nasreq_ACR{'Origin-Host' = OH,
-                                   'Origin-Realm' = OR,
-                                   'Destination-Host' = [DH],
-                                   'Destination-Realm' = DR,
-                                   'Acct-Application-Id' = Ids}};
+    {send, Rec#diameter_sgi_ACR{'Origin-Host' = OH,
+                                'Origin-Realm' = OR,
+                                'Destination-Host' = [DH],
+                                'Destination-Realm' = DR,
+                                'Acct-Application-Id' = Ids}};
 
 prepare_request(_Packet, _, _Peer) ->
     lager:debug("unexpected request: ~p~n", [_Packet]),
@@ -200,7 +200,7 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
     {ok, Msg}.
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, From)
-  when is_record(Msg, diameter_nasreq_ACA) and is_pid(From) ->
+  when is_record(Msg, diameter_sgi_ACA) and is_pid(From) ->
     handle_aca(From, Msg),
     {ok, Msg};
 
@@ -218,8 +218,8 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %% internal helpers
 %%===================================================================
 handle_aca(From, Answer) ->
-    #diameter_nasreq_ACA{'Result-Code' = Code,
-                         'Acct-Interim-Interval' = Interval} = Answer,
+    #diameter_sgi_ACA{'Result-Code' = Code,
+                      'Acct-Interim-Interval' = Interval} = Answer,
     if Code == ?'DIAMETER_BASE_RESULT-CODE_SUCCESS' andalso length(Interval) > 0 ->
            ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
        true -> ok
@@ -288,54 +288,66 @@ transport_module(sctp) -> diameter_sctp;
 transport_module(_) -> unknown.
 
 service_type([Atom]) when is_atom(Atom) -> service_type(Atom);
-service_type('Login-User')              -> ?'DIAMETER_NASREQ_SERVICE-TYPE_LOGIN';
-service_type('Framed-User')             -> ?'DIAMETER_NASREQ_SERVICE-TYPE_FRAMED';
-service_type('Callback-Login-User')     -> ?'DIAMETER_NASREQ_SERVICE-TYPE_CALLBACK_LOGIN';
-service_type('Callback-Framed-User')    -> ?'DIAMETER_NASREQ_SERVICE-TYPE_CALLBACK_FRAMED';
-service_type('Outbound-User')           -> ?'DIAMETER_NASREQ_SERVICE-TYPE_OUTBOUND';
-service_type('Administrative-User')     -> ?'DIAMETER_NASREQ_SERVICE-TYPE_ADMINISTRATIVE';
-service_type('NAS-Prompt-User')         -> ?'DIAMETER_NASREQ_SERVICE-TYPE_NAS_PROMPT';
-service_type('Authenticate-Only')       -> ?'DIAMETER_NASREQ_SERVICE-TYPE_AUTHENTICATE_ONLY';
-service_type('Callback-NAS-Prompt')     -> ?'DIAMETER_NASREQ_SERVICE-TYPE_CALLBACK_NAS_PROMPT';
-service_type('Call-Check')              -> ?'DIAMETER_NASREQ_SERVICE-TYPE_CALL_CHECK';
-service_type('Callback-Administrative') -> ?'DIAMETER_NASREQ_SERVICE-TYPE_CALLBACK_ADMINISTRATIVE';
-service_type('Voice')                   -> ?'DIAMETER_NASREQ_SERVICE-TYPE_VOICE';
-service_type('Fax')                     -> ?'DIAMETER_NASREQ_SERVICE-TYPE_FAX';
-service_type('Modem-Relay')             -> ?'DIAMETER_NASREQ_SERVICE-TYPE_MODEM_RELAY';
-service_type('IAPP-Register')           -> ?'DIAMETER_NASREQ_SERVICE-TYPE_IAPP_REGISTER';
-service_type('IAPP-AP-Check')           -> ?'DIAMETER_NASREQ_SERVICE-TYPE_IAPP_AP_CHECK';
-service_type('Authorze-Only')           -> ?'DIAMETER_NASREQ_SERVICE-TYPE_AUTHORIZE_ONLY';
-service_type('Framed-Management')       -> ?'DIAMETER_NASREQ_SERVICE-TYPE_FRAMED_MANAGEMENT';
+service_type('Login-User')              -> ?'DIAMETER_SGI_SERVICE-TYPE_LOGIN';
+service_type('Framed-User')             -> ?'DIAMETER_SGI_SERVICE-TYPE_FRAMED';
+service_type('Callback-Login-User')     -> ?'DIAMETER_SGI_SERVICE-TYPE_CALLBACK_LOGIN';
+service_type('Callback-Framed-User')    -> ?'DIAMETER_SGI_SERVICE-TYPE_CALLBACK_FRAMED';
+service_type('Outbound-User')           -> ?'DIAMETER_SGI_SERVICE-TYPE_OUTBOUND';
+service_type('Administrative-User')     -> ?'DIAMETER_SGI_SERVICE-TYPE_ADMINISTRATIVE';
+service_type('NAS-Prompt-User')         -> ?'DIAMETER_SGI_SERVICE-TYPE_NAS_PROMPT';
+service_type('Authenticate-Only')       -> ?'DIAMETER_SGI_SERVICE-TYPE_AUTHENTICATE_ONLY';
+service_type('Callback-NAS-Prompt')     -> ?'DIAMETER_SGI_SERVICE-TYPE_CALLBACK_NAS_PROMPT';
+service_type('Call-Check')              -> ?'DIAMETER_SGI_SERVICE-TYPE_CALL_CHECK';
+service_type('Callback-Administrative') -> ?'DIAMETER_SGI_SERVICE-TYPE_CALLBACK_ADMINISTRATIVE';
+service_type('Voice')                   -> ?'DIAMETER_SGI_SERVICE-TYPE_VOICE';
+service_type('Fax')                     -> ?'DIAMETER_SGI_SERVICE-TYPE_FAX';
+service_type('Modem-Relay')             -> ?'DIAMETER_SGI_SERVICE-TYPE_MODEM_RELAY';
+service_type('IAPP-Register')           -> ?'DIAMETER_SGI_SERVICE-TYPE_IAPP-REGISTER';
+service_type('IAPP-AP-Check')           -> ?'DIAMETER_SGI_SERVICE-TYPE_IAPP-AP-CHECK';
+service_type('Authorze-Only')           -> ?'DIAMETER_SGI_SERVICE-TYPE_AUTHORIZE_ONLY';
+%service_type('Framed-Management')       -> ?'DIAMETER_SGI_SERVICE-TYPE_FRAMED-MANAGEMENT';
 % these types are not described in dia file
-%service_type('TP-CAPWAP-WTP')           -> ?'DIAMETER_NASREQ_SERVICE-TYPE_UNKNOWN'.
-%service_type('TP-CAPWAP-STA')           -> ?'DIAMETER_NASREQ_SERVICE-TYPE_UNKNOWN'.
-service_type(_)                         -> ?'DIAMETER_NASREQ_SERVICE-TYPE_UNKNOWN'.
+%service_type('TP-CAPWAP-WTP')           -> ?'DIAMETER_SGI_SERVICE-TYPE_UNKNOWN'.
+%service_type('TP-CAPWAP-STA')           -> ?'DIAMETER_SGI_SERVICE-TYPE_UNKNOWN'.
+service_type(_)                         -> ?'DIAMETER_SGI_SERVICE-TYPE_FRAMED'.
 
 acct_authentic([Atom]) when is_atom(Atom) -> acct_authentic(Atom);
-acct_authentic('None')                    -> ?'DIAMETER_NASREQ_ACCT-AUTHENTIC_NONE';
-acct_authentic('RADIUS')                  -> ?'DIAMETER_NASREQ_ACCT-AUTHENTIC_RADIUS';
-acct_authentic('Local')                   -> ?'DIAMETER_NASREQ_ACCT-AUTHENTIC_LOCAL';
-acct_authentic('Remote')                  -> ?'DIAMETER_NASREQ_ACCT-AUTHENTIC_REMOTE';
-acct_authentic('Diameter')                -> ?'DIAMETER_NASREQ_ACCT-AUTHENTIC_DIAMETER';
-acct_authentic(_)                         -> ?'DIAMETER_NASREQ_ACCT-AUTHENTIC_NONE'.
+%acct_authentic('None')                    -> ?'DIAMETER_SGI_ACCT-AUTHENTIC-NONE';
+acct_authentic('RADIUS')                  -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_RADIUS';
+acct_authentic('Local')                   -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_LOCAL';
+acct_authentic('Remote')                  -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_REMOTE';
+acct_authentic('Diameter')                -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_DIAMETER';
+acct_authentic(_)                         -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_RADIUS'.
 
 framed_protocol([Atom]) when is_atom(Atom) -> framed_protocol(Atom);
-framed_protocol('PPP')                     -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_PPP';
-framed_protocol('SLIP')                    -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_SLIP';
-framed_protocol('ARAP')                    -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_ARAP';
-framed_protocol('Gandalf-SLML')            -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_GANDALF';
-framed_protocol('Xylogics-IPX-SLIP')       -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_XYLOGICS';
-framed_protocol('X.75-Synchronous')        -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_X_75';
-framed_protocol('GPRS-PDP-Context')        -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_GPRS_PDP_CONTEXT';
+framed_protocol('PPP')                     -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP';
+framed_protocol('SLIP')                    -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_SLIP';
+framed_protocol('ARAP')                    -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_ARAP';
+framed_protocol('Gandalf-SLML')            -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_GANDALF';
+framed_protocol('Xylogics-IPX-SLIP')       -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_XYLOGICS';
+framed_protocol('X.75-Synchronous')        -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_X75';
+framed_protocol('GPRS-PDP-Context')        -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_GPRS_PDP_CONTEXT';
 % note that mapping for 255,256,257,258,259,260,261 missed for now
 % these types are not described in dia file
-%framed_protocol('TP-CAPWAP')               -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_PPP'.
-framed_protocol(_)                         -> ?'DIAMETER_NASREQ_FRAMED-PROTOCOL_PPP'.
+%framed_protocol('TP-CAPWAP')               -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP'.
+framed_protocol(_)                         -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP'.
+
+pdp_type([Atom]) when is_atom(Atom) -> pdp_type(Atom);
+pdp_type('IPv4')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4';
+pdp_type('IPv6')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV6';
+pdp_type('IPv4v6')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4V6';
+pdp_type('PPP')                     -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP';
+pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
+
+format_cc(Value) when is_binary(Value) ->
+    erlang:iolist_to_binary([io_lib:format("~2.16.0B", [X]) 
+                             || <<X>> <= Value]);
+format_cc(_) -> [].
 
 create_ACR(Session, Type, State) ->
     AcctSessionId = hd(attr_get('Session-Id', Session)),
     MultiSessionId = hd(attr_get('Multi-Session-Id', Session)),
-    #diameter_nasreq_ACR{
+    #diameter_sgi_ACR{
        'Session-Id' = State#state.sid,
        'Accounting-Record-Type' = Type,
        'Accounting-Record-Number' = State#state.accounting_record_number,
@@ -358,6 +370,29 @@ create_ACR(Session, Type, State) ->
        'Framed-IP-Address' = attr_get_addr('Framed-IP-Address', Session),
        'Framed-Protocol' = [framed_protocol(attr_get('Framed-Protocol', Session))],
        'Tunneling' = tunneling(Session, State),
+       '3GPP-IMSI' = attr_get('3GPP-IMSI', Session),
+       '3GPP-Charging-Id' = attr_get('3GPP-Charging-ID', Session),
+       '3GPP-PDP-Type' = [pdp_type(attr_get('3GPP-Charging-ID', Session))],
+       '3GPP-CG-Address' = attr_get_addr('3GPP-Charging-Gateway-Address', Session),
+       '3GPP-GPRS-Negotiated-QoS-Profile' = attr_get('3GPP-GPRS-Negotiated-QoS-Profile', Session),
+       '3GPP-SGSN-Address' = attr_get_addr('3GPP-SGSN-Address', Session),
+       '3GPP-GGSN-Address' = attr_get_addr('3GPP-GGSN-Address', Session),
+       '3GPP-IMSI-MCC-MNC' = attr_get('3GPP-IMSI-MCC-MNC', Session),
+       '3GPP-GGSN-MCC-MNC' = attr_get('3GPP-GGSN-MCC-MNC', Session),
+       '3GPP-NSAPI' = attr_get('3GPP-NSAPI', Session),
+       '3GPP-Selection-Mode' = attr_get('3GPP-Selection-Mode', Session),
+       '3GPP-Charging-Characteristics' = format_cc(attr_get('3GPP-Charging-Characteristics', Session)),
+       '3GPP-CG-IPv6-Address' = attr_get_addr('3GPP-Charging-Gateway-IPv6-Address', Session),
+       '3GPP-SGSN-IPv6-Address' = attr_get_addr('3GPP-SGSN-IPv6-Address', Session),
+       '3GPP-GGSN-IPv6-Address' = attr_get_addr('3GPP-GGSN-IPv6-Address', Session),
+       '3GPP-SGSN-MCC-MNC' = attr_get('3GPP-SGSN-MCC-MNC', Session),
+       '3GPP-IMEISV' = attr_get('3GPP-IMEISV', Session),
+       '3GPP-RAT-Type' = attr_get('3GPP-RAT-Type', Session),
+       '3GPP-User-Location-Info' = attr_get('3GPP-User-Location-Info', Session),
+       '3GPP-MS-TimeZone' = attr_get('3GPP-MS-TimeZone', Session),
+       '3GPP-CAMEL-Charging-Info' = attr_get('3GPP-Camel-Charging', Session),
+       '3GPP-Packet-Filter' = attr_get('3GPP-Packet-Filter', Session),
+       '3GPP-Negotiated-DSCP' = attr_get('3GPP-Negotiated-DSCP', Session),
        'AVP' = []}.
 
 % TODO: build #'Tunneling'{}

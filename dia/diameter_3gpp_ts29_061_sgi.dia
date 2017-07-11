@@ -166,3 +166,13 @@
               [ 3GPP-IPv6-DNS-Servers ]
          ;; * [ External-Identifier]
             * [ AVP ]
+
+@enum Framed-Protocol
+
+   PPP                            1
+   SLIP                           2
+   ARAP                           3
+   GANDALF                        4
+   XYLOGICS                       5
+   X75                            6
+   GPRS_PDP_CONTEXT               7

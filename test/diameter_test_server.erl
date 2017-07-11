@@ -8,7 +8,7 @@
 -module(diameter_test_server).
 
 -include_lib("diameter/include/diameter.hrl").
--include("../include/diameter_nasreq_rfc7155.hrl").
+-include("../include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -export([start/0, stop/0]).
 
@@ -39,7 +39,7 @@ start() ->
                {restrict_connections, false},
                {string_decode, false},
                {application, [{alias, nasreq},
-                              {dictionary, diameter_nasreq_rfc7155},
+                              {dictionary, diameter_3gpp_ts29_061_sgi},
                               {module, ?MODULE}]}],
     diameter:start_service(?MODULE, SvcOpts),
     Opts = [{transport_module, diameter_tcp},
@@ -77,21 +77,41 @@ handle_error(_Reason, _Request, _SvcName, _Peer) ->
     ?UNEXPECTED.
 
 handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps}) 
-  when is_record(Msg, diameter_nasreq_ACR) ->
+  when is_record(Msg, diameter_sgi_ACR) ->
     #diameter_caps{origin_host = {OH, _},
                    origin_realm = {OR, _}} = Caps,
-    #diameter_nasreq_ACR{'Session-Id' = Id,
-                         'Accounting-Record-Type' = Type,
-                         'Accounting-Record-Number' = Number,
-                         'Acct-Application-Id' = AppId} = Msg,
-    {reply, #diameter_nasreq_ACA{'Session-Id' = Id,
-                                 'Result-Code' = 2001,
-                                 'Origin-Host' = OH,
-                                 'Origin-Realm' = OR,
-                                 'Acct-Interim-Interval' = [1],
-                                 'Accounting-Record-Type' = Type,
-                                 'Accounting-Record-Number' = Number,
-                                 'Acct-Application-Id' = AppId}};
+    #diameter_sgi_ACR{'Session-Id' = Id,
+                      'Accounting-Record-Type' = Type,
+                      'Accounting-Record-Number' = Number,
+                      'Acct-Application-Id' = AppId} = Msg,
+    ACA =  #diameter_sgi_ACA{'Session-Id' = Id,
+                             'Result-Code' = 2001,
+                             'Origin-Host' = OH,
+                             'Origin-Realm' = OR,
+                             'Acct-Interim-Interval' = [1],
+                             'Accounting-Record-Type' = Type,
+                             'Accounting-Record-Number' = Number,
+                             'Acct-Application-Id' = AppId},
+    case Msg#diameter_sgi_ACR.'3GPP-IMSI' of
+         [] -> {reply, ACA};
+         _IMSI -> check_3gpp(Msg, ACA)
+    end;
 
 handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
+
+check_3gpp(Msg, ACA) ->
+    Success = [<<"250071234567890">>] == Msg#diameter_sgi_ACR.'3GPP-IMSI'
+        andalso [<<214, 208, 226, 238>>] == Msg#diameter_sgi_ACR.'3GPP-Charging-Id'
+        andalso [1] == Msg#diameter_sgi_ACR.'3GPP-PDP-Type'
+        andalso [<<10, 10, 10, 10>>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-Address'
+        andalso [<<"250999">>] == Msg#diameter_sgi_ACR.'3GPP-IMSI-MCC-MNC'
+        andalso [<<"250888">>] == Msg#diameter_sgi_ACR.'3GPP-GGSN-MCC-MNC'
+        andalso [<<100, 10, 10, 10>>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-IPv6-Address'
+        andalso [<<200, 10, 10, 10>>] == Msg#diameter_sgi_ACR.'3GPP-GGSN-IPv6-Address'
+        andalso [<<"250777">>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-MCC-MNC'
+        andalso [<<"3566190531472414">>] == Msg#diameter_sgi_ACR.'3GPP-IMEISV'
+        andalso [<<1>>] == Msg#diameter_sgi_ACR.'3GPP-RAT-Type',
+    if Success == true -> {reply, ACA};
+       true -> {answer_message, 3001}
+    end.
