@@ -242,7 +242,7 @@ reply(Reply, State = #state{reply = ReplyTo}) ->
     State#state{reply = undefined}.
 
 event({'ChangeInterimAccouting', Interval}, Session) ->
-    maps:put('Interim-Accounting', Interval, Session);
+    maps:put('Interim-Accounting', Interval * 1000, Session);
 
 event({'AuthenticationRequestReply', {Verdict, SessionOpts}}, Session0) ->
     Session1 = maps:without(['EAP-Data'], Session0),
