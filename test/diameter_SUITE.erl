@@ -82,12 +82,13 @@ acct_interim_interval(_Config) ->
     success = ergw_aaa_session:authenticate(Session, #{}),
     ergw_aaa_session:start(Session, #{}),
 
+    timer:sleep(100),
     Count0 = proplists:get_value({{1, 271, 1}, send}, get_stats()),
     
     % wait a little to be sure that values is set in session
     timer:sleep(100),
     {state, _, _, _, _, _, _, _, SessionMap} = sys:get_state(Session),
-    1 = maps:get('Interim-Accounting', SessionMap),
+    1000 = maps:get('Interim-Accounting', SessionMap),
 
     % In ACA we have Acct-Interim-Interval = 100
     % that means for 2 seconds at least 2 ACR Interim reqs will be sent.
