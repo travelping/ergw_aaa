@@ -61,7 +61,7 @@ check_CER_CEA(_Config) ->
     ok.
 
 accounting(_Config) ->
-    {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{}),
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'Framed-IP-Address' => {10,10,10,10}}),
     success = ergw_aaa_session:authenticate(Session, #{}),
     ergw_aaa_session:start(Session, #{}),
 

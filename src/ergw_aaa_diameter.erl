@@ -262,6 +262,15 @@ attr_get(Key, Session) ->
        Value -> [Value]
     end.
 
+attr_get_addr(Key, Session) ->
+    format_address(attr_get(Key, Session)).
+
+format_address([{A, B, C, D}]) -> [<<A, B, C, D>>];
+format_address([{A, B, C, D, E, F, G, H}]) ->
+    [<<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>];
+format_address(Addr) -> Addr.
+
+
 resolve_hostname(Name) when is_binary(Name) -> resolve_hostname(binary_to_list(Name));
 resolve_hostname(Name) ->
     Name1 = case inet:gethostbyname(Name, inet6) of
@@ -346,7 +355,7 @@ create_ACR(Session, Type, State) ->
        'Called-Station-Id' = attr_get('Called-Station-Id', Session),
        'Calling-Station-Id' = attr_get('Calling-Station-Id', Session),
        'Framed-Interface-Id' = attr_get('Framed-Interface-Id', Session),
-       'Framed-IP-Address' = attr_get('Framed-IP-Address', Session),
+       'Framed-IP-Address' = attr_get_addr('Framed-IP-Address', Session),
        'Framed-Protocol' = [framed_protocol(attr_get('Framed-Protocol', Session))],
        'Tunneling' = tunneling(Session, State),
        'AVP' = []}.
