@@ -5,6 +5,17 @@
 ;; as published by the Free Software Foundation; either version
 ;; 2 of the License, or (at your option) any later version.
 
+;;
+;; RFC 7155, Diameter Network Access Server Application
+;;
+;;
+;; Edits:
+;;
+;; - Framed-Appletalk-Link      -> Framed-AppleTalk-Link
+;; - Framed-Appletalk-Network   -> Framed-AppleTalk-Network
+;; - Framed-Appletalk-Zone      -> Framed-AppleTalk-Zone
+;;
+
 @id 1
 @name   diameter_nasreq_rfc7155
 @prefix diameter_nasreq
@@ -31,9 +42,9 @@
    Calling-Station-Id           31     UTF8String       M
    Connect-Info                 77     UTF8String       M
    Filter-Id                    11     UTF8String       M
-   Framed-Appletalk-Link        37     Unsigned32       M
-   Framed-Appletalk-Network     38     Unsigned32       M
-   Framed-Appletalk-Zone        39     OctetString      M
+   Framed-AppleTalk-Link        37     Unsigned32       M
+   Framed-AppleTalk-Network     38     Unsigned32       M
+   Framed-AppleTalk-Zone        39     OctetString      M
    Framed-Compression           13     Enumerated       M
    Framed-IP-Address            8      OctetString      M
    Framed-IP-Netmask            9      OctetString      M
@@ -133,9 +144,9 @@
             * [ Filter-Id ]
             * [ NAS-Filter-Rule ]
             * [ QoS-Filter-Rule ]
-              [ Framed-Appletalk-Link ]
-              [ Framed-Appletalk-Network ]
-              [ Framed-Appletalk-Zone ]
+              [ Framed-AppleTalk-Link ]
+              [ Framed-AppleTalk-Network ]
+              [ Framed-AppleTalk-Zone ]
               [ Framed-Compression ]
               [ Framed-Interface-Id ]
               [ Framed-IP-Address ]

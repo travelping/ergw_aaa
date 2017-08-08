@@ -1,0 +1,106 @@
+;;
+;; %CopyrightBegin%
+;;
+;; Copyright Travelping GmbH 2015. All Rights Reserved.
+;;
+;; Licensed under the Apache License, Version 2.0 (the "License");
+;; you may not use this file except in compliance with the License.
+;; You may obtain a copy of the License at
+;;
+;;     http://www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
+;;
+;; %CopyrightEnd%
+;;
+
+@id     16777236
+@name   diameter_3gpp_ts29_229
+@prefix diameter_cx
+@vendor 10415 3GPP
+
+@inherits diameter_gen_base_rfc6733
+
+;; only attributes required by other applications are defined
+
+@avp_types
+
+   Visited-Network-Identifier                  600   OctetString    MV
+   Public-Identity                             601    UTF8String    MV
+   Server-Name                                 602    UTF8String    MV
+;; Server-Capabilities                         603       Grouped    MV
+   Mandatory-Capability                        604    Unsigned32    MV
+   Optional-Capability                         605    Unsigned32    MV
+   User-Data                                   606   OctetString    MV
+   SIP-Number-Auth-Items                       607    Unsigned32    MV
+   SIP-Authentication-Scheme                   608    UTF8String    MV
+   SIP-Authenticate                            609   OctetString    MV
+   SIP-Authorization                           610   OctetString    MV
+   SIP-Authentication-Context                  611   OctetString    MV
+;; SIP-Auth-Data-Item                          612       Grouped    MV
+   SIP-Item-Number                             613    Unsigned32    MV
+   Server-Assignment-Type                      614    Enumerated    MV
+;; Deregistration-Reason                       615       Grouped    MV
+   Reason-Code                                 616    Enumerated    MV
+   Reason-Info                                 617    UTF8String    MV
+   Charging-Information                        618       Grouped    MV
+   Primary-Event-Charging-Function-Name        619   DiameterURI    MV
+   Secondary-Event-Charging-Function-Name      620   DiameterURI    MV
+   Primary-Charging-Collection-Function-Name   621   DiameterURI    MV
+   Secondary-Charging-Collection-Function-Name 622   DiameterURI    MV
+   User-Authorization-Type                     623    Enumerated    MV
+   User-Data-Already-Available                 624    Enumerated    MV
+   Confidentiality-Key                         625   OctetString    MV
+   Integrity-Key                               626   OctetString    MV
+   Supported-Features                          628       Grouped     V
+   Feature-List-ID                             629    Unsigned32     V
+   Feature-List                                630    Unsigned32     V
+;; Supported-Applications                      631       Grouped     V
+;; Associated-Identities                       632       Grouped     V
+   Originating-Request                         633    Enumerated    MV
+   Wildcarded-Public-Identity                  634    UTF8String     V
+;; SIP-Digest-Authenticate                     635       Grouped     V
+   Digest-Realm                                104    UTF8String    M			;; RFC-4590
+   Digest-Algorithm                            111    UTF8String    M			;; RFC-4590
+   Digest-QoP                                  110    UTF8String    M			;; RFC-4590
+   Digest-HA1                                  121    UTF8String    M			;; RFC-4590
+   UAR-Flags                                   637    Unsigned32     V
+   Loose-Route-Indication                      638    Enumerated     V
+;; SCSCF-Restoration-Info                      639       Grouped     V
+   Path                                        640   OctetString     V
+   Contact                                     641   OctetString     V
+;; Subscription-Info                           642       Grouped     V
+   Call-ID-SIP-Header                          643   OctetString     V
+   From-SIP-Header                             644   OctetString     V
+   To-SIP-Header                               645   OctetString     V
+   Record-Route                                646   OctetString     V
+;; Associated-Registered-Identities            647       Grouped     V
+   Multiple-Registration-Indication            648    Enumerated     V
+;; Restoration-Info                            649       Grouped     V
+   Session-Priority                            650    Enumerated     V
+;; Identity-with-Emergency-Registration        651       Grouped     V
+   Priviledged-Sender-Indication               652    Enumerated     V
+   LIA-Flags                                   653    Unsigned32     V
+;; OC-Supported-Features                       TBD       Grouped     -			;; IETF draft-ietf-dime-02
+;; OC-OLR                                      TBD       Grouped     -			;; IETF draft-ietf-dime-02
+   Initial-CSeq-Sequence-Number                654    Unsigned32     V
+   SAR-Flags                                   655    Unsigned32     V
+
+@grouped
+
+       Charging-Information ::= < AVP Header : 618 >
+                                [ Primary-Event-Charging-Function-Name ]
+                                [ Secondary-Event-Charging-Function-Name ]
+                                [ Primary-Charging-Collection-Function-Name ]
+                                [ Secondary-Charging-Collection-Function-Name ]
+                              * [ AVP ]
+
+       Supported-Features ::= < AVP Header : 628 >
+                              { Vendor-Id }
+                              { Feature-List-ID }
+                              { Feature-List }
+                            * [ AVP ]

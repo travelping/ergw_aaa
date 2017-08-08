@@ -1,0 +1,46 @@
+;;
+;; %CopyrightBegin%
+;;
+;; Copyright Travelping GmbH 2015. All Rights Reserved.
+;;
+;; Licensed under the Apache License, Version 2.0 (the "License");
+;; you may not use this file except in compliance with the License.
+;; You may obtain a copy of the License at
+;;
+;;     http://www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
+;;
+;; %CopyrightEnd%
+;;
+
+@id     16777231
+@name   diameter_etsi_es283_034
+@prefix diameter_e4
+@vendor 13019 ETSI
+
+@inherits diameter_gen_base_rfc6733
+
+;; only attributes required by other applications are defined
+
+@avp_types
+
+;; Globally-Unique-Address          300       Grouped    MV
+   Address-Realm                    301   OctetString    MV
+   Logical-Access-ID                302   OctetString     V
+;; Initial-Gate-Setting-Description 303       Grouped     V
+;; QoS-Profile-Description          304       Grouped     V
+   IP-Connectivity-Status           305    Enumerated     V
+;; Access-Network-Type              306       Grouped     V
+   Aggregation-Network-Type         307    Enumerated     V
+   Maximum-Allowed-Bandwidth-UL     308    Unsigned32     V
+   Maximum-Allowed-Bandwidth-DL     309    Unsigned32     V
+   Transport-Class                  311    Unsigned32     V
+   Application-Class-ID             312    UTF8String     V
+   Physical-Access-ID               313    UTF8String     V
+   Initial-Gate-Setting-ID          314    Unsigned32     V
+   QoS-Profile-ID                   315    Unsigned32     V
