@@ -1,0 +1,76 @@
+;;
+;; %CopyrightBegin%
+;;
+;; Copyright Travelping GmbH 2015. All Rights Reserved.
+;;
+;; Licensed under the Apache License, Version 2.0 (the "License");
+;; you may not use this file except in compliance with the License.
+;; You may obtain a copy of the License at
+;;
+;;     http://www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
+;;
+;; %CopyrightEnd%
+;;
+
+@id     16777236
+@name   diameter_3gpp_ts29_214
+@prefix diameter_rx
+@vendor 10415 3GPP
+
+@inherits diameter_gen_base_rfc6733
+@inherits diameter_cc_rfc4006
+
+;; only attributes required by other applications are defined
+
+@avp_types
+
+   Abort-Cause                              500     Enumerated    MV
+   Access-Network-Charging-Address          501        Address    MV
+;; Access-Network-Charging-Identifier       502        Grouped    MV
+   Access-Network-Charging-Identifier-Value 503    OctetString    MV
+;; Acceptable-Service-Info                  526        Grouped    MV
+   AF-Application-Identifier                504    OctetString    MV
+   AF-Charging-Identifier                   505    OctetString    MV
+   Application-Service-Provider-Identity    532     UTF8String     V
+   Codec-Data                               524    OctetString    MV
+   Flow-Description                         507   IPFilterRule    MV
+   Flow-Number                              509     Unsigned32    MV
+   Flows                                    510        Grouped    MV
+   Flow-Status                              511     Enumerated    MV
+   Flow-Usage                               512     Enumerated    MV
+   GCS-Identifier                           538    OctetString     V
+   Service-URN                              525    OctetString    MV
+   Specific-Action                          513     Enumerated    MV
+   Max-Requested-Bandwidth-DL               515     Unsigned32    MV
+   Max-Requested-Bandwidth-UL               516     Unsigned32    MV
+;; Media-Component-Description              517        Grouped    MV
+   Media-Component-Number                   518     Unsigned32    MV
+;; Media-Sub-Component                      519        Grouped    MV
+   Media-Type                               520     Enumerated    MV
+   MPS-Identifier                           528    OctetString     V
+   Min-Requested-Bandwidth-DL               534     Unsigned32     V
+   Min-Requested-Bandwidth-UL               535     Unsigned32     V
+   RR-Bandwidth                             521     Unsigned32    MV
+   RS-Bandwidth                             522     Unsigned32    MV
+   Service-Info-Status                      527     Enumerated    MV
+   SIP-Forking-Indication                   523     Enumerated    MV
+   Sponsor-Identity                         531     UTF8String     V
+;; Sponsored-Connectivity-Data              530        Grouped     V
+   AF-Signalling-Protocol                   529     Enumerated     V
+   Required-Access-Info                     536     Enumerated     V
+   Rx-Request-Type                          533     Enumerated     V
+   IP-Domain-Id                             537    OctetString     V
+
+
+@grouped
+
+       Flows ::= < AVP Header: 510 >
+       	     	 { Media-Component-Number }
+ 	       * [ Flow-Number ]
+                 [ Final-Unit-Action ]

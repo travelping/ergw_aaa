@@ -1,0 +1,61 @@
+;;
+;; %CopyrightBegin%
+;;
+;; Copyright Travelping GmbH 2015. All Rights Reserved.
+;;
+;; Licensed under the Apache License, Version 2.0 (the "License");
+;; you may not use this file except in compliance with the License.
+;; You may obtain a copy of the License at
+;;
+;;     http://www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
+;;
+;; %CopyrightEnd%
+;;
+
+;;
+;; Edits:
+;;
+;; - Ipv6   -> IPv6
+;;
+
+@id     16777223
+@name   diameter_3gpp_ts29_061_gmb
+@prefix diameter_gmb
+@vendor 10415 3GPP
+
+@inherits diameter_gen_base_rfc6733
+@inherits diameter_3gpp_base
+
+;; only attributes required by other applications are defined
+
+@avp_types
+
+   TMGI                              900   OctetString    MV
+   Required-MBMS-Bearer-Capabilities 901    UTF8String    MV
+   MBMS-StartStop-Indication         902    Enumerated    MV
+   MBMS-Service-Area                 903   OctetString    MV
+   MBMS-Session-Duration             904   OctetString    MV
+   Alternative-APN                   905    UTF8String    MV
+   MBMS-Service-Type                 906    Enumerated    MV
+   MBMS-2G-3G-Indicator              907    Enumerated    M
+   MBMS-Session-Identity             908   OctetString    MV
+   RAI                               909    UTF8String    M
+   Additional-MBMS-Trace-Info        910   OctetString    MV
+   MBMS-Time-To-Data-Transfer        911   OctetString    MV
+   MBMS-Session-Repetition-Number    912   OctetString    MV
+   MBMS-Required-QoS                 913    UTF8String    MV
+   MBMS-Counting-Information         914    Enumerated    MV
+   MBMS-User-Data-Mode-Indication    915    Enumerated    MV
+   MBMS-GGSN-Address                 916   OctetString    MV
+   MBMS-GGSN-IPv6-Address            917   OctetString    MV
+   MBMS-BMSC-SSM-IP-Address          918   OctetString    MV
+   MBMS-BMSC-SSM-IPv6-Address        919   OctetString    MV
+   MBMS-Flow-Identifier              920   OctetString    MV
+   CN-IP-Multicast-Distribution      921    Enumerated    MV
+   MBMS-HC-Indicator                 922    Enumerated    MV
