@@ -47,6 +47,10 @@ config() ->
 config(_Config)  ->
     ?ok_option([{vsn, "1.0.0"}]),
 
+    ?ok_option([{product_name, "PRODUCT"}]),
+    ?ok_option([{product_name, <<"PRODUCT">>}]),
+    ?error_option([{product_name, 1}]),
+
     ?error_option([{ergw_aaa_provider, invalid_option}]),
     ?error_option([{ergw_aaa_provider, {invalid_handler, []}}]),
 

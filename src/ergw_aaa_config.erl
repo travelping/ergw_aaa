@@ -12,7 +12,8 @@
 %% API
 -export([load_config/1, validate_options/2, validate_options/3]).
 
--define(DefaultOptions, [{ergw_aaa_provider, {ergw_aaa_mock, []}}]).
+-define(DefaultOptions, [{product_name, "erGW-AAA"},
+                         {ergw_aaa_provider, {ergw_aaa_mock, []}}]).
 
 %%%===================================================================
 %%% API
@@ -36,6 +37,8 @@ validate_options(Fun, Opts0, Defaults) ->
     Opts = lists:ukeymerge(1, lists:keysort(1, Opts0), lists:keysort(1, Defaults)),
     validate_options(Fun, Opts).
 
+validate_option(product_name, Value) when not is_list(Value), not is_binary(Value) ->
+    throw({error, {options, {product_name, Value}}});
 validate_option(ergw_aaa_provider, {Handler, Opts} = Value)
   when is_atom(Handler) ->
     case code:ensure_loaded(Handler) of
