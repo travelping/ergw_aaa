@@ -56,7 +56,7 @@
 initialize_provider(Opts) ->
     {OriginHost, Addr} = proplists:get_value(host, Opts),
     OriginRealm = proplists:get_value(realm, Opts),
-    ProductName = application:get_env(ergw_aaa, product_name, "erGW-AAA"),
+    ProductName = setup:get_env(ergw_aaa, product_name, "erGW-AAA"),
     SvcOpts = [{'Origin-Host', OriginHost},
                {'Origin-Realm', OriginRealm},
                {'Origin-State-Id', diameter:origin_state_id()},
