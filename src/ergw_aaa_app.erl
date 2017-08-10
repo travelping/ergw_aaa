@@ -18,8 +18,9 @@
 
 start(_StartType, _StartArgs) ->
     Config = ergw_aaa_config:load_config(setup:get_all_env(ergw_aaa)),
+    ApiSupSpecs = ergw_aaa_api:initialize_apis(Config),
     {ok, ProviderSupSpecs} = ergw_aaa_profile:initialize_provider(Config),
-    ergw_aaa_sup:start_link(ProviderSupSpecs).
+    ergw_aaa_sup:start_link(ApiSupSpecs ++ ProviderSupSpecs).
 
 stop(_State) ->
     ok.
