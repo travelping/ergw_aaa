@@ -21,7 +21,8 @@
 
 %% API
 -export([start_link/0, stop/0]).
--export([register_service/2, get_services/1]).
+-export([peer_down/2, is_first_request/2,
+	 register_service/2, get_services/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -41,6 +42,18 @@ start_link() ->
 stop() ->
     gen_server:cast(?SERVER, stop).
 
+peer_down(API, PeerId) ->
+    (catch ets:delete(?MODULE, {API, PeerId})),
+    ok.
+
+is_first_request(API, PeerId) ->
+    case ets:lookup(?MODULE, {API, PeerId}) of
+	[] ->
+	    gen_server:call(?SERVER, {is_first_request, API, PeerId});
+	[_] ->
+	    false
+    end.
+
 register_service(Transport, SvcOpts) ->
     gen_server:call(?SERVER, {register_service, Transport, SvcOpts}).
 
@@ -52,7 +65,19 @@ get_services(Transport) ->
 %%%===================================================================
 
 init([]) ->
+    ets:new(?MODULE, [ordered_set, public, named_table, {keypos, 1}, {read_concurrency, true}]),
+
     {ok, #state{handlers = dict:new()}}.
+
+handle_call({is_first_request, API, PeerId}, _From, State) ->
+    case ets:lookup(?MODULE, {API, PeerId}) of
+	[] ->
+	    MRef = erlang:monitor(process, PeerId),
+	    ets:insert(?MODULE, {{API, PeerId}, MRef}),
+	    {reply, true, State};
+	_ ->
+	    {reply, false, State}
+    end;
 
 handle_call({register_service, Transport, SvcOpts}, _From, #state{handlers = H} = State) ->
     {reply, ok, State#state{handlers = dict:update(Transport, [SvcOpts | _], [SvcOpts], H)}};
@@ -66,6 +91,10 @@ handle_call({get_services, Transport}, _From, #state{handlers = H} = State) ->
 
 handle_cast(stop, State) ->
     {stop, normal, State}.
+
+handle_info({'DOWN', MRef, _Type, Pid, _Info}, State) ->
+    ets:match_delete(?MODULE, {{'_', Pid}, MRef}),
+    {noreply, State};
 
 handle_info(Info, State) ->
     lager:warning("handle_info: ~p", [Info]),

@@ -8,7 +8,9 @@
 -module(diameter_test_server).
 
 -include_lib("diameter/include/diameter.hrl").
+-include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("../include/diameter_3gpp_ts29_061_sgi.hrl").
+-include("../include/diameter_3gpp_ts29_212.hrl").
 
 -export([start/0, stop/0]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
@@ -28,6 +30,9 @@
 -define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
 -define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
 
+-define(DIAMETER_DICT_GX, diameter_3gpp_ts29_212).
+-define(DIAMETER_APP_ID_GX, ?DIAMETER_DICT_GX:id()).
+
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
@@ -46,12 +51,20 @@ start() ->
 	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
 					?VENDOR_ID_ETSI,
 					?VENDOR_ID_TP]},
-	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ]},
+	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
+					?DIAMETER_APP_ID_GX]},
+	       {'Vendor-Specific-Application-Id',
+		[#'diameter_base_Vendor-Specific-Application-Id'{
+		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
+		    'Auth-Application-Id' = [?DIAMETER_APP_ID_GX]}]},
 	       {restrict_connections, false},
 	       {string_decode, false},
 	       {decode_format, map},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
+			      {module, [?MODULE, SvcState]}]},
+	       {application, [{alias, diameter_gx},
+			      {dictionary, ?DIAMETER_DICT_GX},
 			      {module, [?MODULE, SvcState]}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
@@ -113,6 +126,48 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	[] -> {reply, ['ACA' | ACA]};
 	_IMSI -> check_3gpp(Msg, ACA)
     end;
+
+handle_request(#diameter_packet{
+		  msg = ['CCR' |
+			 #{'Subscription-Id' :=
+			       [#{'Subscription-Id-Data' := <<"FAIL">>}]}]},
+	       _SvcName, _, _Extra) ->
+    {answer_message, 3001};  %% DIAMETER_COMMAND_UNSUPPORTED
+
+handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, _Extra)
+  when is_map(Msg) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _}} = Caps,
+    #{'Session-Id' := Id,
+      'Auth-Application-Id' := AppId,
+      'CC-Request-Type' := Type,
+      'CC-Request-Number' := Number} = Msg,
+
+    RuleNames = [<<"service01">>, <<"service02">>, <<"service03">>],
+    Key = <<"default">>,
+
+    Reply = #{
+      'Session-Id' => Id,
+      'Auth-Application-Id' => AppId,
+      'Origin-Host' => OH,
+      'Origin-Realm' => OR,
+      'CC-Request-Type' => Type,
+      'CC-Request-Number' => Number,
+      'Result-Code' => [?'DIAMETER_BASE_RESULT-CODE_SUCCESS'],
+      'Charging-Rule-Install' =>
+	  [#{'Charging-Rule-Name' => [Name]} || Name <- RuleNames],
+      'Usage-Monitoring-Information' =>
+	  [#{'Monitoring-Key' => [Key],
+	     'Usage-Monitoring-Level' =>
+		 [?'DIAMETER_GX_USAGE-MONITORING-LEVEL_SESSION_LEVEL'],
+	     'Granted-Service-Unit' =>
+		 [#{'CC-Time' => [600]},
+		  #{'CC-Total-Octets' => [1000],
+		    'CC-Input-Octets' => [1000],
+		    'CC-Output-Octets' => [1000]}
+		 ]}]
+     },
+    {reply, ['CCA' | Reply]};
 
 handle_request(#diameter_packet{msg = _Msg}, _SvcName, _, _Extra) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
