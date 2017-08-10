@@ -13,38 +13,65 @@
          end_per_suite/1]).
 
 %% Test cases
--export([check_CER_CEA/1, accounting/1, acct_interim_interval/1, attrs_3gpp/1]).
+-export([accounting/1, acct_interim_interval/1, attrs_3gpp/1]).
 
 -include_lib("common_test/include/ct.hrl").
+
+-import(diameter_test_server, [get_stats/1, diff_stats/2, wait_for_diameter/2]).
+
+-define(SERVICE, ergw_aaa_diameter).
+
+-define(equal(Expected, Actual),
+    (fun (Expected@@@, Expected@@@) -> true;
+	 (Expected@@@, Actual@@@) ->
+	     ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
+		    [?FILE, ?LINE, ??Actual, Expected@@@, Actual@@@]),
+	     false
+     end)(Expected, Actual) orelse error(badmatch)).
+
+-define(match(Guard, Expr),
+	((fun () ->
+		  case (Expr) of
+		      Guard -> ok;
+		      V -> ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~s~n",
+				   [?FILE, ?LINE, ??Expr, ??Guard,
+				    ergw_test_lib:pretty_print(V)]),
+			    error(badmatch)
+		  end
+	  end)())).
 
 %%%===================================================================
 %%% Common Test callbacks
 %%%===================================================================
 
 all() ->
-    [check_CER_CEA,
-     accounting,
+    [accounting,
      acct_interim_interval,
      attrs_3gpp].
 
-
 init_per_suite(Config) ->
     DiameterOpts = [{nas_identifier, <<"NAS">>},
-                    {host, <<"127.0.0.1">>},
-                    {realm, <<"example.com">>},
-                    {connect_to, <<"aaa://127.0.0.1:3868">>},
-                    {acct_interim_interval, 1},
-                    {service_type, 'Framed-User'}
-                   ],
-    Opts = [ {default, {provider, ergw_aaa_diameter, DiameterOpts} } ],
+		    {host, <<"127.0.0.1">>},
+		    {realm, <<"example.com">>},
+		    {connect_to, <<"aaa://127.0.0.1">>},
+		    {acct_interim_interval, 1},
+		    {service_type, 'Framed-User'}
+		   ],
+    Opts = [ {default, {provider, ?SERVICE, DiameterOpts} } ],
+
     application:load(ergw_aaa),
     application:set_env(ergw_aaa, applications, Opts),
 
     diameter_test_server:start(),
     application:ensure_all_started(ergw_aaa),
 
-    timer:sleep(100),
-    Config.
+    case diameter_test_server:wait_for_diameter(?SERVICE, 10) of
+	ok ->
+	    Config;
+	Other ->
+	    end_per_suite(Config),
+	    {skip, Other}
+    end.
 
 end_per_suite(_Config) ->
     application:stop(ergw_aaa),
@@ -56,29 +83,24 @@ end_per_suite(_Config) ->
 %%% Test cases
 %%%===================================================================
 
-check_CER_CEA(_Config) ->
-    Statistics = get_stats(),
-    % check that client has sent CER
-    1 = proplists:get_value({{0, 257, 1}, send}, Statistics),
-    % check that client has received CEA
-    1 = proplists:get_value({{0, 257, 0}, recv}, Statistics),
-    ok.
-
 accounting(_Config) ->
-    {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'Framed-IP-Address' => {10,10,10,10}}),
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
+						     #{'Framed-IP-Address' => {10,10,10,10}}),
     success = ergw_aaa_session:authenticate(Session, #{}),
     ergw_aaa_session:start(Session, #{}),
 
     timer:sleep(100),
-    Statistics = get_stats(),
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
     % check that client has sent ACR
-    1 = proplists:get_value({{1, 271, 1}, send}, Statistics),
+    ?equal(1, proplists:get_value({{1, 271, 1}, send}, Statistics)),
     % check that client has received ACA
-    1 = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics),
+    ?equal(1, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
     ok.
 
-% test diameter provider can reset interim interval 
+% test diameter provider can reset interim interval
 % by data from ACA Acct-Interim-Interval
 acct_interim_interval(_Config) ->
     Fun = fun(_, S) -> S end,
@@ -87,21 +109,23 @@ acct_interim_interval(_Config) ->
     ergw_aaa_session:start(Session, #{}),
 
     timer:sleep(100),
-    Count0 = proplists:get_value({{1, 271, 1}, send}, get_stats()),
-    
+    Stats0 = get_stats(?SERVICE),
+
     % wait a little to be sure that values is set in session
     timer:sleep(100),
     {state, _, _, _, _, _, _, _, SessionMap} = sys:get_state(Session),
-    1000 = maps:get('Interim-Accounting', SessionMap),
-    'Framed-User' = maps:get('Service-Type', SessionMap),
-    'PPP' = maps:get('Framed-Protocol', SessionMap),
+    ?match(#{'Interim-Accounting' := 1000,
+	     'Service-Type' := 'Framed-User',
+	     'Framed-Protocol' := PPP}, SessionMap),
 
     % In ACA we have Acct-Interim-Interval = 100
     % that means for 2 seconds at least 2 ACR Interim reqs will be sent.
     % We can check it via statistics counter.
     timer:sleep(2000),
-    Count = proplists:get_value({{1, 271, 1}, send}, get_stats()),
-    true = (2 =< Count - Count0),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?match(Count when is_integer(Count) andalso Count >= 2,
+		      proplists:get_value({{1, 271, 1}, send}, Stats1)),
 
     ok.
 
@@ -134,18 +158,14 @@ attrs_3gpp(_Config) ->
       'Username'                => <<"ergw">>
      },
 
-    Count0 = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, get_stats()),
+    Stats0 = get_stats(?SERVICE),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), Attrs),
     success = ergw_aaa_session:authenticate(Session, #{}),
     ergw_aaa_session:start(Session, #{}),
 
     timer:sleep(100),
-    Count = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, get_stats()),
-    1 = Count - Count0,
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(1, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     ok.
-
-get_stats() ->
-    [Transport] = diameter:service_info(ergw_aaa_diameter, transport),
-    proplists:get_value(statistics, Transport).
