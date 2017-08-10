@@ -31,8 +31,13 @@ start_link(ProviderSupSpecs) ->
 %% Supervisor callbacks
 %% ===================================================================
 
-init(ProviderSupSpecs) ->
+init(ProviderSupSpecs0) ->
+    ProviderSupSpecs = remove_dups(ProviderSupSpecs0),
     {ok, {{one_for_one, 30, 60}, [?CHILD(ergw_aaa_session_seq, worker),
 				  ?CHILD(ergw_aaa_session_sup, supervisor)]
 				  ++ ProviderSupSpecs}}.
 
+%% ===================================================================
+
+remove_dups([])    -> [];
+remove_dups([H|T]) -> [H | [X || X <- remove_dups(T), element(1, X) /= element(1, H)]].

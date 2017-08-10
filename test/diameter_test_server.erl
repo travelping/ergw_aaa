@@ -14,14 +14,14 @@
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
 %% diameter callbacks
--export([peer_up/3,
-	 peer_down/3,
-	 pick_peer/4,
-	 prepare_request/3,
-	 prepare_retransmit/3,
-	 handle_answer/4,
-	 handle_error/4,
-	 handle_request/3]).
+-export([peer_up/4,
+	 peer_down/4,
+	 pick_peer/5,
+	 prepare_request/4,
+	 prepare_retransmit/4,
+	 handle_answer/5,
+	 handle_error/5,
+	 handle_request/4]).
 
 -define(UNEXPECTED, erlang:error({unexpected, ?MODULE, ?LINE})).
 
@@ -38,6 +38,7 @@
 
 start() ->
     application:ensure_all_started(diameter),
+    SvcState = #{},
     SvcOpts = [{'Origin-Host', "server.example.com"},
 	       {'Origin-Realm', "example.com"},
 	       {'Vendor-Id', ?VENDOR_ID_TP},
@@ -51,7 +52,7 @@ start() ->
 	       {decode_format, map},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
-			      {module, ?MODULE}]}],
+			      {module, [?MODULE, SvcState]}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
     Opts = [{transport_module, diameter_tcp},
@@ -69,41 +70,31 @@ stop() ->
 %% DIAMETER handler callbacks
 %%===================================================================
 
-peer_up(_SvcName, _Peer, State) ->
+peer_up(_SvcName, _Peer, State, _Extra) ->
+    lager:debug("peer_up: ~p, ~p~n", [_Peer, _Extra]),
     State.
 
-peer_down(_SvcName, _Peer, State) ->
+peer_down(_SvcName, _Peer, State, _Extra) ->
     State.
 
-pick_peer(_, _, _SvcName, _State) ->
+pick_peer(_, _, _SvcName, _State, _Extra) ->
     ?UNEXPECTED.
 
-prepare_request(_, _SvcName, _Peer) ->
+prepare_request(_, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
 
-prepare_retransmit(_Packet, _SvcName, _Peer) ->
+prepare_retransmit(_Packet, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
 
-handle_answer(_Packet, _Request, _SvcName, _Peer) ->
+handle_answer(_Packet, _Request, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
 
-handle_error(_Reason, _Request, _SvcName, _Peer) ->
+handle_error(_Reason, _Request, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
 
-handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps})
+handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
-    {ok, Apps} = application:get_env(ergw_aaa, applications),
-    InterimAccounting = case lists:keyfind(default, 1, Apps) of
-			    {default, {_, _, Opts}} ->
-				case lists:keyfind(acct_interim_interval, 1, Opts) of
-				    false ->
-					1;
-				    {_, Interim} ->
-					Interim
-				end;
-			    _ ->
-				1
-			end,
+    InterimAccounting = 1,
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _}} = Caps,
     #{'Session-Id' := Id,
@@ -123,7 +114,7 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps})
 	_IMSI -> check_3gpp(Msg, ACA)
     end;
 
-handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
+handle_request(#diameter_packet{msg = _Msg}, _SvcName, _, _Extra) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
 check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],

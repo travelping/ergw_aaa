@@ -10,9 +10,10 @@
 -behaviour(ergw_aaa).
 
 %% AAA API
--export([validate_options/1, initialize_provider/1,
-	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
+-export([validate_handler/1, validate_service/3, validate_procedure/5,
+	 initialize_handler/1, initialize_service/2, invoke/5]).
 -export(['3gpp_from_session'/2]).
+
 %%
 %% diameter callbacks
 -export([peer_up/3,
@@ -29,37 +30,38 @@
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
--include("include/ergw_aaa_profile.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
 
--define(Start, 2).
--define(Interim, 3).
--define(Stop, 4).
-
--record(state, {accounting_record_number = 0,
-		sid    :: binary(), % diameter Session-Id
-		nas_id :: binary()}).
-
--define(DefaultOptions, [{nas_identifier, undefined},
-			 {host, undefined},
+-define(DefaultOptions, [{host, undefined},
 			 {realm, undefined},
 			 {connect_to, undefined}
 			]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
+-define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
 %%===================================================================
 %% API
 %%===================================================================
-initialize_provider(Opts) ->
-    {OriginHost, Addr} = proplists:get_value(host, Opts),
-    OriginRealm = proplists:get_value(realm, Opts),
-    ProductName = setup:get_env(ergw_aaa, product_name, "erGW-AAA"),
+
+initialize_handler(_Opts) ->
+    {ok, []}.
+
+initialize_service(_ServiceId,
+		   #{host := {OriginHost, Addr},
+		     realm := OriginRealm,
+		     connect_to :=
+			 #diameter_uri{type = _AAA, % aaa | aaas
+				       fqdn = Host,
+				       port = Port,
+				       transport = Transport,
+				       protocol = _Diameter}}) ->
+    ProductName = application:get_env(ergw_aaa, product_name, "erGW-AAA"),
     SvcOpts = [{'Origin-Host', OriginHost},
 	       {'Origin-Realm', OriginRealm},
 	       {'Origin-State-Id', diameter:origin_state_id()},
@@ -78,11 +80,6 @@ initialize_provider(Opts) ->
 			      {module, ?MODULE}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
-    #diameter_uri{type = _AAA, % aaa | aaas
-		  fqdn = Host,
-		  port = Port,
-		  transport = Transport,
-		  protocol = _Diameter} = proplists:get_value(connect_to, Opts),
     {ok, {Raddr, Type}} = resolve_hostname(Host),
     TransportOpts = [{transport_module, transport_module(Transport)},
 		     {transport_config, [{reuseaddr, true},
@@ -94,47 +91,68 @@ initialize_provider(Opts) ->
 
     {ok, []}.
 
-validate_options(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions).
+validate_handler(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions, map).
 
-init(Opts) ->
-    State = #state{
-      sid = list_to_binary(string:join(diameter:session_id("erGW-AAA"), "")),
-      nas_id = proplists:get_value(nas_identifier, Opts)
-    },
-    {ok, State}.
+validate_service(_Service, HandlerOpts, Opts) ->
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts, map).
 
-start_authentication(From, Session, State) ->
-    Verdict = success,
-    ?queue_event(From, {'AuthenticationRequestReply', {Verdict, Session, State}}),
-    {ok, State}.
+validate_procedure(_Application, _Procedure, _Service, _ServiceOpts, Opts) ->
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, [], map).
 
-authorize(_From, _Session, State) ->
-    Verdict = success,
-    {reply, Verdict, ergw_aaa_session:to_session([]), State}.
+invoke(_Service, init, Session, Events, _Opts) ->
+    {ok, Session, Events};
 
-start_accounting(From, 'Start', Session0, State) ->
-    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets'],
-    Session = maps:without(Keys, Session0),
-    Request = create_ACR(Session, ?Start, State),
-    cast(Request, From),
-    {ok, inc_number(State)};
+invoke(_Service, authenticate, Session, Events, _Opts) ->
+    {ok, Session, Events};
 
-start_accounting(From, 'Interim', Session0, State) ->
-    Now = erlang:monotonic_time(milli_seconds),
-    Start = ergw_aaa_session:attr_get('Accounting-Start', Session0, Now),
-    Session = Session0#{'Acct-Session-Time' => round((Now - Start) / 1000)},
-    Request = create_ACR(Session, ?Interim, State),
-    cast(Request, From),
-    {ok, inc_number(State)};
+invoke(_Service, authorize, Session, Events, _Opts) ->
+    {ok, Session, Events};
 
-start_accounting(From, 'Stop', Session0, State) ->
-    Now = erlang:monotonic_time(milli_seconds),
-    Start = ergw_aaa_session:attr_get('Accounting-Start', Session0, Now),
-    Session = Session0#{'Acct-Session-Time' => round((Now - Start) / 1000)},
-    Request = create_ACR(Session, ?Stop, State),
-    cast(Request, From),
-    {ok, inc_number(State)}.
+invoke(_Service, start, Session0, Events, Opts) ->
+    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    case maps:get('State', DiamSession, stopped) of
+	stopped ->
+	    Session1 = ergw_aaa_session:set_svc_opt(
+			 ?MODULE, DiamSession#{'State' => 'started'}, Session0),
+	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
+	    Session = maps:without(Keys, inc_number(Session1)),
+	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
+	    Request = create_ACR(RecType, Session, Opts),
+	    handle_aca(call(Request), Session, Events);
+	_ ->
+	    {ok, Session0, Events}
+    end;
+
+invoke(_Service, interim, Session0, Events, Opts) ->
+    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    case maps:get('State', DiamSession, stopped) of
+	started ->
+	    Session = inc_number(Session0),
+	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
+	    Request = create_ACR(RecType, Session, Opts),
+	    handle_aca(call(Request), Session, Events);
+	_ ->
+	    {ok, Session0, Events}
+    end;
+
+invoke(_Service, stop, Session0, Events, Opts) ->
+    lager:debug("Session Stop: ~p", [Session0]),
+    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    case maps:get('State', DiamSession, stopped) of
+	started ->
+	    Session1 = ergw_aaa_session:set_svc_opt(
+			 ?MODULE, DiamSession#{'State' => 'stopped'}, Session0),
+	    Session = inc_number(Session1),
+	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
+	    Request = create_ACR(RecType, Session, Opts),
+	    handle_aca(call(Request), Session, Events);
+	_ ->
+	    {ok, Session0, Events}
+    end;
+
+invoke(Service, Procedure, Session, Events, _Opts) ->
+    {{error, {Service, Procedure}}, Session, Events}.
 
 % will be used in tests
 stop() ->
@@ -184,9 +202,9 @@ prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_, Caps})
 		      'Destination-Realm' => DR,
 		      'Acct-Application-Id' => Ids}]};
 
-prepare_request(_Packet, _, _Peer) ->
-    lager:debug("unexpected request: ~p~n", [_Packet]),
-    erlang:error({unexpected, ?MODULE, ?LINE}).
+prepare_request(Packet, _SvcName, {PeerRef, _}) ->
+    lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
+    {send, Packet}.
 
 prepare_request(Packet, SvcName, Peer, _From) ->
     prepare_request(Packet, SvcName, Peer).
@@ -198,15 +216,15 @@ prepare_retransmit(Packet, SvcName, Peer, _From) ->
     prepare_request(Packet, SvcName, Peer).
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
-    {ok, Msg}.
+    Msg.
 
 handle_answer(#diameter_packet{msg = ['ACA' | Avps] = Msg}, _Request, _SvcName, _Peer, From)
   when is_map(Avps), is_pid(From) ->
-    handle_aca(From, Avps),
-    {ok, Msg};
+    From ! Msg,
+    Msg;
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
-    {ok, Msg}.
+    Msg.
 
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
@@ -214,17 +232,11 @@ handle_error(Reason, _Request, _SvcName, _Peer) ->
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
 
+%%%===================================================================
+%%% Options Validation
+%%%===================================================================
 
-%%===================================================================
-%% internal helpers
-%%===================================================================
-handle_aca(From, #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
-		   'Acct-Interim-Interval' := [Interval]}) ->
-    ?queue_event(From, {'ChangeInterimAccouting', Interval});
-handle_aca(From, ACA) ->
-    ok.
-
-validate_option(nas_identifier, Value) when is_binary(Value) ->
+validate_option(connect_to, Value) when is_record(Value, diameter_uri) ->
     Value;
 validate_option(connect_to = Opt, Value) when is_binary(Value) ->
     try
@@ -232,6 +244,9 @@ validate_option(connect_to = Opt, Value) when is_binary(Value) ->
 	    diameter_types:'DiameterURI'(decode, Value, #{rfc => 6733})
     catch _:_ -> validate_option_error(Opt, Value)
     end;
+validate_option(host, {Host, Addr} = Value)
+  when is_binary(Host), ?IS_IP(Addr) ->
+    Value;
 validate_option(host = Opt, Value) when is_binary(Value) ->
     try
 	{ok, {Addr, _Type}} = resolve_hostname(Value),
@@ -240,20 +255,37 @@ validate_option(host = Opt, Value) when is_binary(Value) ->
     end;
 validate_option(realm, Value) when is_binary(Value) ->
     Value;
-validate_option(acct_interim_interval, Value) when is_integer(Value) ->
-    Value;
-validate_option(service_type, Value) when is_atom(Value) ->
-    Value;
-validate_option(framed_protocol, Value) when is_atom(Value) ->
-    Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
 validate_option_error(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
-inc_number(#state{accounting_record_number = Number} = State) ->
-    State#state{accounting_record_number = Number + 1}.
+%%===================================================================
+%% internal helpers
+%%===================================================================
+
+handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
+	   Session0, Events0) ->
+    case Avps of
+	#{'Acct-Interim-Interval' := [Interim]} ->
+	    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN',
+						   time, Interim * 1000, [recurring]),
+	    Events = ergw_aaa_session:ev_set(Trigger, Events0),
+	    {ok, Session0, Events};
+	_ ->
+	    {ok, Session0, Events0}
+	end;
+handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
+  when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
+    {{fail, Code}, Session, Events};
+handle_aca({error, _} = Result, Session, Events) ->
+    {Result, Session, Events}.
+
+inc_number(Session) ->
+    ModuleOpts = maps:get(?MODULE, Session, #{}),
+    Number = maps:get('Accounting-Record-Number', ModuleOpts, -1),
+    Session#{?MODULE => ModuleOpts#{'Accounting-Record-Number' => Number + 1}}.
 
 format_address({A, B, C, D}) -> <<A, B, C, D>>;
 format_address({A, B, C, D, E, F, G, H}) ->
@@ -275,6 +307,16 @@ resolve_hostname(Name) ->
 transport_module(tcp) -> diameter_tcp;
 transport_module(sctp) -> diameter_sctp;
 transport_module(_) -> unknown.
+
+%% from Erlang R21:
+
+-define(SECONDS_PER_DAY, 86400).
+-define(DAYS_FROM_0_TO_1970, 719528).
+-define(SECONDS_FROM_0_TO_1970, (?DAYS_FROM_0_TO_1970*?SECONDS_PER_DAY)).
+
+system_time_to_universal_time(Time, TimeUnit) ->
+    Secs = erlang:convert_time_unit(Time, TimeUnit, second),
+    calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
 
 service_type('Login-User')              -> ?'DIAMETER_SGI_SERVICE-TYPE_LOGIN';
 service_type('Framed-User')             -> ?'DIAMETER_SGI_SERVICE-TYPE_FRAMED';
@@ -406,6 +448,11 @@ pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
        is_integer(Value) ->
     erlang:integer_to_binary(Value, 16).
 
+from_service('Accounting-Record-Number' = Key, Value, M) ->
+    M#{Key => Value};
+from_service(_, _, M) ->
+    M.
+
 from_session(Key, Value, M)
   when Key =:= '3GPP-Charging-Gateway-Address';
        Key =:= '3GPP-SGSN-Address';
@@ -453,9 +500,16 @@ from_session('IP', Value, M) ->
 from_session('Framed-IP-Address' = Key, Value, M) ->
     M#{Key => [format_address(Value)]};
 
+from_session('Event-Timestamp' = Key, Value, M) ->
+    M#{Key => [system_time_to_universal_time(Value, second)]};
+
+from_session('Diameter-Session-Id', SId, M) ->
+    M#{'Session-Id' => SId};
+
 from_session(Key, Value, M)
   when Key =:= 'Acct-Session-Time';
        Key =:= 'User-Name';
+       Key =:= 'NAS-Identifier';
        Key =:= 'NAS-Port-Id';
        Key =:= 'NAS-Port-Type';
        Key =:= 'Class';
@@ -464,15 +518,15 @@ from_session(Key, Value, M)
        Key =:= 'Framed-Interface-Id' ->
     M#{Key => [Value]};
 
+from_session(?MODULE, Value, M) ->
+    maps:fold(fun from_service/3, M, Value);
+
 from_session(_Key, _Value, M) -> M.
 
 from_session(Session, Avps) ->
     maps:fold(fun from_session/3, Avps, Session).
 
-create_ACR(Session, Type, State) ->
-    Avps0 = #{'Session-Id'               => State#state.sid,
-	      'Accounting-Record-Type'   => Type,
-	      'Accounting-Record-Number' => State#state.accounting_record_number,
-	      'NAS-Identifier'           => [State#state.nas_id]},
+create_ACR(Type, Session, _) ->
+    Avps0 = #{'Accounting-Record-Type' => Type},
     Avps = from_session(Session, Avps0),
     ['ACR' | Avps].
