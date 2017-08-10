@@ -7,17 +7,21 @@
 
 -module(ergw_aaa).
 
--type session() :: list({atom(), term()}) | map().
--type a3state() :: term().
--export_type([session/0, a3state/0]).
+-type session() :: map().
+-export_type([session/0]).
 
--callback validate_options(Options :: term()) -> term().
--callback initialize_provider(Options :: term()) -> {ok, [supervisor:child_spec()]} | {error, term()}.
+-callback validate_handler(Options :: list() | map()) -> map().
+-callback validate_service(Service :: atom(), HandlerOpts :: map(),
+			   Options :: list() | map()) -> map().
+-callback validate_procedure(App :: atom(), Procedure :: atom(),
+			     Service :: atom(), ServiceOpts :: map(),
+			     SessionOptions :: list() | map()) -> map().
 
--callback init(proplists:proplist()) -> {ok, a3state()} | {error, term()}.
--callback start_authentication(From :: term(), Session :: session(), State :: a3state()) ->
-    {reply, a3state()}.
--callback authorize(From :: term(), Session :: session(), State :: a3state()) ->
-    {noreply, term()} | {reply, term(), a3state()} | {reply, term(), session(), a3state()}.
--callback start_accounting(From :: term(), Type :: term(), Session :: session(), State :: a3state()) ->
-    {ok, a3state()}.
+-callback initialize_handler(Options :: map()) ->
+    {ok, [supervisor:child_spec()]} | {error, term()}.
+-callback initialize_service(ServiceId :: atom(), Options :: map()) ->
+    {ok, [supervisor:child_spec()]} | {error, term()}.
+
+-callback invoke(ServiceId :: atom(), Procedure :: atom(),
+		 Session :: session(), Events :: list(), Opts :: map()) ->
+    {ok | atom(), session()}.

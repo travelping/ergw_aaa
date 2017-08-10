@@ -17,7 +17,7 @@
 	((fun () ->
 		  case (Expr) of
 		      Guard -> ok;
-		      V -> ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
+		      V -> ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p ~nActual:   ~p~n",
 				   [?FILE, ?LINE, ??Expr, ??Guard, V]),
 			   error(badmatch)
 		  end

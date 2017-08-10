@@ -17,9 +17,26 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    Config = ergw_aaa_config:load_config(setup:get_all_env(ergw_aaa)),
-    {ok, ProviderSupSpecs} = ergw_aaa_profile:initialize_provider(Config),
-    ergw_aaa_sup:start_link(ProviderSupSpecs).
+    Config = ergw_aaa_config:load_config(),
+    SrvSupSpecs0 = initialize_handlers(Config, []),
+    SrvSupSpecs = initialize_services(Config, SrvSupSpecs0),
+    ergw_aaa_sup:start_link(SrvSupSpecs).
 
 stop(_State) ->
     ok.
+
+%%===================================================================
+%% Internal
+%%===================================================================
+
+initialize_handlers(#{handlers := Handlers}, SupSpecs) ->
+    maps:fold(fun(Handler, Opts, Specs) ->
+		      {ok, SupSpec} = Handler:initialize_handler(Opts),
+		      Specs ++ SupSpec
+	      end, SupSpecs, Handlers).
+
+initialize_services(#{services := Services}, SupSpecs) ->
+    maps:fold(fun(ServiceId, #{handler := Handler} = Opts, Specs) ->
+		      {ok, SupSpec} = Handler:initialize_service(ServiceId, Opts),
+		      Specs ++ SupSpec
+	      end, SupSpecs, Services).
