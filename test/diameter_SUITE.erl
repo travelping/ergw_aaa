@@ -102,17 +102,31 @@ acct_interim_interval(_Config) ->
 
 attrs_3gpp(_Config) ->
     Attrs = #{
+      '3GPP-GGSN-Address'       => {199,255,4,125},
+      '3GPP-IMEISV'             => <<82,21,50,96,32,80,30,0>>,
       '3GPP-IMSI'               => <<"250071234567890">>,
       '3GPP-Charging-ID'        => <<214, 208, 226, 238>>,
-      '3GPP-PDP-Type'           => 'PPP',
-      '3GPP-SGSN-Address'       => {10, 10, 10, 10},
-      '3GPP-IMSI-MCC-MNC'       => <<"250999">>,
-      '3GPP-GGSN-MCC-MNC'       => <<"250888">>,
+      '3GPP-IMSI-MCC-MNC'       => <<"25999">>,
+      '3GPP-GGSN-MCC-MNC'       => <<"25888">>,
+      '3GPP-MS-TimeZone'        => {128,1},
+      '3GPP-NSAPI'              => 5,
+      '3GPP-PDP-Type'           => 'IPv4',
+      '3GPP-RAT-Type'           => 6,
+      '3GPP-SGSN-Address'       => <<192,168,1,1>>,
+      '3GPP-SGSN-MCC-MNC'       => <<"26201">>,
       '3GPP-SGSN-IPv6-Address'  => {100, 10, 10, 10},
       '3GPP-GGSN-IPv6-Address'  => {200, 10, 10, 10},
-      '3GPP-SGSN-MCC-MNC'       => <<"250777">>,
-      '3GPP-IMEISV'             => <<"3566190531472414">>,
-      '3GPP-RAT-Type'           => <<1>>
+      '3GPP-Selection-Mode'     => 0,
+      '3GPP-User-Location-Info' => <<24,98,242,16,64,163,98,242,16,1,156,232,0>>,
+      'Called-Station-Id'       => <<"some.station.gprs">>,
+      'Calling-Station-Id'      => <<"543148000012345">>,
+      'Framed-IP-Address'       => {0,0,0,0},
+      'Framed-Protocol'         => 'GPRS-PDP-Context',
+      'Multi-Session-Id'        => 1012552258277823040188863251876666193415858290601,
+      'Password'                => <<"ergw">>,
+      'Service-Type'            => 'Framed-User',
+      'Session-Id'              => 1012552258277823040188863251876666193415858290601,
+      'Username'                => <<"ergw">>
      },
 
     Count0 = proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, get_stats()),
