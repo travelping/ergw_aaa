@@ -345,6 +345,13 @@ format_cc(Value) when is_binary(Value) ->
                              || <<X>> <= Value]);
 format_cc(_) -> [].
 
+octet_string([Int]) when is_integer(Int) -> [<<Int>>];
+octet_string([{A, B}]) when is_integer(A), is_integer(B) -> [<<A, B>>];
+octet_string(OctetString) -> OctetString.
+
+int_to_binary([Int]) when is_integer(Int) -> [erlang:integer_to_binary(Int)];
+int_to_binary(Binary) -> Binary.
+
 create_ACR(Session, Type, State) ->
     AcctSessionId = hd(attr_get('Session-Id', Session)),
     MultiSessionId = hd(attr_get('Multi-Session-Id', Session)),
@@ -373,24 +380,24 @@ create_ACR(Session, Type, State) ->
        'Tunneling' = tunneling(Session, State),
        '3GPP-IMSI' = attr_get('3GPP-IMSI', Session),
        '3GPP-Charging-Id' = attr_get('3GPP-Charging-ID', Session),
-       '3GPP-PDP-Type' = [pdp_type(attr_get('3GPP-Charging-ID', Session))],
+       '3GPP-PDP-Type' = [pdp_type(attr_get('3GPP-PDP-Type', Session))],
        '3GPP-CG-Address' = attr_get_addr('3GPP-Charging-Gateway-Address', Session),
        '3GPP-GPRS-Negotiated-QoS-Profile' = attr_get('3GPP-GPRS-Negotiated-QoS-Profile', Session),
        '3GPP-SGSN-Address' = attr_get_addr('3GPP-SGSN-Address', Session),
        '3GPP-GGSN-Address' = attr_get_addr('3GPP-GGSN-Address', Session),
        '3GPP-IMSI-MCC-MNC' = attr_get('3GPP-IMSI-MCC-MNC', Session),
        '3GPP-GGSN-MCC-MNC' = attr_get('3GPP-GGSN-MCC-MNC', Session),
-       '3GPP-NSAPI' = attr_get('3GPP-NSAPI', Session),
-       '3GPP-Selection-Mode' = attr_get('3GPP-Selection-Mode', Session),
+       '3GPP-NSAPI' = octet_string(attr_get('3GPP-NSAPI', Session)),
+       '3GPP-Selection-Mode' = int_to_binary(attr_get('3GPP-Selection-Mode', Session)),
        '3GPP-Charging-Characteristics' = format_cc(attr_get('3GPP-Charging-Characteristics', Session)),
        '3GPP-CG-IPv6-Address' = attr_get_addr('3GPP-Charging-Gateway-IPv6-Address', Session),
        '3GPP-SGSN-IPv6-Address' = attr_get_addr('3GPP-SGSN-IPv6-Address', Session),
        '3GPP-GGSN-IPv6-Address' = attr_get_addr('3GPP-GGSN-IPv6-Address', Session),
        '3GPP-SGSN-MCC-MNC' = attr_get('3GPP-SGSN-MCC-MNC', Session),
        '3GPP-IMEISV' = attr_get('3GPP-IMEISV', Session),
-       '3GPP-RAT-Type' = attr_get('3GPP-RAT-Type', Session),
+       '3GPP-RAT-Type' = octet_string(attr_get('3GPP-RAT-Type', Session)),
        '3GPP-User-Location-Info' = attr_get('3GPP-User-Location-Info', Session),
-       '3GPP-MS-TimeZone' = attr_get('3GPP-MS-TimeZone', Session),
+       '3GPP-MS-TimeZone' = octet_string(attr_get('3GPP-MS-TimeZone', Session)),
        '3GPP-CAMEL-Charging-Info' = attr_get('3GPP-Camel-Charging', Session),
        '3GPP-Packet-Filter' = attr_get('3GPP-Packet-Filter', Session),
        '3GPP-Negotiated-DSCP' = attr_get('3GPP-Negotiated-DSCP', Session),

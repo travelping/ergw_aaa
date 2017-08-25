@@ -103,15 +103,16 @@ handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
 check_3gpp(Msg, ACA) ->
     Success = [<<"250071234567890">>] == Msg#diameter_sgi_ACR.'3GPP-IMSI'
         andalso [<<214, 208, 226, 238>>] == Msg#diameter_sgi_ACR.'3GPP-Charging-Id'
-        andalso [1] == Msg#diameter_sgi_ACR.'3GPP-PDP-Type'
-        andalso [<<10, 10, 10, 10>>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-Address'
-        andalso [<<"250999">>] == Msg#diameter_sgi_ACR.'3GPP-IMSI-MCC-MNC'
-        andalso [<<"250888">>] == Msg#diameter_sgi_ACR.'3GPP-GGSN-MCC-MNC'
+        andalso [0] == Msg#diameter_sgi_ACR.'3GPP-PDP-Type'
+        andalso [<<192, 168, 1, 1>>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-Address'
+        andalso [<<"25999">>] == Msg#diameter_sgi_ACR.'3GPP-IMSI-MCC-MNC'
+        andalso [<<"25888">>] == Msg#diameter_sgi_ACR.'3GPP-GGSN-MCC-MNC'
         andalso [<<100, 10, 10, 10>>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-IPv6-Address'
         andalso [<<200, 10, 10, 10>>] == Msg#diameter_sgi_ACR.'3GPP-GGSN-IPv6-Address'
-        andalso [<<"250777">>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-MCC-MNC'
-        andalso [<<"3566190531472414">>] == Msg#diameter_sgi_ACR.'3GPP-IMEISV'
-        andalso [<<1>>] == Msg#diameter_sgi_ACR.'3GPP-RAT-Type',
+        andalso [<<"26201">>] == Msg#diameter_sgi_ACR.'3GPP-SGSN-MCC-MNC'
+        andalso [<<82,21,50,96,32,80,30,0>>] == Msg#diameter_sgi_ACR.'3GPP-IMEISV'
+        andalso [<<5>>] == Msg#diameter_sgi_ACR.'3GPP-NSAPI'
+        andalso [<<6>>] == Msg#diameter_sgi_ACR.'3GPP-RAT-Type',
     if Success == true -> {reply, ACA};
        true -> {answer_message, 3001}
     end.
