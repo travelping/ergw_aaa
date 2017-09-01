@@ -109,34 +109,26 @@ authorize(_From, _Session, State) ->
     Verdict = success,
     {reply, Verdict, ergw_aaa_session:to_session([]), State}.
 
-start_accounting(From, 'Start', Session, State) ->
-    Request0 = create_ACR(Session, ?Start, State),
-    Request = Request0#diameter_sgi_ACR{
-                'Accounting-Input-Octets' = [],
-                'Accounting-Input-Packets' = [],
-                'Accounting-Output-Octets' = [],
-                'Accounting-Output-Packets' = []
-              },
+start_accounting(From, 'Start', Session0, State) ->
+    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets'],
+    Session = maps:without(Keys, Session0),
+    Request = create_ACR(Session, ?Start, State),
     cast(Request, From),
     {ok, inc_number(State)};
 
-start_accounting(From, 'Interim', Session, State) ->
-    Request0 = create_ACR(Session, ?Interim, State),
+start_accounting(From, 'Interim', Session0, State) ->
     Now = ergw_aaa_variable:now_ms(),
-    Start = ergw_aaa_session:attr_get('Accounting-Start', Session, Now),
-    Request = Request0#diameter_sgi_ACR{
-                'Acct-Session-Time' = [round((Now - Start) / 1000)]
-              },
+    Start = ergw_aaa_session:attr_get('Accounting-Start', Session0, Now),
+    Session = Session0#{'Acct-Session-Time' => round((Now - Start) / 1000)},
+    Request = create_ACR(Session, ?Interim, State),
     cast(Request, From),
     {ok, inc_number(State)};
 
-start_accounting(From, 'Stop', Session, State) ->
-    Request0 = create_ACR(Session, ?Stop, State),
+start_accounting(From, 'Stop', Session0, State) ->
     Now = ergw_aaa_variable:now_ms(),
-    Start = ergw_aaa_session:attr_get('Accounting-Start', Session, Now),
-    Request = Request0#diameter_sgi_ACR{
-                'Acct-Session-Time' = [round((Now - Start) / 1000)]
-              },
+    Start = ergw_aaa_session:attr_get('Accounting-Start', Session0, Now),
+    Session = Session0#{'Acct-Session-Time' => round((Now - Start) / 1000)},
+    Request = create_ACR(Session, ?Stop, State),
     cast(Request, From),
     {ok, inc_number(State)}.
 
@@ -172,17 +164,18 @@ pick_peer([Peer | _], _, _SvcName, _State) ->
 pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
     pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
 
-prepare_request(#diameter_packet{msg = #diameter_sgi_ACR{} = Rec}, _, {_, Caps}) ->
+prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_, Caps}) ->
     #diameter_caps{origin_host = {OH, DH},
                    origin_realm = {OR, DR},
                    acct_application_id = {[Ids], _}}
         = Caps,
 
-    {send, Rec#diameter_sgi_ACR{'Origin-Host' = OH,
-                                'Origin-Realm' = OR,
-                                'Destination-Host' = [DH],
-                                'Destination-Realm' = DR,
-                                'Acct-Application-Id' = Ids}};
+    {send, [T, {'Origin-Host', OH},
+               {'Origin-Realm', OR},
+               {'Destination-Host', [DH]},
+               {'Destination-Realm', DR},
+               {'Acct-Application-Id', Ids}
+            | Avps]};
 
 prepare_request(_Packet, _, _Peer) ->
     lager:debug("unexpected request: ~p~n", [_Packet]),
@@ -257,20 +250,10 @@ decode_diameter_uri(Value) ->
 inc_number(#state{accounting_record_number = Number} = State) ->
     State#state{accounting_record_number = Number + 1}.
 
-attr_get(Key, Session) ->
-    case ergw_aaa_session:attr_get(Key, Session, undefined) of
-       undefined -> [];
-       Value -> [Value]
-    end.
-
-attr_get_addr(Key, Session) ->
-    format_address(attr_get(Key, Session)).
-
-format_address([{A, B, C, D}]) -> [<<A, B, C, D>>];
-format_address([{A, B, C, D, E, F, G, H}]) ->
-    [<<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>];
+format_address({A, B, C, D}) -> <<A, B, C, D>>;
+format_address({A, B, C, D, E, F, G, H}) ->
+    <<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>;
 format_address(Addr) -> Addr.
-
 
 resolve_hostname(Name) when is_binary(Name) -> resolve_hostname(binary_to_list(Name));
 resolve_hostname(Name) ->
@@ -288,7 +271,6 @@ transport_module(tcp) -> diameter_tcp;
 transport_module(sctp) -> diameter_sctp;
 transport_module(_) -> unknown.
 
-service_type([Atom]) when is_atom(Atom) -> service_type(Atom);
 service_type('Login-User')              -> ?'DIAMETER_SGI_SERVICE-TYPE_LOGIN';
 service_type('Framed-User')             -> ?'DIAMETER_SGI_SERVICE-TYPE_FRAMED';
 service_type('Callback-Login-User')     -> ?'DIAMETER_SGI_SERVICE-TYPE_CALLBACK_LOGIN';
@@ -312,7 +294,6 @@ service_type('Authorze-Only')           -> ?'DIAMETER_SGI_SERVICE-TYPE_AUTHORIZE
 %service_type('TP-CAPWAP-STA')           -> ?'DIAMETER_SGI_SERVICE-TYPE_UNKNOWN'.
 service_type(_)                         -> ?'DIAMETER_SGI_SERVICE-TYPE_FRAMED'.
 
-acct_authentic([Atom]) when is_atom(Atom) -> acct_authentic(Atom);
 %acct_authentic('None')                    -> ?'DIAMETER_SGI_ACCT-AUTHENTIC-NONE';
 acct_authentic('RADIUS')                  -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_RADIUS';
 acct_authentic('Local')                   -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_LOCAL';
@@ -320,7 +301,6 @@ acct_authentic('Remote')                  -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_REMOT
 acct_authentic('Diameter')                -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_DIAMETER';
 acct_authentic(_)                         -> ?'DIAMETER_SGI_ACCT-AUTHENTIC_RADIUS'.
 
-framed_protocol([Atom]) when is_atom(Atom) -> framed_protocol(Atom);
 framed_protocol('PPP')                     -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP';
 framed_protocol('SLIP')                    -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_SLIP';
 framed_protocol('ARAP')                    -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_ARAP';
@@ -333,75 +313,104 @@ framed_protocol('GPRS-PDP-Context')        -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_GPR
 %framed_protocol('TP-CAPWAP')               -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP'.
 framed_protocol(_)                         -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP'.
 
-pdp_type([Atom]) when is_atom(Atom) -> pdp_type(Atom);
 pdp_type('IPv4')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4';
 pdp_type('IPv6')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV6';
 pdp_type('IPv4v6')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4V6';
 pdp_type('PPP')                     -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP';
 pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
 
-format_cc(Value) when is_binary(Value) ->
-    erlang:iolist_to_binary([io_lib:format("~2.16.0B", [X]) 
-                             || <<X>> <= Value]);
-format_cc(_) -> [].
-
-octet_string([Int]) when is_integer(Int) -> [<<Int>>];
-octet_string([{A, B}]) when is_integer(A), is_integer(B) -> [<<A, B>>];
-octet_string(OctetString) -> OctetString.
-
-int_to_binary([Int]) when is_integer(Int) -> [erlang:integer_to_binary(Int)];
+int_to_binary(Int) when is_integer(Int) -> erlang:integer_to_binary(Int);
 int_to_binary(Binary) -> Binary.
 
-create_ACR(Session, Type, State) ->
-    AcctSessionId = hd(attr_get('Session-Id', Session)),
-    MultiSessionId = hd(attr_get('Multi-Session-Id', Session)),
-    #diameter_sgi_ACR{
-       'Session-Id' = State#state.sid,
-       'Accounting-Record-Type' = Type,
-       'Accounting-Record-Number' = State#state.accounting_record_number,
-       'User-Name' = attr_get('Username', Session),
-       'Acct-Session-Id' = io_lib:format("~40.16.0B", [AcctSessionId]),
-       'Acct-Multi-Session-Id' = io_lib:format("~40.16.0B", [MultiSessionId]),
-       'NAS-Identifier' = [State#state.nas_id],
-       'NAS-Port-Id' = attr_get('Port-Id', Session),
-       'NAS-Port-Type' = attr_get('Port-Type', Session),
-       'Class' = attr_get('Class', Session),
-       'Service-Type' = [service_type(attr_get('Service-Type', Session))],
-       'Accounting-Input-Octets' = attr_get('InOctets', Session),
-       'Accounting-Input-Packets' = attr_get('InPackets', Session),
-       'Accounting-Output-Octets' = attr_get('OutOctets', Session),
-       'Accounting-Output-Packets' = attr_get('OutPackets', Session),
-       'Acct-Authentic' = [acct_authentic(attr_get('Acct-Authentic', Session))],
-       'Called-Station-Id' = attr_get('Called-Station-Id', Session),
-       'Calling-Station-Id' = attr_get('Calling-Station-Id', Session),
-       'Framed-Interface-Id' = attr_get('Framed-Interface-Id', Session),
-       'Framed-IP-Address' = attr_get_addr('Framed-IP-Address', Session),
-       'Framed-Protocol' = [framed_protocol(attr_get('Framed-Protocol', Session))],
-       'Tunneling' = tunneling(Session, State),
-       '3GPP-IMSI' = attr_get('3GPP-IMSI', Session),
-       '3GPP-Charging-Id' = attr_get('3GPP-Charging-ID', Session),
-       '3GPP-PDP-Type' = [pdp_type(attr_get('3GPP-PDP-Type', Session))],
-       '3GPP-CG-Address' = attr_get_addr('3GPP-Charging-Gateway-Address', Session),
-       '3GPP-GPRS-Negotiated-QoS-Profile' = attr_get('3GPP-GPRS-Negotiated-QoS-Profile', Session),
-       '3GPP-SGSN-Address' = attr_get_addr('3GPP-SGSN-Address', Session),
-       '3GPP-GGSN-Address' = attr_get_addr('3GPP-GGSN-Address', Session),
-       '3GPP-IMSI-MCC-MNC' = attr_get('3GPP-IMSI-MCC-MNC', Session),
-       '3GPP-GGSN-MCC-MNC' = attr_get('3GPP-GGSN-MCC-MNC', Session),
-       '3GPP-NSAPI' = octet_string(attr_get('3GPP-NSAPI', Session)),
-       '3GPP-Selection-Mode' = int_to_binary(attr_get('3GPP-Selection-Mode', Session)),
-       '3GPP-Charging-Characteristics' = format_cc(attr_get('3GPP-Charging-Characteristics', Session)),
-       '3GPP-CG-IPv6-Address' = attr_get_addr('3GPP-Charging-Gateway-IPv6-Address', Session),
-       '3GPP-SGSN-IPv6-Address' = attr_get_addr('3GPP-SGSN-IPv6-Address', Session),
-       '3GPP-GGSN-IPv6-Address' = attr_get_addr('3GPP-GGSN-IPv6-Address', Session),
-       '3GPP-SGSN-MCC-MNC' = attr_get('3GPP-SGSN-MCC-MNC', Session),
-       '3GPP-IMEISV' = attr_get('3GPP-IMEISV', Session),
-       '3GPP-RAT-Type' = octet_string(attr_get('3GPP-RAT-Type', Session)),
-       '3GPP-User-Location-Info' = attr_get('3GPP-User-Location-Info', Session),
-       '3GPP-MS-TimeZone' = octet_string(attr_get('3GPP-MS-TimeZone', Session)),
-       '3GPP-CAMEL-Charging-Info' = attr_get('3GPP-Camel-Charging', Session),
-       '3GPP-Packet-Filter' = attr_get('3GPP-Packet-Filter', Session),
-       '3GPP-Negotiated-DSCP' = attr_get('3GPP-Negotiated-DSCP', Session),
-       'AVP' = []}.
+to_list({Key, [A | _] = Avps}) when is_map(A) ->
+    {Key, lists:map(fun to_list/1, Avps)};
+to_list({Key, Avps}) when is_map(Avps) ->
+    {Key, lists:map(fun to_list/1, maps:to_list(Avps))};
+to_list(Avps) when is_map(Avps) ->
+    lists:map(fun to_list/1, maps:to_list(Avps));
+to_list(Avp) ->
+    Avp.
 
-% TODO: build #'Tunneling'{}
-tunneling(_Session, _State) -> [].
+from_session('Session-Id', Value, M) ->
+    M#{'Acct-Session-Id' =>  io_lib:format("~40.16.0B", [Value])};
+from_session('Multi-Session-Id', Value, M) ->
+    M#{'Acct-Multi-Session-Id' =>  io_lib:format("~40.16.0B", [Value])};
+from_session('Service-Type' = Key, Value, M) ->
+    M#{Key => [service_type(Value)]};
+from_session('Acct-Authentic' = Key, Value, M) ->
+    M#{Key => [acct_authentic(Value)]};
+from_session('Framed-Protocol' = Key, Value, M) ->
+    M#{Key => [framed_protocol(Value)]};
+
+from_session('InPackets', Value, M) ->
+    M#{'Accounting-Input-Packets' => [Value]};
+from_session('OutPackets', Value, M) ->
+    M#{'Accounting-Output-Packets' => [Value]};
+from_session('InOctets', Value, M) ->
+    M#{'Accounting-Input-Octets' => [Value]};
+from_session('OutOctets', Value, M) ->
+    M#{'Accounting-Output-Octets' => [Value]};
+
+from_session('IP', Value, M) ->
+    M#{'Framed-IP-Address' => [format_address(Value)]};
+from_session( Key, Value, M)
+  when Key =:= 'Framed-IP-Address';
+       Key =:= '3GPP-CG-Address';
+       Key =:= '3GPP-SGSN-Address';
+       Key =:= '3GPP-GGSN-Address';
+       Key =:= '3GPP-CG-IPv6-Address';
+       Key =:= '3GPP-SGSN-IPv6-Address';
+       Key =:= '3GPP-GGSN-IPv6-Address' ->
+    M#{Key => [format_address(Value)]};
+
+from_session('3GPP-Charging-ID', Value, M) ->
+    M#{'3GPP-Charging-Id' => [Value]};
+from_session('3GPP-Camel-Charging', Value, M) ->
+    M#{'3GPP-CAMEL-Charging-Info' => [Value]};
+from_session('3GPP-PDP-Type' = Key, Value, M) ->
+    M#{Key => [pdp_type(Value)]};
+from_session('3GPP-RAT-Type' = Key, Value, M) ->
+    M#{Key => [<<Value>>]};
+from_session('3GPP-MS-TimeZone' = Key, {A, B}, M) ->
+    M#{Key => [<<A, B>>]};
+from_session('3GPP-Charging-Characteristics' = Key, Value, M) ->
+    CC = erlang:iolist_to_binary([io_lib:format("~2.16.0B", [X])
+                                  || <<X>> <= Value]),
+    M#{Key => [CC]};
+from_session('3GPP-NSAPI' = Key, Value, M) ->
+    M#{Key => [<<Value>>]};
+from_session('3GPP-Selection-Mode' = Key, Value, M) ->
+    M#{Key => [int_to_binary(Value)]};
+
+from_session(Key, Value, M)
+  when Key =:= 'Acct-Session-Time';
+       Key =:= 'User-Name';
+       Key =:= 'NAS-Port-Id';
+       Key =:= 'NAS-Port-Type';
+       Key =:= 'Class';
+       Key =:= 'Called-Station-Id';
+       Key =:= 'Calling-Station-Id';
+       Key =:= 'Framed-Interface-Id';
+       Key =:= '3GPP-IMSI';
+       Key =:= '3GPP-GPRS-Negotiated-QoS-Profile';
+       Key =:= '3GPP-IMSI-MCC-MNC';
+       Key =:= '3GPP-GGSN-MCC-MNC';
+       Key =:= '3GPP-SGSN-MCC-MNC';
+       Key =:= '3GPP-IMEISV';
+       Key =:= '3GPP-User-Location-Info';
+       Key =:= '3GPP-Packet-Filter';
+       Key =:= '3GPP-Negotiated-DSCP' ->
+    M#{Key => [Value]};
+
+from_session(_Key, _Value, M) -> M.
+
+from_session(Session, Avps) ->
+    maps:fold(fun from_session/3, Avps, Session).
+
+create_ACR(Session, Type, State) ->
+    Avps0 = #{'Session-Id'               => State#state.sid,
+              'Accounting-Record-Type'   => Type,
+              'Accounting-Record-Number' => State#state.accounting_record_number,
+              'NAS-Identifier'           => [State#state.nas_id]},
+    Avps = from_session(Session, Avps0),
+    ['ACR' | to_list(Avps)].
