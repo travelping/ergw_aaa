@@ -331,10 +331,6 @@ to_list(Avps) when is_map(Avps) ->
 to_list(Avp) ->
     Avp.
 
-from_session('Session-Id', Value, M) ->
-    M#{'Acct-Session-Id' =>  io_lib:format("~40.16.0B", [Value])};
-from_session('Multi-Session-Id', Value, M) ->
-    M#{'Acct-Multi-Session-Id' =>  io_lib:format("~40.16.0B", [Value])};
 from_session('Service-Type' = Key, Value, M) ->
     M#{Key => [service_type(Value)]};
 from_session('Acct-Authentic' = Key, Value, M) ->
