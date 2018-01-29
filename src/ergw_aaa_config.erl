@@ -13,7 +13,10 @@
 -export([load_config/1, validate_options/2, validate_options/3]).
 
 -define(DefaultOptions, [{product_name, "erGW-AAA"},
-                         {ergw_aaa_provider, {ergw_aaa_mock, []}}]).
+                         {applications, [
+                            {default, {provider, ergw_aaa_mock, []}}
+                         ]}
+                        ]).
 
 %%%===================================================================
 %%% API
@@ -39,6 +42,8 @@ validate_options(Fun, Opts0, Defaults) ->
 
 validate_option(product_name, Value) when not is_list(Value), not is_binary(Value) ->
     throw({error, {options, {product_name, Value}}});
+validate_option(applications, Apps) when is_list(Apps) ->
+    lists:map(fun validate_application/1, Apps);
 validate_option(ergw_aaa_provider, {Handler, Opts} = Value)
   when is_atom(Handler) ->
     case code:ensure_loaded(Handler) of
@@ -53,3 +58,15 @@ validate_option(Opt, Value)
     throw({error, {options, {Opt, Value}}});
 validate_option(_Opt, Value) ->
     Value.
+
+validate_application({AppId, {provider, Handler, Opts}} = Value)
+  when is_atom(AppId), is_atom(Handler) ->
+    case code:ensure_loaded(Handler) of
+        {module, _} ->
+            ok;
+        _ ->
+            throw({error, {options, Value}})
+    end,
+    {AppId, {provider, Handler, Handler:validate_options(Opts)}};
+validate_application(Value) ->
+    throw({error, {options, Value}}).

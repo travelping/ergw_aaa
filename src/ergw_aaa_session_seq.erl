@@ -39,7 +39,9 @@ inc(Id) ->
 
 init([]) ->
     ets:new(?MODULE, [public, set, named_table, {write_concurrency, true}]),
-    new_id(default),
+    Apps = setup:get_env(ergw_aaa, applications, []),
+    ApplicationIDs = lists:merge([element(1, App) || App <- Apps], [default]),
+    lists:foreach(fun new_id/1, ApplicationIDs),
     {ok, #state{}}.
 
 handle_call({new, Id}, _From, State) ->

@@ -29,13 +29,14 @@ all() ->
 
 
 init_per_suite(Config) ->
-    Opts = [{nas_identifier, <<"NAS">>},
-            {host, <<"127.0.0.1">>},
-            {realm, <<"example.com">>},
-            {connect_to, <<"aaa://127.0.0.1:3868">>}
-           ],
+    DiameterOpts = [{nas_identifier, <<"NAS">>},
+                    {host, <<"127.0.0.1">>},
+                    {realm, <<"example.com">>},
+                    {connect_to, <<"aaa://127.0.0.1:3868">>}
+                   ],
+    Opts = [ {default, {provider, ergw_aaa_diameter, DiameterOpts} } ],
     application:load(ergw_aaa),
-    application:set_env(ergw_aaa, ergw_aaa_provider, {ergw_aaa_diameter, Opts}),
+    application:set_env(ergw_aaa, applications, Opts),
 
     diameter_test_server:start(),
     application:ensure_all_started(ergw_aaa),
