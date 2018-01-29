@@ -18,6 +18,9 @@
 -define(ok_option(Config),
 	?match([_|_], ergw_aaa_config:load_config(Config))).
 
+-define(def_app(Config),
+        [{applications, [{default, Config}]}]).
+
 -define(RADIUS_OK_CFG,
 	[{nas_identifier,<<"NAS-Identifier">>},
 	 {radius_auth_server,{{127,0,0,1},1812,<<"secret">>}},
@@ -51,36 +54,36 @@ config(_Config)  ->
     ?ok_option([{product_name, <<"PRODUCT">>}]),
     ?error_option([{product_name, 1}]),
 
-    ?error_option([{ergw_aaa_provider, invalid_option}]),
-    ?error_option([{ergw_aaa_provider, {invalid_handler, []}}]),
+    ?error_option(?def_app({provider, invalid_option})),
+    ?error_option(?def_app({provider, invalid_handler, []})),
 
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_mock, [{invalid_option, []}]}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_mock, [{shared_secret, invalid_secret}]}}]),
-    ?ok_option([{ergw_aaa_provider, {ergw_aaa_mock, []}}]),
-    ?ok_option([{ergw_aaa_provider, {ergw_aaa_mock, [{shared_secret, <<"secret">>}]}}]),
+    ?error_option(?def_app({provider, ergw_aaa_mock, [{invalid_option, []}]})),
+    ?error_option(?def_app({provider, ergw_aaa_mock, [{shared_secret, invalid_secret}]})),
+    ?ok_option(?def_app({provider, ergw_aaa_mock, []})),
+    ?ok_option(?def_app({provider, ergw_aaa_mock, [{shared_secret, <<"secret">>}]})),
 
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, []}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, [{invalid_option, []} | ?RADIUS_OK_CFG]}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(nas_identifier, invalid_id)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_auth_server, invalid_id)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, invalid_id)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"undefined.example.net",1812,<<"secret">>})}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {invalid_ip,1812,<<"secret">>})}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},invalid_port,<<"secret">>})}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},1812,invalid_secret})}}]),
+    ?error_option(?def_app({provider, ergw_aaa_radius, []})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, [{invalid_option, []} | ?RADIUS_OK_CFG]})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(nas_identifier, invalid_id)})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_auth_server, invalid_id)})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, invalid_id)})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"undefined.example.net",1812,<<"secret">>})})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {invalid_ip,1812,<<"secret">>})})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},invalid_port,<<"secret">>})})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},1812,invalid_secret})})),
 
-    ?ok_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_OK_CFG}}]),
-    ?ok_option([{ergw_aaa_provider, {ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"localhost",1812,<<"secret">>})}}]),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_OK_CFG})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"localhost",1812,<<"secret">>})})),
 
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, []}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, [{invalid_option, []} | ?DIAMETER_OK_CFG]}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(nas_identifier, invalid_id)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(host, invalid_host)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(realm, invalid_realm)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, invalid_uri)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(host, <<"undefined.example.net">>)}}]),
-    ?error_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, <<"http://example.com:12345">>)}}]),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, []})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, [{invalid_option, []} | ?DIAMETER_OK_CFG]})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(nas_identifier, invalid_id)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(host, invalid_host)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(realm, invalid_realm)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, invalid_uri)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(host, <<"undefined.example.net">>)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, <<"http://example.com:12345">>)})),
 
-    ?ok_option([{ergw_aaa_provider, {ergw_aaa_diameter, ?DIAMETER_OK_CFG}}]),
+    ?ok_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_OK_CFG})),
 
     ok.

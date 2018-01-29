@@ -22,8 +22,14 @@
     {next_profile, NextProfileName :: atom(), NewState :: #{}}.
 
 initialize_provider(Config) ->
-    {Handler, HandlerOpts} = proplists:get_value(ergw_aaa_provider, Config),
-    Handler:initialize_provider(HandlerOpts).
+    Apps = proplists:get_value(applications, Config, []),
+    ProvidersSupSpec = lists:flatmap(
+        fun(App) ->
+            {ok, {Handler, HandlerOpts}} = get_opts(App),
+            {ok, ProviderSupSpec} = Handler:initialize_provider(HandlerOpts),
+            ProviderSupSpec
+        end, Apps),
+    {ok, ProvidersSupSpec}.
 
 action('Authenticate', State) ->
     lager:debug("Event: Authenticate ~p", [State]),
@@ -81,7 +87,9 @@ invoke_provider(F, A,
 init_provider(State = #{'AuthProvider' := _Provider}) ->
     {ok, State};
 init_provider(State) ->
-    {ok, {Provider, ProviderOpts}} = setup:get_env(ergw_aaa, ergw_aaa_provider),
+    AppId = maps:get('AAA-Application-Id', State, default),
+
+    {ok, {Provider, ProviderOpts}} = get_application_opts(AppId),
 
     case Provider:init(ProviderOpts) of
         {ok, PState} ->
@@ -91,6 +99,22 @@ init_provider(State) ->
         Other ->
             {error, Other}
     end.
+
+get_application_opts(ApplicationID) ->
+    case setup:get_env(ergw_aaa, applications) of
+        {ok, Providers} when is_list(Providers) ->
+            AppOpts = lists:keyfind(ApplicationID, 1, Providers),
+            get_opts(AppOpts);
+        _ ->
+            get_old_application_opts()
+    end.
+
+get_old_application_opts() ->
+    {ok, {Provider, ProviderOpts}} = setup:get_env(ergw_aaa, ergw_aaa_provider),
+    {ok, {Provider, ProviderOpts, []}}.
+
+get_opts({_AppId, {provider, Provider, ProviderOpts}}) ->
+    {ok, {Provider, ProviderOpts}}.
 
 start_authentication(State) ->
     invoke_provider(start_authentication, [self()], State).

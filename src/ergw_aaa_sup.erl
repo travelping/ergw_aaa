@@ -33,6 +33,6 @@ start_link(ProviderSupSpecs) ->
 
 init(ProviderSupSpecs) ->
     {ok, {{one_for_one, 30, 60}, [?CHILD(ergw_aaa_session_seq, worker),
-				  ?CHILD(ergw_aaa_session_sup, supervisor)
-				  | ProviderSupSpecs]}}.
+				  ?CHILD(ergw_aaa_session_sup, supervisor)]
+				  ++ ProviderSupSpecs}}.
 

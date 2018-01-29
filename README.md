@@ -27,6 +27,42 @@ Using rebar3:
 
     # rebar3 compile
 
+SUPPORT MULTIPLE APPLICATIONS
+-----------------------------
+
+erGW-AAA support per-application config.
+
+Example of possible config.
+
+```erlang
+ {ergw_aaa, [
+    {applications, [
+        {default,
+            {provider, ergw_aaa_radius, [
+                {nas_identifier, <<"nas_id1">>},
+                {radius_auth_server, {{127,0,0,1}, 1812, <<"secret">>}},
+                {radius_acct_server, {{127,0,0,1}, 1813, <<"secret">>}}
+            ]}
+        },
+        {application1,
+            {provider, ergw_aaa_radius, [
+                {nas_identifier, <<"nas_id3">>},
+                {radius_auth_server, {{127,0,0,1}, 1812, <<"radius_password">>}},
+                {radius_acct_server, {{127,0,0,1}, 1813, <<"radius_password">>}}
+            ]}
+        },
+        {application,
+            {provider, ergw_aaa_mock,
+                [{shared_secret, <<"MySecret">>}]
+            }
+        }
+    ]}
+ ]},
+
+```
+
+Set 'AAA-Application-Id' key for select application config.
+Default ApplicationId is 'default'.
 
 [1]: https://github.com/travelping/ergw
 
