@@ -59,14 +59,17 @@ validate_option(Opt, Value)
 validate_option(_Opt, Value) ->
     Value.
 
-validate_application({AppId, {provider, Handler, Opts}} = Value)
-  when is_atom(AppId), is_atom(Handler) ->
+validate_application({AppId, Provider = {provider, _, _}}) ->
+    validate_application({AppId, Provider, {attribute_map, []}});
+validate_application({AppId, {provider, Handler, Opts},
+                             Attr = {attribute_map, AttrMap}} = Value)
+  when is_atom(AppId), is_atom(Handler), is_list(AttrMap) ->
     case code:ensure_loaded(Handler) of
-        {module, _} ->
-            ok;
-        _ ->
-            throw({error, {options, Value}})
+	{module, _} ->
+	    ok;
+	_ ->
+	    throw({error, {options, Value}})
     end,
-    {AppId, {provider, Handler, Handler:validate_options(Opts)}};
+    {AppId, {provider, Handler, Handler:validate_options(Opts)}, Attr};
 validate_application(Value) ->
     throw({error, {options, Value}}).

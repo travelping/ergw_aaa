@@ -25,7 +25,7 @@ initialize_provider(Config) ->
     Apps = proplists:get_value(applications, Config, []),
     ProvidersSupSpec = lists:flatmap(
         fun(App) ->
-            {ok, {Handler, HandlerOpts}} = get_opts(App),
+            {ok, {Handler, HandlerOpts, _AttrMap}} = get_opts(App),
             {ok, ProviderSupSpec} = Handler:initialize_provider(HandlerOpts),
             ProviderSupSpec
         end, Apps),
@@ -89,13 +89,14 @@ init_provider(State = #{'AuthProvider' := _Provider}) ->
 init_provider(State) ->
     AppId = maps:get('AAA-Application-Id', State, default),
 
-    {ok, {Provider, ProviderOpts}} = get_application_opts(AppId),
+    {ok, {Provider, ProviderOpts, AttrMap}} = get_application_opts(AppId),
 
     case Provider:init(ProviderOpts) of
         {ok, PState} ->
-	    State1 = State#{'AuthProvider'      => Provider,
-			    'AuthProviderState' => PState},
-            {ok, State1};
+	    State1 = State#{'AuthProvider'        => Provider,
+			    'AuthProviderState'   => PState},
+            State2 = lists:foldl(fun attribute_map/2, State1, AttrMap),
+            {ok, State2};
         Other ->
             {error, Other}
     end.
@@ -113,8 +114,10 @@ get_old_application_opts() ->
     {ok, {Provider, ProviderOpts}} = setup:get_env(ergw_aaa, ergw_aaa_provider),
     {ok, {Provider, ProviderOpts, []}}.
 
-get_opts({_AppId, {provider, Provider, ProviderOpts}}) ->
-    {ok, {Provider, ProviderOpts}}.
+get_opts({AppId, Provider}) ->
+    get_opts({AppId, Provider, {attribute_map, []}});
+get_opts({_AppId, {provider, Provider, ProviderOpts}, {attribute_map, AttrMap}}) ->
+    {ok, {Provider, ProviderOpts, AttrMap}}.
 
 start_authentication(State) ->
     invoke_provider(start_authentication, [self()], State).
@@ -131,3 +134,25 @@ update_accounting_state('Stop', State) ->
     State#{ 'Accounting-Stop' => ergw_aaa_variable:now_ms() };
 update_accounting_state(_AcctType, State) ->
     State.
+
+attribute_map({Attr, disabled}, Attributes) ->
+    maps:remove(Attr, Attributes);
+attribute_map({Attr, Rule}, Attributes) ->
+    AttrVal = compute_attribute(Rule, Attributes, <<>>),
+    Attributes#{Attr => AttrVal}.
+
+compute_attribute([], _Attributes, Res) -> Res;
+compute_attribute([RuleVar | Tail], Attributes, Res)
+  when is_binary(RuleVar) ->
+    compute_attribute(Tail, Attributes, <<Res/binary, RuleVar/binary>>);
+compute_attribute([RuleVar | Tail], Attributes, Res)
+  when is_list(RuleVar) ->
+    RuleVar1 = erlang:list_to_binary(RuleVar),
+    compute_attribute(Tail, Attributes, <<Res/binary, RuleVar1/binary>>);
+compute_attribute([RuleVar | Tail], Attributes, Res)
+  when is_atom(RuleVar) ->
+    Value = case maps:find(RuleVar, Attributes) of
+        {ok, Result} -> Result;
+        _ -> erlang:atom_to_binary(RuleVar, unicode)
+    end,
+    compute_attribute(Tail, Attributes, <<Res/binary, Value/binary>>).
