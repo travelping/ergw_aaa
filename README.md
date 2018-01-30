@@ -27,8 +27,8 @@ Using rebar3:
 
     # rebar3 compile
 
-SUPPORT MULTIPLE APPLICATIONS
------------------------------
+PER-APPLICATIONS CONFIG
+-----------------------
 
 erGW-AAA support per-application config.
 
@@ -49,12 +49,23 @@ Example of possible config.
                 {nas_identifier, <<"nas_id3">>},
                 {radius_auth_server, {{127,0,0,1}, 1812, <<"radius_password">>}},
                 {radius_acct_server, {{127,0,0,1}, 1813, <<"radius_password">>}}
+            ]},
+            {attribute_map, [
+                {'Attr-A', ['Fixed-Value', '/', 'SomeElse']},
+                {'Attr-B', ['MAC']},
+                {'Attr-C', disabled}  %% do not transmit Attr-C
             ]}
         },
         {application,
             {provider, ergw_aaa_mock,
                 [{shared_secret, <<"MySecret">>}]
-            }
+            },
+            {attribute_map, [
+                %% send Called-Station-Id as "12-34-56-78-9A-BC (MyWifi)"
+                {'Called-Station-Id', ['BSSID', <<" (">>, 'SSID', <<")">>]},
+                {'Calling-Station-Id', ['MAC']},
+                {'TP-Location-Id', ['ZONE-X']}
+            ]}
         }
     ]}
  ]},
@@ -63,6 +74,24 @@ Example of possible config.
 
 Set 'AAA-Application-Id' key for select application config.
 Default ApplicationId is 'default'.
+
+FLEXIBLE AAA ATTRIBUTES
+-----------------------
+
+erGW-AAA have ability for dynamic attributes. You can set 'attribute\_map' for
+specific application. For example:
+
+```erlang
+{attribute_map, [
+    {'Attr-A', ['Fixed-Value', '/', 'SomeElse']},
+    {'Attr-B', ['MAC']},
+    {'Attr-C', disabled}  %% do not transmit Attr-C
+]}
+```
+
+Variables in mapping rule will be replaced with value from 'ergw\_aaa\_session'
+state.  If some variable in the mapping rule is not found, it will be replaced
+with the name of this variable.
 
 [1]: https://github.com/travelping/ergw
 
