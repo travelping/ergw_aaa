@@ -210,6 +210,11 @@ validate_option(radius_auth_server, Value) ->
     validate_server_spec(radius_auth_server, Value);
 validate_option(radius_acct_server, Value) ->
     validate_server_spec(radius_auth_server, Value);
+validate_option(Opt = disabled, Value) when is_list(Value) ->
+    lists:all(fun(El) ->
+        lists:member(El, [acct, auth])
+    end, Value) orelse throw({error, {options, {Opt, Value}}}),
+    lists:usort(Value);
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
