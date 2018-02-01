@@ -71,9 +71,14 @@ config(_Config)  ->
     ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {invalid_ip,1812,<<"secret">>})})),
     ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},invalid_port,<<"secret">>})})),
     ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},1812,invalid_secret})})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [invalid])})),
 
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_OK_CFG})),
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"localhost",1812,<<"secret">>})})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [acct, auth])})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [acct])})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [])})),
+
 
     ?error_option(?def_app({provider, ergw_aaa_diameter, []})),
     ?error_option(?def_app({provider, ergw_aaa_diameter, [{invalid_option, []} | ?DIAMETER_OK_CFG]})),
