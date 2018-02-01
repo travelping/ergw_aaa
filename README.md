@@ -93,6 +93,27 @@ Variables in mapping rule will be replaced with value from 'ergw\_aaa\_session'
 state.  If some variable in the mapping rule is not found, it will be replaced
 with the name of this variable.
 
+OPTION FOR DISABLE RADIUS AUTHENTICATION OR/AND ACCOUNTING
+----------------------------------------------------------
+
+Use option 'disabled' in Radius provider config for disabling necessary actions.
+
+```erlang
+{ergw_aaa, [
+    {applications, [
+        {default,
+            {provider, ergw_aaa_radius, [
+                {nas_identifier, <<"nas_id">>},
+                {radius_auth_server, {{127,0,0,1}, 1812, <<"secret">>}},
+                {radius_acct_server, {{127,0,0,1}, 1813, <<"secret">>}},
+                {disabled, [acct, auth]}
+            ]}
+        }]
+    }]
+}
+
+```
+
 [1]: https://github.com/travelping/ergw
 
 <!-- Badges -->
