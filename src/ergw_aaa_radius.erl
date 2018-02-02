@@ -32,7 +32,10 @@
 		auth_server, acct_server,
 		auth_state,
 		radius_session = [],
-		acct_app_id = default}).
+		acct_app_id = default,
+                disabled_acct = false :: boolean(),
+                disabled_auth = false :: boolean()
+               }).
 
 -define(DefaultOptions, [{nas_identifier, undefined},
 			 {radius_auth_server, undefined},
@@ -57,10 +60,13 @@ validate_options(Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions).
 
 init(Opts) ->
+    DisabledOpts = proplists:get_value(disabled, Opts, []),
     State = #state{
       nas_id = proplists:get_value(nas_identifier, Opts, <<"NAS">>),
       auth_server = proplists:get_value(radius_auth_server, Opts, {{127,0,0,1}, 1812, <<"secret">>}),
-      acct_server = proplists:get_value(radius_acct_server, Opts, {{127,0,0,1}, 1813, <<"secret">>})
+      acct_server = proplists:get_value(radius_acct_server, Opts, {{127,0,0,1}, 1813, <<"secret">>}),
+      disabled_auth = lists:member(auth, DisabledOpts),
+      disabled_acct = lists:member(acct, DisabledOpts)
      },
     {ok, State}.
 
@@ -74,6 +80,11 @@ session_auth_options('PAP', Session, Attrs) ->
 session_auth_options(_, _Session, Attrs) ->
     Attrs.
 
+start_authentication(From, Session, State = #state{disabled_auth = true}) ->
+    SessionOpts = copy_session_id(Session, #{}),
+    Verdict = success,
+    ?queue_event(From, {'AuthenticationRequestReply', {Verdict, SessionOpts, State}}),
+    {ok, State};
 start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
     Attrs0 = [{?User_Name,       attr_get('Username', Session, <<>>)},
 	      {?NAS_Identifier,  State0#state.nas_id}],
@@ -100,6 +111,8 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
 authorize(_From, _Session, State = #state{auth_state = Verdict}) ->
     {reply, Verdict, to_session([]), State}.
 
+start_accounting(_From, _, _, State = #state{disabled_acct = true}) ->
+    {ok, State};
 start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, radius_session = RadiusSession}) ->
     UserName0 = attr_get('Username', Session, <<>>),
     UserName = case proplists:get_value('Username', RadiusSession) of
