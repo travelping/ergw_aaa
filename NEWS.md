@@ -3,12 +3,16 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
-Version 2.1.0 - xx May 2017
+Version 2.1.0 - 02 Feb 2018
 ---------------------------
 
-* added config validation
-* added per provider initialization function
-* switch to rebar3 for builds
+* Diameter support
+* Provide the concept of different AAA-Applications
+* Allow to disable Accounting/Authorization per RADIUS application
+* Add mapping feature to build dynamic AAA attributes
+* Added config validation
+* Update dependencies
+* Switch to rebar3 for builds
 
 Version 2.0.0 - 23 Sep 2016
 ---------------------------
