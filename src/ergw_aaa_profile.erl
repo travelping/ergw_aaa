@@ -104,8 +104,10 @@ init_provider(State) ->
 get_application_opts(ApplicationID) ->
     case setup:get_env(ergw_aaa, applications) of
         {ok, Providers} when is_list(Providers) ->
-            AppOpts = lists:keyfind(ApplicationID, 1, Providers),
-            get_opts(AppOpts);
+            case lists:keyfind(ApplicationID, 1, Providers) of
+                false   -> get_opts(lists:keyfind(default, 1, Providers));
+                AppOpts -> get_opts(AppOpts)
+            end;
         _ ->
             get_old_application_opts()
     end.
