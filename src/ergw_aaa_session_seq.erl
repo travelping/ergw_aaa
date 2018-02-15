@@ -30,8 +30,16 @@ start_link() ->
 new(Id) ->
     gen_server:call(?SERVER, {new, Id}).
 
+inc(Id = default) ->
+    ets:update_counter(?MODULE, Id, 1);
 inc(Id) ->
-    ets:update_counter(?MODULE, Id, 1).
+    try
+        ets:update_counter(?MODULE, Id, 1)
+    catch
+        _:badarg ->
+            new_id(Id),
+            ets:update_counter(?MODULE, Id, 1)
+    end.
 
 %%%===================================================================
 %%% gen_server callbacks
