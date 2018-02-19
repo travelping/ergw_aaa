@@ -39,7 +39,8 @@
 
 -define(DefaultOptions, [{nas_identifier, undefined},
 			 {radius_auth_server, undefined},
-			 {radius_acct_server, undefined}
+			 {radius_acct_server, undefined},
+			 {'Interim-Accounting', undefined}
 			]).
 
 %%===================================================================
@@ -228,6 +229,8 @@ validate_option(Opt = disabled, Value) when is_list(Value) ->
         lists:member(El, [acct, auth])
     end, Value) orelse throw({error, {options, {Opt, Value}}}),
     lists:usort(Value);
+validate_option('Interim-Accounting', Value) when is_integer(Value) ->
+    Value;
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 

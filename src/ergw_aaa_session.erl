@@ -32,6 +32,9 @@
 		session}).
 
 -define(AAA_TIMEOUT, (30 * 1000)).      %% 30sec for all AAA gen_server:call timeouts
+-define(DEFAULT_INTERIM_ACCT, 600).     %% 10 minutes for accounting interim
+-define(DEFAULT_SERVICE_TYPE, 'Framed-User').
+-define(DEFAULT_FRAMED_PROTO, 'PPP').
 
 -include("include/ergw_aaa_profile.hrl").
 
@@ -89,9 +92,9 @@ init([Owner, SessionOpts]) ->
     DefaultSessionOpts = #{
       'Session-Id'         => SessionId,
       'Multi-Session-Id'   => SessionId,
-      'Service-Type'       => 'Framed-User',
-      'Framed-Protocol'    => 'PPP',
-      'Interim-Accounting' => 10 * 1000
+      'Service-Type'       => get_session_opt(AcctAppId, 'Service-Type', ?DEFAULT_SERVICE_TYPE),
+      'Framed-Protocol'    => get_session_opt(AcctAppId, 'Framed-Protocol', ?DEFAULT_FRAMED_PROTO),
+      'Interim-Accounting' => get_session_opt(AcctAppId, 'Interim-Accounting', ?DEFAULT_INTERIM_ACCT) * 1000
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),
     State = #state{
@@ -331,3 +334,11 @@ handle_owner_exit(State)
     ?action('Account', 'Stop', State#state.session);
 handle_owner_exit(_State) ->
     ok.
+
+get_session_opt(AcctAppId, Opt, Default) ->
+    case application:get_env(AcctAppId, Opt) of
+        undefined ->
+            Default;
+        {ok, Val} ->
+            Val
+    end.
