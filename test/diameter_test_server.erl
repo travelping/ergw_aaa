@@ -78,6 +78,18 @@ handle_error(_Reason, _Request, _SvcName, _Peer) ->
 
 handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps}) 
   when is_record(Msg, diameter_sgi_ACR) ->
+    {ok, Apps} = application:get_env(ergw_aaa, applications),
+    InterimAccounting = case lists:keyfind(default, 1, Apps) of
+                            {default, {_, _, Opts}} ->
+                                case lists:keyfind('Interim-Accounting', 1, Opts) of
+                                    false ->
+                                        1;
+                                    {_, Interim} ->
+                                        Interim
+                                end;
+                            _ ->
+                                1
+                        end,
     #diameter_caps{origin_host = {OH, _},
                    origin_realm = {OR, _}} = Caps,
     #diameter_sgi_ACR{'Session-Id' = Id,
@@ -88,7 +100,7 @@ handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps})
                              'Result-Code' = 2001,
                              'Origin-Host' = OH,
                              'Origin-Realm' = OR,
-                             'Acct-Interim-Interval' = [1],
+                             'Acct-Interim-Interval' = [InterimAccounting],
                              'Accounting-Record-Type' = Type,
                              'Accounting-Record-Number' = Number,
                              'Acct-Application-Id' = AppId},

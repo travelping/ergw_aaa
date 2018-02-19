@@ -24,7 +24,8 @@
 -define(RADIUS_OK_CFG,
 	[{nas_identifier,<<"NAS-Identifier">>},
 	 {radius_auth_server,{{127,0,0,1},1812,<<"secret">>}},
-	 {radius_acct_server,{{0,0,0,0,0,0,0,1},1813,<<"secret">>}}]).
+	 {radius_acct_server,{{0,0,0,0,0,0,0,1},1813,<<"secret">>}},
+	 {'Interim-Accounting', 600}]).
 
 -define(RADIUS_CFG(Key, Value),
 	lists:keystore(Key, 1, ?RADIUS_OK_CFG, {Key, Value})).
@@ -33,7 +34,8 @@
 	[{nas_identifier,<<"NAS-Identifier">>},
 	 {host, <<"127.0.0.1">>},
 	 {realm, <<"example.com">>},
-	 {connect_to, <<"aaa://127.0.0.1:3868">>}]).
+	 {connect_to, <<"aaa://127.0.0.1:3868">>},
+	 {'Interim-Accounting', 600}]).
 
 -define(DIAMETER_CFG(Key, Value),
 	lists:keystore(Key, 1, ?DIAMETER_OK_CFG, {Key, Value})).
@@ -88,6 +90,7 @@ config(_Config)  ->
     ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, invalid_uri)})),
     ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(host, <<"undefined.example.net">>)})),
     ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, <<"http://example.com:12345">>)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG('Interim-Accounting', <<"100">>)})),
 
     ?ok_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_OK_CFG})),
 

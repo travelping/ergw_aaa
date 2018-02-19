@@ -32,7 +32,8 @@ init_per_suite(Config) ->
     DiameterOpts = [{nas_identifier, <<"NAS">>},
                     {host, <<"127.0.0.1">>},
                     {realm, <<"example.com">>},
-                    {connect_to, <<"aaa://127.0.0.1:3868">>}
+                    {connect_to, <<"aaa://127.0.0.1:3868">>},
+                    {'Interim-Accounting', 1}
                    ],
     Opts = [ {default, {provider, ergw_aaa_diameter, DiameterOpts} } ],
     application:load(ergw_aaa),
