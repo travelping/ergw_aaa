@@ -41,7 +41,10 @@ Example of possible config.
             {provider, ergw_aaa_radius, [
                 {nas_identifier, <<"nas_id1">>},
                 {radius_auth_server, {{127,0,0,1}, 1812, <<"secret">>}},
-                {radius_acct_server, {{127,0,0,1}, 1813, <<"secret">>}}
+                {radius_acct_server, {{127,0,0,1}, 1813, <<"secret">>}},
+                {acct_interim_interval, 300},  %% Interim Accounting in seconds. By default it is 10 minutes.
+                {service_type, 'Framed-User'},
+                {framed_protocol, 'PPP'}
             ]}
         },
         {application1,
