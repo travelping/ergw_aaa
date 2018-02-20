@@ -92,9 +92,9 @@ init([Owner, SessionOpts]) ->
     DefaultSessionOpts = #{
       'Session-Id'         => SessionId,
       'Multi-Session-Id'   => SessionId,
-      'Service-Type'       => get_session_opt(AcctAppId, 'Service-Type', ?DEFAULT_SERVICE_TYPE),
-      'Framed-Protocol'    => get_session_opt(AcctAppId, 'Framed-Protocol', ?DEFAULT_FRAMED_PROTO),
-      'Interim-Accounting' => get_session_opt(AcctAppId, 'Interim-Accounting', ?DEFAULT_INTERIM_ACCT) * 1000
+      'Service-Type'       => get_session_opt(AcctAppId, service_type, ?DEFAULT_SERVICE_TYPE),
+      'Framed-Protocol'    => get_session_opt(AcctAppId, framed_protocol, ?DEFAULT_FRAMED_PROTO),
+      'Interim-Accounting' => get_session_opt(AcctAppId, acct_interim_interval, ?DEFAULT_INTERIM_ACCT) * 1000
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),
     State = #state{
