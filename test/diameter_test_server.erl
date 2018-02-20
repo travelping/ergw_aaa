@@ -81,7 +81,7 @@ handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps})
     {ok, Apps} = application:get_env(ergw_aaa, applications),
     InterimAccounting = case lists:keyfind(default, 1, Apps) of
                             {default, {_, _, Opts}} ->
-                                case lists:keyfind('Interim-Accounting', 1, Opts) of
+                                case lists:keyfind(acct_interim_interval, 1, Opts) of
                                     false ->
                                         1;
                                     {_, Interim} ->

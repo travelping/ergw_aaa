@@ -25,7 +25,9 @@
 	[{nas_identifier,<<"NAS-Identifier">>},
 	 {radius_auth_server,{{127,0,0,1},1812,<<"secret">>}},
 	 {radius_acct_server,{{0,0,0,0,0,0,0,1},1813,<<"secret">>}},
-	 {'Interim-Accounting', 600}]).
+	 {acct_interim_interval, 600},
+	 {framed_protocol, 'PPP'},
+	 {service_type, 'Framed-User'}]).
 
 -define(RADIUS_CFG(Key, Value),
 	lists:keystore(Key, 1, ?RADIUS_OK_CFG, {Key, Value})).
@@ -35,7 +37,9 @@
 	 {host, <<"127.0.0.1">>},
 	 {realm, <<"example.com">>},
 	 {connect_to, <<"aaa://127.0.0.1:3868">>},
-	 {'Interim-Accounting', 600}]).
+	 {acct_interim_interval, 600},
+	 {framed_protocol, 'PPP'},
+	 {service_type, 'Framed-User'}]).
 
 -define(DIAMETER_CFG(Key, Value),
 	lists:keystore(Key, 1, ?DIAMETER_OK_CFG, {Key, Value})).
@@ -74,12 +78,18 @@ config(_Config)  ->
     ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},invalid_port,<<"secret">>})})),
     ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {{127,0,0,1},1812,invalid_secret})})),
     ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [invalid])})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(acct_interim_interval, "10")})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(service_type, "Framed-User")})),
+    ?error_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(framed_protocol, "PPP")})),
 
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_OK_CFG})),
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(radius_acct_server, {"localhost",1812,<<"secret">>})})),
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [acct, auth])})),
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [acct])})),
     ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(disabled, [])})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(acct_interim_interval, 10)})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(service_type, 'Framed-User')})),
+    ?ok_option(?def_app({provider, ergw_aaa_radius, ?RADIUS_CFG(framed_protocol, 'PPP')})),
 
 
     ?error_option(?def_app({provider, ergw_aaa_diameter, []})),
@@ -90,7 +100,9 @@ config(_Config)  ->
     ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, invalid_uri)})),
     ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(host, <<"undefined.example.net">>)})),
     ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(connect_to, <<"http://example.com:12345">>)})),
-    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG('Interim-Accounting', <<"100">>)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(acct_interim_interval, <<"100">>)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(service_type, <<"Framed-User">>)})),
+    ?error_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_CFG(framed_protocol, <<"PPP">>)})),
 
     ?ok_option(?def_app({provider, ergw_aaa_diameter, ?DIAMETER_OK_CFG})),
 

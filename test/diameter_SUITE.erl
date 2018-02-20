@@ -33,7 +33,8 @@ init_per_suite(Config) ->
                     {host, <<"127.0.0.1">>},
                     {realm, <<"example.com">>},
                     {connect_to, <<"aaa://127.0.0.1:3868">>},
-                    {'Interim-Accounting', 1}
+                    {acct_interim_interval, 1},
+                    {service_type, 'Framed-User'}
                    ],
     Opts = [ {default, {provider, ergw_aaa_diameter, DiameterOpts} } ],
     application:load(ergw_aaa),
@@ -92,6 +93,8 @@ acct_interim_interval(_Config) ->
     timer:sleep(100),
     {state, _, _, _, _, _, _, _, SessionMap} = sys:get_state(Session),
     1000 = maps:get('Interim-Accounting', SessionMap),
+    'Framed-User' = maps:get('Service-Type', SessionMap),
+    'PPP' = maps:get('Framed-Protocol', SessionMap),
 
     % In ACA we have Acct-Interim-Interval = 100
     % that means for 2 seconds at least 2 ACR Interim reqs will be sent.

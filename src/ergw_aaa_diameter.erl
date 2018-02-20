@@ -47,8 +47,7 @@
 -define(DefaultOptions, [{nas_identifier, undefined},
                          {host, undefined},
                          {realm, undefined},
-                         {connect_to, undefined},
-                         {'Interim-Accounting', undefined}
+                         {connect_to, undefined}
                         ]).
 
 %%===================================================================
@@ -235,7 +234,11 @@ validate_option(host = Opt, Value) when is_binary(Value) ->
     end;
 validate_option(realm, Value) when is_binary(Value) ->
     Value;
-validate_option('Interim-Accounting', Value) when is_integer(Value) ->
+validate_option(acct_interim_interval, Value) when is_integer(Value) ->
+    Value;
+validate_option(service_type, Value) when is_atom(Value) ->
+    Value;
+validate_option(framed_protocol, Value) when is_atom(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
