@@ -9,6 +9,8 @@
 
 -export([initialize_provider/1, action/2, action/3, handle_reply/3]).
 
+-compile({parse_transform, cut}).
+
 -include("include/ergw_aaa_profile.hrl").
 
 -callback enter(State :: #{}) ->
@@ -140,21 +142,17 @@ update_accounting_state(_AcctType, State) ->
 attribute_map({Attr, disabled}, Attributes) ->
     maps:remove(Attr, Attributes);
 attribute_map({Attr, Rule}, Attributes) ->
-    AttrVal = compute_attribute(Rule, Attributes, <<>>),
-    Attributes#{Attr => AttrVal}.
+    AttrVal = lists:map(compute_attribute(_, Attributes), Rule),
+    Attributes#{Attr => erlang:iolist_to_binary(AttrVal)}.
 
-compute_attribute([], _Attributes, Res) -> Res;
-compute_attribute([RuleVar | Tail], Attributes, Res)
-  when is_binary(RuleVar) ->
-    compute_attribute(Tail, Attributes, <<Res/binary, RuleVar/binary>>);
-compute_attribute([RuleVar | Tail], Attributes, Res)
-  when is_list(RuleVar) ->
-    RuleVar1 = erlang:list_to_binary(RuleVar),
-    compute_attribute(Tail, Attributes, <<Res/binary, RuleVar1/binary>>);
-compute_attribute([RuleVar | Tail], Attributes, Res)
+compute_attribute(RuleVar, _Attributes)
+  when is_binary(RuleVar); is_list(RuleVar) ->
+    RuleVar;
+compute_attribute(RuleVar, Attributes)
   when is_atom(RuleVar) ->
-    Value = case maps:find(RuleVar, Attributes) of
-        {ok, Result} -> Result;
-        _ -> erlang:atom_to_binary(RuleVar, unicode)
-    end,
-    compute_attribute(Tail, Attributes, <<Res/binary, Value/binary>>).
+    case Attributes of
+	#{RuleVar := Result} ->
+	    Result;
+	_ ->
+	    erlang:atom_to_binary(RuleVar, unicode)
+    end.
