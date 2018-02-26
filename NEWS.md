@@ -3,6 +3,14 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 2.2.0 - 26 Feb 2018
+---------------------------
+
+* Expose `acct_interim_interval`, `service_type`, `framed_protocol` option to
+  RADIUS configuration (per AAA-Applications, all optional)
+* Fix applying configured attribute map
+* Fix fallback back to the default AAA-Application configuration
+
 Version 2.1.0 - 02 Feb 2018
 ---------------------------
 
