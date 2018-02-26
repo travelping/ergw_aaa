@@ -88,13 +88,14 @@ init([Owner, SessionOpts]) ->
     AcctAppId = maps:get('AAA-Application-Id', SessionOpts, default),
     SessionId = ergw_aaa_session_seq:inc(AcctAppId),
     MonRef = erlang:monitor(process, Owner),
+    {ok, {_App, AppOpts, _AppAttrMap}} = ergw_aaa_profile:get_application_opts(AcctAppId),
 
     DefaultSessionOpts = #{
       'Session-Id'         => SessionId,
       'Multi-Session-Id'   => SessionId,
-      'Service-Type'       => get_session_opt(AcctAppId, service_type, ?DEFAULT_SERVICE_TYPE),
-      'Framed-Protocol'    => get_session_opt(AcctAppId, framed_protocol, ?DEFAULT_FRAMED_PROTO),
-      'Interim-Accounting' => get_session_opt(AcctAppId, acct_interim_interval, ?DEFAULT_INTERIM_ACCT) * 1000
+      'Service-Type'       => proplists:get_value(service_type, AppOpts, ?DEFAULT_SERVICE_TYPE),
+      'Framed-Protocol'    => proplists:get_value(framed_protocol, AppOpts, ?DEFAULT_FRAMED_PROTO),
+      'Interim-Accounting' => proplists:get_value(acct_interim_interval, AppOpts, ?DEFAULT_INTERIM_ACCT) * 1000
      },
     Session = maps:merge(DefaultSessionOpts, SessionOpts),
     State = #state{
@@ -335,10 +336,3 @@ handle_owner_exit(State)
 handle_owner_exit(_State) ->
     ok.
 
-get_session_opt(AcctAppId, Opt, Default) ->
-    case application:get_env(AcctAppId, Opt) of
-        undefined ->
-            Default;
-        {ok, Val} ->
-            Val
-    end.
