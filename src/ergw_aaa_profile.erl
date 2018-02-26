@@ -7,7 +7,7 @@
 
 -module(ergw_aaa_profile).
 
--export([initialize_provider/1, action/2, action/3, handle_reply/3]).
+-export([initialize_provider/1, action/2, action/3, handle_reply/3, get_application_opts/1]).
 
 -compile({parse_transform, cut}).
 
