@@ -1,9 +1,6 @@
 {"1.1.0",
 [{<<"bear">>,{pkg,<<"bear">>,<<"0.8.5">>},3},
- {<<"eradius">>,
-  {git,"https://github.com/travelping/eradius.git",
-       {ref,"845930c02911702b0a1c3b16a677c9bdf59a8906"}},
-  0},
+ {<<"eradius">>,{pkg,<<"eradius">>,<<"0.9.1">>},0},
  {<<"erlando">>,
   {git,"https://github.com/travelping/erlando.git",
        {ref,"8d1aa927c51b7ac351b90abcdaed7d2f527eb937"}},
@@ -22,6 +19,7 @@
 [
 {pkg_hash,[
  {<<"bear">>, <<"E95FCA1627CD9E15BAF93CE0A52AFF16917BAF325F0EE65B88CD715376CD2344">>},
+ {<<"eradius">>, <<"AD3360D61AC5FEFFF36FD061F69581AE8F233A8B0393381BD62219A342E46134">>},
  {<<"exometer_core">>, <<"62A99A361BA8A14D53857D4C716A191E810299D2F43C5C981EB7B086C0BFCCE1">>},
  {<<"folsom">>, <<"94A027B56FE84FEED264F9B33CB4C6AC9A801FAD84B87DBDA0836CE83C3B8D69">>},
  {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>},
