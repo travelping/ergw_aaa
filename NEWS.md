@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 2.2.1 - 14 Mar 2018
+---------------------------
+
+* Upgrade used RADIUS library eradius to avoid memory impact when providing
+  metrics
+
 Version 2.2.0 - 26 Feb 2018
 ---------------------------
 
