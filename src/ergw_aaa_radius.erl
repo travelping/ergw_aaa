@@ -751,7 +751,7 @@ process_gen_attrs({#attribute{id = ?TP_NAT_Port_End}, Value}, Acc) ->
     session_opt('NAT-Port-End', Value, Acc);
 
 %% TP-Max-Input-Octets
-process_gen_attrs({#attribute{id = ?TP_Max_Total_Octets}, Value}, Acc) ->
+process_gen_attrs({#attribute{id = ?TP_Max_Input_Octets}, Value}, Acc) ->
     session_opt('Max-Input-Octets', Value, Acc);
 
 %% TP-Max-Output-Octets
@@ -759,7 +759,7 @@ process_gen_attrs({#attribute{id = ?TP_Max_Output_Octets}, Value}, Acc) ->
     session_opt('Max-Output-Octets', Value, Acc);
 
 %% TP-Max-Total-Octets
-process_gen_attrs({#attribute{id = ?TP_Max_Input_Octets}, Value}, Acc) ->
+process_gen_attrs({#attribute{id = ?TP_Max_Total_Octets}, Value}, Acc) ->
     session_opt('Max-Total-Octets', Value, Acc);
 
 %% TP-TLS-Pre-Shared-Key
