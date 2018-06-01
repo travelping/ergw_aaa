@@ -290,6 +290,8 @@ session_options('Called-Station-Id', Value, Acc) ->
     [{?Called_Station_Id, Value}|Acc];
 session_options('Port-Id', Value, Acc) ->
     [{?NAS_Port_Id, Value}|Acc];
+session_options('NAS-IP-Address', Value, Acc) ->
+    [{?NAS_IP_Address, Value}|Acc];
 
 session_options('InOctets', Octets, Acc) when is_integer(Octets) ->
     [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
