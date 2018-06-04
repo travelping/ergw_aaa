@@ -734,6 +734,10 @@ process_gen_attrs({#attribute{id = ?TP_Access_Rule}, Value}, Acc) ->
 process_gen_attrs({#attribute{id = ?TP_Access_Group}, Value}, Acc) ->
     session_opt('Access-Group', binary_to_list(Value), Acc);
 
+%% TP-Access-Class-Id
+process_gen_attrs({#attribute{id = ?TP_Access_Class_Id}, Value}, Acc) ->
+    session_opt('Access-Class', binary_to_list(Value), Acc);
+
 %% TP-NAT-Pool-Id
 process_gen_attrs({#attribute{id = ?TP_NAT_Pool_Id}, Value}, Acc) ->
     session_opt('NAT-Pool-Id', Value, Acc);
