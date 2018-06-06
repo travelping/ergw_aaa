@@ -12,6 +12,7 @@
 %% AAA API
 -export([validate_options/1, initialize_provider/1,
 	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
+-export(['3gpp_from_session'/2]).
 %%
 %% diameter callbacks
 -export([peer_up/3,
@@ -49,6 +50,9 @@
 			 {realm, undefined},
 			 {connect_to, undefined}
 			]).
+
+-define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
+-define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
 
 %%===================================================================
 %% API
@@ -328,9 +332,6 @@ pdp_type('IPv4v6')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4V6';
 pdp_type('PPP')                     -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP';
 pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
 
-int_to_binary(Int) when is_integer(Int) -> erlang:integer_to_binary(Int);
-int_to_binary(Binary) -> Binary.
-
 to_list({Key, [A | _] = Avps}) when is_map(A) ->
     {Key, lists:map(fun to_list/1, Avps)};
 to_list({Key, Avps}) when is_map(Avps) ->
@@ -339,6 +340,113 @@ to_list(Avps) when is_map(Avps) ->
     lists:map(fun to_list/1, maps:to_list(Avps));
 to_list(Avp) ->
     Avp.
+
+'3gpp_from_session'(Key, Value)
+  when (Key =:= '3GPP-Charging-Gateway-Address' orelse
+	Key =:= '3GPP-SGSN-Address' orelse
+	Key =:= '3GPP-GGSN-Address') andalso
+       ?IS_IPv4(Value) ->
+    format_address(Value);
+
+'3gpp_from_session'(Key, Value)
+  when (Key =:= '3GPP-Charging-Gateway-IPv6-Address' orelse
+	Key =:= '3GPP-SGSN-IPv6-Address' orelse
+	Key =:= '3GPP-GGSN-IPv6-Address') andalso
+       ?IS_IPv6(Value) ->
+    format_address(Value);
+
+'3gpp_from_session'('3GPP-IPv6-DNS-Servers', Value)
+  when is_list(Value) ->
+    << <<(format_address(IP))/binary>> || IP <- Value >>;
+'3gpp_from_session'('3GPP-IPv6-DNS-Servers', Value)
+  when is_binary(Value) ->
+    Value;
+
+'3gpp_from_session'('3GPP-Teardown-Indicator', true) ->
+    <<1>>;
+'3gpp_from_session'('3GPP-Teardown-Indicator', <<_:7, 1:1>>) ->
+    <<1>>;
+'3gpp_from_session'('3GPP-Teardown-Indicator', Value)
+  when is_integer(Value) ->
+    << (Value rem 2) >>;
+'3gpp_from_session'('3GPP-Teardown-Indicator', _Value) ->
+    <<0>>;
+
+'3gpp_from_session'('3GPP-Session-Stop-Indicator', true) ->
+    <<255>>;
+'3gpp_from_session'('3GPP-Session-Stop-Indicator', Value)
+  when is_integer(Value), Value /= 0 ->
+    <<255>>;
+'3gpp_from_session'('3GPP-Session-Stop-Indicator', Value)
+  when is_binary(Value) ->
+    Value;
+'3gpp_from_session'('3GPP-Session-Stop-Indicator', _Value) ->
+    <<0>>;
+
+'3gpp_from_session'(Key, Value)
+  when Key =:= '3GPP-RAT-Type'
+       andalso is_integer(Value) ->
+    <<Value>>;
+
+'3gpp_from_session'(Key, Value)
+  when Key =:= '3GPP-Charging-Id'
+       andalso is_integer(Value) ->
+    <<Value:32>>;
+
+'3gpp_from_session'(Key, Value)
+  when Key =:= '3GPP-Camel-Charging' orelse
+       Key =:= '3GPP-IMSI' orelse
+       Key =:= '3GPP-GPRS-Negotiated-QoS-Profile' orelse
+       Key =:= '3GPP-IMSI-MCC-MNC' orelse
+       Key =:= '3GPP-GGSN-MCC-MNC' orelse
+       Key =:= '3GPP-SGSN-MCC-MNC' orelse
+       Key =:= '3GPP-IMEISV' orelse
+       Key =:= '3GPP-User-Location-Info' orelse
+       Key =:= '3GPP-Packet-Filter' orelse
+       Key =:= '3GPP-Negotiated-DSCP' ->
+    Value;
+
+'3gpp_from_session'('3GPP-PDP-Type', Value) ->
+    pdp_type(Value);
+
+'3gpp_from_session'('3GPP-MS-TimeZone', {A, B}) ->
+    <<A, B>>;
+
+'3gpp_from_session'('3GPP-Charging-Characteristics', Value)
+  when is_binary(Value) ->
+    erlang:iolist_to_binary([io_lib:format("~2.16.0B", [X]) || <<X>> <= Value]);
+
+'3gpp_from_session'(Key, Value)
+  when (Key =:= '3GPP-NSAPI' orelse
+	Key =:= '3GPP-Selection-Mode') andalso
+       is_integer(Value) ->
+    erlang:integer_to_binary(Value, 16).
+
+from_session(Key, Value, M)
+  when Key =:= '3GPP-Charging-Gateway-Address';
+       Key =:= '3GPP-SGSN-Address';
+       Key =:= '3GPP-GGSN-Address';
+       Key =:= '3GPP-Charging-Gateway-IPv6-Address';
+       Key =:= '3GPP-SGSN-IPv6-Address';
+       Key =:= '3GPP-GGSN-IPv6-Address';
+       Key =:= '3GPP-Charging-Id';
+       Key =:= '3GPP-Camel-Charging';
+       Key =:= '3GPP-PDP-Type';
+       Key =:= '3GPP-RAT-Type';
+       Key =:= '3GPP-MS-TimeZone';
+       Key =:= '3GPP-Charging-Characteristics';
+       Key =:= '3GPP-NSAPI';
+       Key =:= '3GPP-Selection-Mode';
+       Key =:= '3GPP-IMSI';
+       Key =:= '3GPP-GPRS-Negotiated-QoS-Profile';
+       Key =:= '3GPP-IMSI-MCC-MNC';
+       Key =:= '3GPP-GGSN-MCC-MNC';
+       Key =:= '3GPP-SGSN-MCC-MNC';
+       Key =:= '3GPP-IMEISV';
+       Key =:= '3GPP-User-Location-Info';
+       Key =:= '3GPP-Packet-Filter';
+       Key =:= '3GPP-Negotiated-DSCP' ->
+    M#{Key => ['3gpp_from_session'(Key, Value)]};
 
 from_session('Service-Type' = Key, Value, M) ->
     M#{Key => [service_type(Value)]};
@@ -358,34 +466,8 @@ from_session('OutOctets', Value, M) ->
 
 from_session('IP', Value, M) ->
     M#{'Framed-IP-Address' => [format_address(Value)]};
-from_session( Key, Value, M)
-  when Key =:= 'Framed-IP-Address';
-       Key =:= '3GPP-CG-Address';
-       Key =:= '3GPP-SGSN-Address';
-       Key =:= '3GPP-GGSN-Address';
-       Key =:= '3GPP-CG-IPv6-Address';
-       Key =:= '3GPP-SGSN-IPv6-Address';
-       Key =:= '3GPP-GGSN-IPv6-Address' ->
+from_session('Framed-IP-Address' = Key, Value, M) ->
     M#{Key => [format_address(Value)]};
-
-from_session('3GPP-Charging-ID', Value, M) ->
-    M#{'3GPP-Charging-Id' => [Value]};
-from_session('3GPP-Camel-Charging', Value, M) ->
-    M#{'3GPP-CAMEL-Charging-Info' => [Value]};
-from_session('3GPP-PDP-Type' = Key, Value, M) ->
-    M#{Key => [pdp_type(Value)]};
-from_session('3GPP-RAT-Type' = Key, Value, M) ->
-    M#{Key => [<<Value>>]};
-from_session('3GPP-MS-TimeZone' = Key, {A, B}, M) ->
-    M#{Key => [<<A, B>>]};
-from_session('3GPP-Charging-Characteristics' = Key, Value, M) ->
-    CC = erlang:iolist_to_binary([io_lib:format("~2.16.0B", [X])
-                                  || <<X>> <= Value]),
-    M#{Key => [CC]};
-from_session('3GPP-NSAPI' = Key, Value, M) ->
-    M#{Key => [<<Value>>]};
-from_session('3GPP-Selection-Mode' = Key, Value, M) ->
-    M#{Key => [int_to_binary(Value)]};
 
 from_session(Key, Value, M)
   when Key =:= 'Acct-Session-Time';
@@ -395,16 +477,7 @@ from_session(Key, Value, M)
        Key =:= 'Class';
        Key =:= 'Called-Station-Id';
        Key =:= 'Calling-Station-Id';
-       Key =:= 'Framed-Interface-Id';
-       Key =:= '3GPP-IMSI';
-       Key =:= '3GPP-GPRS-Negotiated-QoS-Profile';
-       Key =:= '3GPP-IMSI-MCC-MNC';
-       Key =:= '3GPP-GGSN-MCC-MNC';
-       Key =:= '3GPP-SGSN-MCC-MNC';
-       Key =:= '3GPP-IMEISV';
-       Key =:= '3GPP-User-Location-Info';
-       Key =:= '3GPP-Packet-Filter';
-       Key =:= '3GPP-Negotiated-DSCP' ->
+       Key =:= 'Framed-Interface-Id' ->
     M#{Key => [Value]};
 
 from_session(_Key, _Value, M) -> M.

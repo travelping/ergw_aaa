@@ -363,7 +363,7 @@ session_options('Acct-Authentic', 'Diameter', Acc) ->
 %% 3GPP TS 29.061 Attributes
 session_options('3GPP-IMSI', Value, ACC) ->
     [{?X_3GPP_IMSI, Value}|ACC];
-session_options('3GPP-Charging-ID', Value, Acc) ->
+session_options('3GPP-Charging-Id', Value, Acc) ->
     [{?X_3GPP_Charging_ID, Value}|Acc];
 
 session_options('3GPP-PDP-Type', 'IPv4', Acc) ->
@@ -432,8 +432,6 @@ session_options('3GPP-Packet-Filter', Value, Acc) ->
     [{?X_3GPP_Packet_Filter, Value}|Acc];
 session_options('3GPP-Negotiated-DSCP', Value, Acc) ->
     [{?X_3GPP_Negotiated_DSCP, Value}|Acc];
-session_options('3GPP-PDN-Type', Value, Acc) ->
-    [{?X_3GPP_PDN_Type, Value}|Acc];
 
 %% DSL-Forum PPPoE Intermediate Agent Attributes
 session_options('ADSL-Agent-Circuit-Id', Value, Acc) ->

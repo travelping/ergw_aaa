@@ -132,12 +132,13 @@ check_3gpp(#diameter_sgi_ACR{
 	      '3GPP-SGSN-Address'      = [<<192, 168, 1, 1>>],
 	      '3GPP-IMSI-MCC-MNC'      = [<<"25999">>],
 	      '3GPP-GGSN-MCC-MNC'      = [<<"25888">>],
-	      '3GPP-SGSN-IPv6-Address' = [<<100, 10, 10, 10>>],
-	      '3GPP-GGSN-IPv6-Address' = [<<200, 10, 10, 10>>],
+	      '3GPP-SGSN-IPv6-Address' = [<<253,150,220,210,239,219,65,196,0,0,0,0,0,0,16,0>>],
+	      '3GPP-GGSN-IPv6-Address' = [<<253,150,220,210,239,219,65,196,0,0,0,0,0,0,32,0>>],
 	      '3GPP-SGSN-MCC-MNC'      = [<<"26201">>],
 	      '3GPP-IMEISV'            = [<<82,21,50,96,32,80,30,0>>],
 	      '3GPP-RAT-Type'          = [<<6>>],
-	      '3GPP-NSAPI'             = [<<5>>]
+	      '3GPP-NSAPI'             = [<<"5">>],
+	      '3GPP-Selection-Mode'    = [<<"0">>]
 	     }, ACA) ->
     {reply, ACA};
 check_3gpp(_Msg, _ACA) ->
