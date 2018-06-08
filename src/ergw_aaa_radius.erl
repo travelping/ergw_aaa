@@ -374,6 +374,8 @@ session_options('3GPP-PDP-Type', 'IPv4v6', Acc) ->
     [{?X_3GPP_PDP_Type, 3}|Acc];
 session_options('3GPP-PDP-Type', 'PPP', Acc) ->
     [{?X_3GPP_PDP_Type, 1}|Acc];
+session_options('3GPP-PDP-Type', 'Non-IP', Acc) ->
+    [{?X_3GPP_PDP_Type, 4}|Acc];
 
 session_options('3GPP-Charging-Gateway-Address', Value, Acc) ->
     [{?X_3GPP_Charging_Gateway_Address, Value}|Acc];
