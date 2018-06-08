@@ -157,9 +157,12 @@ peer_down(_SvcName, _Peer, State) ->
     lager:debug("peer_down: ~p~n", [_Peer]),
     State.
 
-pick_peer([Peer | _], _, _SvcName, _State) ->
-    lager:debug("pick_peer: ~p~n", [Peer]),
-    {ok, Peer}.
+pick_peer([], RemoteCandidates, _SvcName, _State) ->
+    N = rand:uniform(length(RemoteCandidates)),
+    {ok, lists:nth(N, RemoteCandidates)};
+pick_peer(LocalCandidates, _, _SvcName, _State) ->
+    N = rand:uniform(length(LocalCandidates)),
+    {ok, lists:nth(N, LocalCandidates)}.
 
 pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
     pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
