@@ -330,6 +330,7 @@ pdp_type('IPv4')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4';
 pdp_type('IPv6')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV6';
 pdp_type('IPv4v6')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4V6';
 pdp_type('PPP')                     -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP';
+pdp_type('Non-IP')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_NON-IP';
 pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
 
 to_list({Key, [A | _] = Avps}) when is_map(A) ->
