@@ -25,7 +25,7 @@
 @id 4
 
 @inherits diameter_gen_base_rfc6733
-@inherits diameter_nasreq_rfc4005  Filter-Id
+@inherits diameter_rfc4005_nasreq  Filter-Id
 
 ;; ===========================================================================
 

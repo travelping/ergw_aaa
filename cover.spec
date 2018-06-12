@@ -5,8 +5,8 @@
 	     diameter_3gpp_ts29_212,
 	     diameter_3gpp_ts29_214,
 	     diameter_3gpp_ts29_229,
-	     diameter_cc_rfc4006,
+	     diameter_rfc4006_cc,
 	     diameter_etsi_es283_034,
-	     diameter_nasreq_rfc4005,
-	     diameter_nasreq_rfc7155]}.
+	     diameter_rfc4005_nasreq,
+	     diameter_rfc7155_nasreq]}.
 {export, "logs/all.coverdata"}.

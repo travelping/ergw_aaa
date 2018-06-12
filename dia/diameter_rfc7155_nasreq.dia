@@ -17,7 +17,7 @@
 ;;
 
 @id 1
-@name   diameter_nasreq_rfc7155
+@name   diameter_rfc7155_nasreq
 @prefix diameter_nasreq
 @vendor 0 IETF
 
