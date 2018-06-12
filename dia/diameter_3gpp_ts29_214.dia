@@ -24,7 +24,7 @@
 @vendor 10415 3GPP
 
 @inherits diameter_gen_base_rfc6733
-@inherits diameter_cc_rfc4006
+@inherits diameter_rfc4006_cc
 
 ;; only attributes required by other applications are defined
 
