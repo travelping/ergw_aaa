@@ -13,16 +13,6 @@
 
 -include("include/ergw_aaa_profile.hrl").
 
--callback enter(State :: #{}) ->
-    {ok, NewState :: #{}} |
-    {stop, Reason :: term(), NewState :: #{}} |
-    {next_profile, NextProfileName :: atom(), NewState :: #{}}.
-
--callback event(Event :: term(), State :: #{}) ->
-    {ok, NewState :: #{}} |
-    {stop, Reason :: term(), NewState :: #{}} |
-    {next_profile, NextProfileName :: atom(), NewState :: #{}}.
-
 initialize_provider(Config) ->
     Apps = proplists:get_value(applications, Config, []),
     ProvidersSupSpec = lists:flatmap(
