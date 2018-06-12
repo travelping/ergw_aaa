@@ -43,6 +43,7 @@
    3GPP-IMSI-MCC-MNC                8      UTF8String     V
    3GPP-GGSN-MCC-MNC                9      UTF8String     V
    3GPP-NSAPI                       10    OctetString     V
+   3GPP-Session-Stop-Indicator      11    OctetString     V
    3GPP-Selection-Mode              12     UTF8String     V
    3GPP-Charging-Characteristics    13     UTF8String     V
    3GPP-CG-IPv6-Address             14    OctetString     V
