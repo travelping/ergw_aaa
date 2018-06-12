@@ -32,7 +32,7 @@ action('Authenticate', State) ->
 	    %% send auth request
 	    start_authentication(State1);
 	{error, Error} ->
-	    ?queue_event('AuthenticationRequestReply', {failed, #{'Reason' => Error}}),
+	    ?queue_event({'AuthenticationRequestReply', {failed, #{'Reason' => Error}}}),
 	    {ok, State}
     end;
 
@@ -53,7 +53,7 @@ action('Account', [AcctType], State) ->
 	    %% send auth request
 	    request_accounting(AcctType, State1);
 	{error, Error} ->
-	    ?queue_event('AccountingRequestReply', {failed, #{'Reason' => Error}}),
+	    ?queue_event({'AccountingRequestReply', {failed, #{'Reason' => Error}}}),
 	    {ok, State}
     end;
 
