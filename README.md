@@ -19,10 +19,6 @@ In the future possible other providers are:
 BUILDING
 --------
 
-Using tetrapak:
-
-    # tetrapak build check
-
 Using rebar3:
 
     # rebar3 compile
