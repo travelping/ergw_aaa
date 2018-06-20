@@ -162,7 +162,7 @@ handle_cast({stop, SessionOpts}, State) ->
     State0 = stop_interim_accounting(State),
     NewSessionOpts = maps:merge(State#state.session, SessionOpts),
     {_, NewSession} = ?action('Account', 'Stop', NewSessionOpts),
-    {noreply, State0#state{session = NewSession, started = false}};
+    {noreply, State0#state{session = NewSession, started = false, authenticated = false}};
 
 handle_cast(terminate, State) ->
     lager:info("Handling terminate request: ~p", [State]),
