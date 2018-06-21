@@ -100,8 +100,9 @@ start_authentication(From, Session, State0 = #state{auth_server = NAS}) ->
 	     eap_msg = attr_get('EAP-Data', Session, <<>>)},
 
     Pid = proc_lib:spawn_link(fun() ->
+				      ClientName = <<(State0#state.nas_id)/binary, <<"_auth">>/binary>>,
 				      {Verdict, SessionOpts0, State} =
-					  radius_response(eradius_client:send_request(NAS, Req), NAS, State0),
+					  radius_response(eradius_client:send_request(NAS, Req, [{client_name, ClientName}]), NAS, State0),
 				      NewSessionOpts0 = to_session(SessionOpts0),
 				      NewSessionOpts1 = copy_session_id(Session, NewSessionOpts0),
 				      ?queue_event(From, {'AuthenticationRequestReply', {Verdict, NewSessionOpts1, State#state{auth_state = Verdict}}})
@@ -135,7 +136,10 @@ start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, radi
 	     attrs = Attrs,
 	     msg_hmac = false},
 
-    proc_lib:spawn_link(fun() -> eradius_client:send_request(NAS, Req) end),
+    proc_lib:spawn_link(fun() ->
+                                ClientName = <<(State#state.nas_id)/binary, <<"_acct">>/binary>>,
+                                eradius_client:send_request(NAS, Req, [{client_name, ClientName}])
+                        end),
 
     {ok, State};
 
@@ -162,7 +166,10 @@ start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, ra
 	     attrs = Attrs,
 	     msg_hmac = false},
 
-    proc_lib:spawn_link(fun() -> eradius_client:send_request(NAS, Req) end),
+    proc_lib:spawn_link(fun() ->
+                                ClientName = <<(State#state.nas_id)/binary, <<"_acct">>/binary>>,
+                                eradius_client:send_request(NAS, Req, [{client_name, ClientName}])
+                        end),
 
     {ok, State};
 
@@ -186,7 +193,10 @@ start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
 	     attrs = Attrs,
 	     msg_hmac = false},
 
-    proc_lib:spawn(fun() -> eradius_client:send_request(NAS, Req) end),
+    proc_lib:spawn(fun() ->
+                           ClientName = <<(State#state.nas_id)/binary, <<"_acct">>/binary>>,
+                           eradius_client:send_request(NAS, Req, [{client_name, ClientName}])
+                   end),
 
     {ok, State}.
 
