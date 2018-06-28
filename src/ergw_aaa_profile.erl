@@ -121,11 +121,11 @@ request_accounting(AcctType, State) ->
     invoke_provider(start_accounting, [self(), AcctType], State1).
 
 update_accounting_state('Start', State) ->
-    State#{ 'Accounting-Start' => ergw_aaa_variable:now_ms() };
+    State#{ 'Accounting-Start' => erlang:monotonic_time(milli_seconds) };
 update_accounting_state('Interim', State) ->
-    State#{ 'Last-Interim-Update' => ergw_aaa_variable:now_ms() };
+    State#{ 'Last-Interim-Update' => erlang:monotonic_time(milli_seconds) };
 update_accounting_state('Stop', State) ->
-    State#{ 'Accounting-Stop' => ergw_aaa_variable:now_ms() };
+    State#{ 'Accounting-Stop' => erlang:monotonic_time(milli_seconds) };
 update_accounting_state(_AcctType, State) ->
     State.
 

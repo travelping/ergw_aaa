@@ -30,7 +30,6 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_profile.hrl").
--include("include/ergw_aaa_variable.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
@@ -122,7 +121,7 @@ start_accounting(From, 'Start', Session0, State) ->
     {ok, inc_number(State)};
 
 start_accounting(From, 'Interim', Session0, State) ->
-    Now = ergw_aaa_variable:now_ms(),
+    Now = erlang:monotonic_time(milli_seconds),
     Start = ergw_aaa_session:attr_get('Accounting-Start', Session0, Now),
     Session = Session0#{'Acct-Session-Time' => round((Now - Start) / 1000)},
     Request = create_ACR(Session, ?Interim, State),
@@ -130,7 +129,7 @@ start_accounting(From, 'Interim', Session0, State) ->
     {ok, inc_number(State)};
 
 start_accounting(From, 'Stop', Session0, State) ->
-    Now = ergw_aaa_variable:now_ms(),
+    Now = erlang:monotonic_time(milli_seconds),
     Start = ergw_aaa_session:attr_get('Accounting-Start', Session0, Now),
     Session = Session0#{'Acct-Session-Time' => round((Now - Start) / 1000)},
     Request = create_ACR(Session, ?Stop, State),
@@ -219,11 +218,11 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%===================================================================
 %% internal helpers
 %%===================================================================
-handle_aca(From, #{'Result-Code' := Code, 'Acct-Interim-Interval' := Interval}) ->
-    if Code == ?'DIAMETER_BASE_RESULT-CODE_SUCCESS' andalso length(Interval) > 0 ->
-	    ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
-       true -> ok
-    end.
+handle_aca(From, #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+		   'Acct-Interim-Interval' := [Interval]}) ->
+    ?queue_event(From, {'ChangeInterimAccouting', Interval});
+handle_aca(From, ACA) ->
+    ok.
 
 validate_option(nas_identifier, Value) when is_binary(Value) ->
     Value;
