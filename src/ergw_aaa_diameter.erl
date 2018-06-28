@@ -73,6 +73,7 @@ initialize_provider(Opts) ->
 	       {'Auth-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
 	       {'Acct-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
 	       {string_decode, false},
+	       {decode_format, map},
 	       {application, [{alias, nasreq},
 			      {dictionary, diameter_3gpp_ts29_061_sgi},
 			      {module, ?MODULE}]}],
@@ -171,18 +172,18 @@ pick_peer(LocalCandidates, _, _SvcName, _State) ->
 pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
     pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
 
-prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_, Caps}) ->
+prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_, Caps})
+  when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, DH},
 		   origin_realm = {OR, DR},
 		   acct_application_id = {[Ids], _}}
 	= Caps,
 
-    {send, [T, {'Origin-Host', OH},
-	       {'Origin-Realm', OR},
-	       {'Destination-Host', [DH]},
-	       {'Destination-Realm', DR},
-	       {'Acct-Application-Id', Ids}
-	    | Avps]};
+    {send, [T | Avps#{'Origin-Host' => OH,
+		      'Origin-Realm' => OR,
+		      'Destination-Host' => [DH],
+		      'Destination-Realm' => DR,
+		      'Acct-Application-Id' => Ids}]};
 
 prepare_request(_Packet, _, _Peer) ->
     lager:debug("unexpected request: ~p~n", [_Packet]),
@@ -200,9 +201,9 @@ prepare_retransmit(Packet, SvcName, Peer, _From) ->
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
     {ok, Msg}.
 
-handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, From)
-  when is_record(Msg, diameter_sgi_ACA) and is_pid(From) ->
-    handle_aca(From, Msg),
+handle_answer(#diameter_packet{msg = ['ACA' | Avps] = Msg}, _Request, _SvcName, _Peer, From)
+  when is_map(Avps), is_pid(From) ->
+    handle_aca(From, Avps),
     {ok, Msg};
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
@@ -218,11 +219,9 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%===================================================================
 %% internal helpers
 %%===================================================================
-handle_aca(From, Answer) ->
-    #diameter_sgi_ACA{'Result-Code' = Code,
-		      'Acct-Interim-Interval' = Interval} = Answer,
+handle_aca(From, #{'Result-Code' := Code, 'Acct-Interim-Interval' := Interval}) ->
     if Code == ?'DIAMETER_BASE_RESULT-CODE_SUCCESS' andalso length(Interval) > 0 ->
-	   ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
+	    ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
        true -> ok
     end.
 
@@ -230,7 +229,8 @@ validate_option(nas_identifier, Value) when is_binary(Value) ->
     Value;
 validate_option(connect_to = Opt, Value) when is_binary(Value) ->
     try
-	#diameter_uri{} = decode_diameter_uri(Value)
+	#diameter_uri{} =
+	    diameter_types:'DiameterURI'(decode, Value, #{rfc => 6733})
     catch _:_ -> validate_option_error(Opt, Value)
     end;
 validate_option(host = Opt, Value) when is_binary(Value) ->
@@ -252,13 +252,6 @@ validate_option(Opt, Value) ->
 
 validate_option_error(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
-
-decode_diameter_uri(Value) ->
-    Module = diameter_types, % trick to stop xref complains about undef function
-    try
-	apply(Module, 'DiameterURI', [decode, Value, #{rfc => 6733}]) % OTP 20
-    catch _:_ -> apply(Module, 'DiameterURI', [decode, Value])
-    end.
 
 inc_number(#state{accounting_record_number = Number} = State) ->
     State#state{accounting_record_number = Number + 1}.
@@ -332,15 +325,6 @@ pdp_type('IPv4v6')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4V6';
 pdp_type('PPP')                     -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP';
 pdp_type('Non-IP')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_NON-IP';
 pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
-
-to_list({Key, [A | _] = Avps}) when is_map(A) ->
-    {Key, lists:map(fun to_list/1, Avps)};
-to_list({Key, Avps}) when is_map(Avps) ->
-    {Key, lists:map(fun to_list/1, maps:to_list(Avps))};
-to_list(Avps) when is_map(Avps) ->
-    lists:map(fun to_list/1, maps:to_list(Avps));
-to_list(Avp) ->
-    Avp.
 
 '3gpp_from_session'(Key, Value)
   when (Key =:= '3GPP-Charging-Gateway-Address' orelse
@@ -492,4 +476,4 @@ create_ACR(Session, Type, State) ->
 	      'Accounting-Record-Number' => State#state.accounting_record_number,
 	      'NAS-Identifier'           => [State#state.nas_id]},
     Avps = from_session(Session, Avps0),
-    ['ACR' | to_list(Avps)].
+    ['ACR' | Avps].

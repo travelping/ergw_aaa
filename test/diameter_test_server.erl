@@ -48,6 +48,7 @@ start() ->
 	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ]},
 	       {restrict_connections, false},
 	       {string_decode, false},
+	       {decode_format, map},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
 			      {module, ?MODULE}]}],
@@ -89,8 +90,8 @@ handle_answer(_Packet, _Request, _SvcName, _Peer) ->
 handle_error(_Reason, _Request, _SvcName, _Peer) ->
     ?UNEXPECTED.
 
-handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps})
-  when is_record(Msg, diameter_sgi_ACR) ->
+handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps})
+  when is_map(Msg) ->
     {ok, Apps} = application:get_env(ergw_aaa, applications),
     InterimAccounting = case lists:keyfind(default, 1, Apps) of
 			    {default, {_, _, Opts}} ->
@@ -105,42 +106,41 @@ handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps})
 			end,
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _}} = Caps,
-    #diameter_sgi_ACR{'Session-Id' = Id,
-		      'Accounting-Record-Type' = Type,
-		      'Accounting-Record-Number' = Number,
-		      'Acct-Application-Id' = AppId} = Msg,
-    ACA =  #diameter_sgi_ACA{'Session-Id' = Id,
-			     'Result-Code' = 2001,
-			     'Origin-Host' = OH,
-			     'Origin-Realm' = OR,
-			     'Acct-Interim-Interval' = [InterimAccounting],
-			     'Accounting-Record-Type' = Type,
-			     'Accounting-Record-Number' = Number,
-			     'Acct-Application-Id' = AppId},
-    case Msg#diameter_sgi_ACR.'3GPP-IMSI' of
-	 [] -> {reply, ACA};
-	 _IMSI -> check_3gpp(Msg, ACA)
+    #{'Session-Id' := Id,
+      'Accounting-Record-Type' := Type,
+      'Accounting-Record-Number' := Number,
+      'Acct-Application-Id' := AppId} = Msg,
+    ACA =  #{'Session-Id' => Id,
+	     'Result-Code' => 2001,
+	     'Origin-Host' => OH,
+	     'Origin-Realm' => OR,
+	     'Acct-Interim-Interval' => [InterimAccounting],
+	     'Accounting-Record-Type' => Type,
+	     'Accounting-Record-Number' => Number,
+	     'Acct-Application-Id' => AppId},
+    case maps:get('3GPP-IMSI', Msg, []) of
+	[] -> {reply, ['ACA' | ACA]};
+	_IMSI -> check_3gpp(Msg, ACA)
     end;
 
 handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
-check_3gpp(#diameter_sgi_ACR{
-	      '3GPP-IMSI'              = [<<"250071234567890">>],
-	      '3GPP-Charging-Id'       = [<<214, 208, 226, 238>>],
-	      '3GPP-PDP-Type'          = [0],
-	      '3GPP-SGSN-Address'      = [<<192, 168, 1, 1>>],
-	      '3GPP-IMSI-MCC-MNC'      = [<<"25999">>],
-	      '3GPP-GGSN-MCC-MNC'      = [<<"25888">>],
-	      '3GPP-SGSN-IPv6-Address' = [<<253,150,220,210,239,219,65,196,0,0,0,0,0,0,16,0>>],
-	      '3GPP-GGSN-IPv6-Address' = [<<253,150,220,210,239,219,65,196,0,0,0,0,0,0,32,0>>],
-	      '3GPP-SGSN-MCC-MNC'      = [<<"26201">>],
-	      '3GPP-IMEISV'            = [<<82,21,50,96,32,80,30,0>>],
-	      '3GPP-RAT-Type'          = [<<6>>],
-	      '3GPP-NSAPI'             = [<<"5">>],
-	      '3GPP-Selection-Mode'    = [<<"0">>]
-	     }, ACA) ->
-    {reply, ACA};
+check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
+	     '3GPP-Charging-Id'       := [<<214, 208, 226, 238>>],
+	     '3GPP-PDP-Type'          := [0],
+	     '3GPP-SGSN-Address'      := [<<192, 168, 1, 1>>],
+	     '3GPP-IMSI-MCC-MNC'      := [<<"25999">>],
+	     '3GPP-GGSN-MCC-MNC'      := [<<"25888">>],
+	     '3GPP-SGSN-IPv6-Address' := [<<253,150,220,210,239,219,65,196,0,0,0,0,0,0,16,0>>],
+	     '3GPP-GGSN-IPv6-Address' := [<<253,150,220,210,239,219,65,196,0,0,0,0,0,0,32,0>>],
+	     '3GPP-SGSN-MCC-MNC'      := [<<"26201">>],
+	     '3GPP-IMEISV'            := [<<82,21,50,96,32,80,30,0>>],
+	     '3GPP-RAT-Type'          := [<<6>>],
+	     '3GPP-NSAPI'             := [<<"5">>],
+	     '3GPP-Selection-Mode'    := [<<"0">>]
+	    }, ACA) ->
+    {reply, ['ACA' | ACA]};
 check_3gpp(_Msg, _ACA) ->
     {answer_message, 3001}.
 
