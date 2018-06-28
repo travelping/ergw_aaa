@@ -23,7 +23,7 @@ now_ms() ->
     erlang:system_time(milli_seconds).
 
 now_ms({MegaSecs,Secs,MicroSecs}) ->
-        MegaSecs * 1000000000 + Secs * 1000 + round(MicroSecs / 1000.0).
+	MegaSecs * 1000000000 + Secs * 1000 + round(MicroSecs / 1000.0).
 
 new(Name, Type, Value, TriggerDefs) ->
     Now = now_ms(),
@@ -80,12 +80,12 @@ start_timer(Time, Name, Event) ->
 %% an active timer/send_event_after, false otherwise.
 cancel_timer(Ref) ->
     case erlang:cancel_timer(Ref) of
-        false ->
-            receive {timeout, Ref, _} -> 0
-            after 0 -> false
-            end;
-        RemainingTime ->
-            RemainingTime
+	false ->
+	    receive {timeout, Ref, _} -> 0
+	    after 0 -> false
+	    end;
+	RemainingTime ->
+	    RemainingTime
     end.
 
 init_trigger(Now, Name, timer, _Value, {Event, limit, TimeOut}) ->

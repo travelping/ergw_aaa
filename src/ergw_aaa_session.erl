@@ -298,12 +298,12 @@ cancel_timer(undefined) ->
     false;
 cancel_timer(Ref) ->
     case erlang:cancel_timer(Ref) of
-        false ->
-            receive {timeout, Ref, _} -> 0
-            after 0 -> false
-            end;
-        RemainingTime ->
-            RemainingTime
+	false ->
+	    receive {timeout, Ref, _} -> 0
+	    after 0 -> false
+	    end;
+	RemainingTime ->
+	    RemainingTime
     end.
 
 start_interim_accounting(State) ->
@@ -335,4 +335,3 @@ handle_owner_exit(State)
     ?action('Account', 'Stop', State#state.session);
 handle_owner_exit(_State) ->
     ok.
-

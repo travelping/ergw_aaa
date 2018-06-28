@@ -34,11 +34,11 @@ inc(Id = default) ->
     ets:update_counter(?MODULE, Id, 1);
 inc(Id) ->
     try
-        ets:update_counter(?MODULE, Id, 1)
+	ets:update_counter(?MODULE, Id, 1)
     catch
-        _:badarg ->
-            new_id(Id),
-            ets:update_counter(?MODULE, Id, 1)
+	_:badarg ->
+	    new_id(Id),
+	    ets:update_counter(?MODULE, Id, 1)
     end.
 
 %%%===================================================================

@@ -11,17 +11,17 @@
 
 %% AAA API
 -export([validate_options/1, initialize_provider/1,
-         init/1, authorize/3, start_authentication/3, start_accounting/4]).
+	 init/1, authorize/3, start_authentication/3, start_accounting/4]).
 %%
 %% diameter callbacks
 -export([peer_up/3,
-         peer_down/3,
-         pick_peer/4, pick_peer/5,
-         prepare_request/3, prepare_request/4,
-         prepare_retransmit/3, prepare_retransmit/4,
-         handle_answer/4, handle_answer/5,
-         handle_error/4,
-         handle_request/3]).
+	 peer_down/3,
+	 pick_peer/4, pick_peer/5,
+	 prepare_request/3, prepare_request/4,
+	 prepare_retransmit/3, prepare_retransmit/4,
+	 handle_answer/4, handle_answer/5,
+	 handle_error/4,
+	 handle_request/3]).
 
 -export([stop/0, call/1, cast/1, cast/2]).
 
@@ -41,14 +41,14 @@
 -define(Stop, 4).
 
 -record(state, {accounting_record_number = 0,
-                sid    :: binary(), % diameter Session-Id
-                nas_id :: binary()}).
+		sid    :: binary(), % diameter Session-Id
+		nas_id :: binary()}).
 
 -define(DefaultOptions, [{nas_identifier, undefined},
-                         {host, undefined},
-                         {realm, undefined},
-                         {connect_to, undefined}
-                        ]).
+			 {host, undefined},
+			 {realm, undefined},
+			 {connect_to, undefined}
+			]).
 
 %%===================================================================
 %% API
@@ -58,34 +58,34 @@ initialize_provider(Opts) ->
     OriginRealm = proplists:get_value(realm, Opts),
     ProductName = setup:get_env(ergw_aaa, product_name, "erGW-AAA"),
     SvcOpts = [{'Origin-Host', OriginHost},
-               {'Origin-Realm', OriginRealm},
-               {'Origin-State-Id', diameter:origin_state_id()},
-               {'Host-IP-Address', [Addr]},
-               {'Vendor-Id', ?VENDOR_ID_TP},
-               {'Product-Name', ProductName},
-               {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
-                                        ?VENDOR_ID_ETSI,
-                                        ?VENDOR_ID_TP]},
-               {'Auth-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
-               {'Acct-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
-               {string_decode, false},
-               {application, [{alias, nasreq},
-                              {dictionary, diameter_3gpp_ts29_061_sgi},
-                              {module, ?MODULE}]}],
+	       {'Origin-Realm', OriginRealm},
+	       {'Origin-State-Id', diameter:origin_state_id()},
+	       {'Host-IP-Address', [Addr]},
+	       {'Vendor-Id', ?VENDOR_ID_TP},
+	       {'Product-Name', ProductName},
+	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
+					?VENDOR_ID_ETSI,
+					?VENDOR_ID_TP]},
+	       {'Auth-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
+	       {'Acct-Application-Id', [diameter_3gpp_ts29_061_sgi:id()]},
+	       {string_decode, false},
+	       {application, [{alias, nasreq},
+			      {dictionary, diameter_3gpp_ts29_061_sgi},
+			      {module, ?MODULE}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
     #diameter_uri{type = _AAA, % aaa | aaas
-                  fqdn = Host,
-                  port = Port,
-                  transport = Transport,
-                  protocol = _Diameter} = proplists:get_value(connect_to, Opts),
+		  fqdn = Host,
+		  port = Port,
+		  transport = Transport,
+		  protocol = _Diameter} = proplists:get_value(connect_to, Opts),
     {ok, {Raddr, Type}} = resolve_hostname(Host),
     TransportOpts = [{transport_module, transport_module(Transport)},
-                     {transport_config, [{reuseaddr, true},
-                                         {raddr, Raddr},
-                                         {rport, Port},
-                                         Type
-                                        ]}],
+		     {transport_config, [{reuseaddr, true},
+					 {raddr, Raddr},
+					 {rport, Port},
+					 Type
+					]}],
     {ok, _} = diameter:add_transport(?MODULE, {connect, TransportOpts}),
 
     {ok, []}.
@@ -166,16 +166,16 @@ pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
 
 prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_, Caps}) ->
     #diameter_caps{origin_host = {OH, DH},
-                   origin_realm = {OR, DR},
-                   acct_application_id = {[Ids], _}}
-        = Caps,
+		   origin_realm = {OR, DR},
+		   acct_application_id = {[Ids], _}}
+	= Caps,
 
     {send, [T, {'Origin-Host', OH},
-               {'Origin-Realm', OR},
-               {'Destination-Host', [DH]},
-               {'Destination-Realm', DR},
-               {'Acct-Application-Id', Ids}
-            | Avps]};
+	       {'Origin-Realm', OR},
+	       {'Destination-Host', [DH]},
+	       {'Destination-Realm', DR},
+	       {'Acct-Application-Id', Ids}
+	    | Avps]};
 
 prepare_request(_Packet, _, _Peer) ->
     lager:debug("unexpected request: ~p~n", [_Packet]),
@@ -213,9 +213,9 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%===================================================================
 handle_aca(From, Answer) ->
     #diameter_sgi_ACA{'Result-Code' = Code,
-                      'Acct-Interim-Interval' = Interval} = Answer,
+		      'Acct-Interim-Interval' = Interval} = Answer,
     if Code == ?'DIAMETER_BASE_RESULT-CODE_SUCCESS' andalso length(Interval) > 0 ->
-           ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
+	   ?queue_event(From, {'ChangeInterimAccouting', hd(Interval)});
        true -> ok
     end.
 
@@ -223,13 +223,13 @@ validate_option(nas_identifier, Value) when is_binary(Value) ->
     Value;
 validate_option(connect_to = Opt, Value) when is_binary(Value) ->
     try
-        #diameter_uri{} = decode_diameter_uri(Value)
+	#diameter_uri{} = decode_diameter_uri(Value)
     catch _:_ -> validate_option_error(Opt, Value)
     end;
 validate_option(host = Opt, Value) when is_binary(Value) ->
     try
-        {ok, {Addr, _Type}} = resolve_hostname(Value),
-        {Value, Addr}
+	{ok, {Addr, _Type}} = resolve_hostname(Value),
+	{Value, Addr}
     catch _:_ -> validate_option_error(Opt, Value)
     end;
 validate_option(realm, Value) when is_binary(Value) ->
@@ -249,7 +249,7 @@ validate_option_error(Opt, Value) ->
 decode_diameter_uri(Value) ->
     Module = diameter_types, % trick to stop xref complains about undef function
     try
-        apply(Module, 'DiameterURI', [decode, Value, #{rfc => 6733}]) % OTP 20
+	apply(Module, 'DiameterURI', [decode, Value, #{rfc => 6733}]) % OTP 20
     catch _:_ -> apply(Module, 'DiameterURI', [decode, Value])
     end.
 
@@ -264,13 +264,13 @@ format_address(Addr) -> Addr.
 resolve_hostname(Name) when is_binary(Name) -> resolve_hostname(binary_to_list(Name));
 resolve_hostname(Name) ->
     Name1 = case inet:gethostbyname(Name, inet6) of
-        {error, nxdomain} -> inet:gethostbyname(Name, inet);
-        Other -> Other
+	{error, nxdomain} -> inet:gethostbyname(Name, inet);
+	Other -> Other
     end,
     case Name1 of
-        {ok, #hostent{h_addr_list = [LocalIP | _], h_addrtype = Type}} ->
-            {ok, {LocalIP, Type}};
-        _ -> erlang:error(badarg, Name)
+	{ok, #hostent{h_addr_list = [LocalIP | _], h_addrtype = Type}} ->
+	    {ok, {LocalIP, Type}};
+	_ -> erlang:error(badarg, Name)
     end.
 
 transport_module(tcp) -> diameter_tcp;
@@ -411,8 +411,8 @@ from_session(Session, Avps) ->
 
 create_ACR(Session, Type, State) ->
     Avps0 = #{'Session-Id'               => State#state.sid,
-              'Accounting-Record-Type'   => Type,
-              'Accounting-Record-Number' => State#state.accounting_record_number,
-              'NAS-Identifier'           => [State#state.nas_id]},
+	      'Accounting-Record-Type'   => Type,
+	      'Accounting-Record-Number' => State#state.accounting_record_number,
+	      'NAS-Identifier'           => [State#state.nas_id]},
     Avps = from_session(Session, Avps0),
     ['ACR' | to_list(Avps)].

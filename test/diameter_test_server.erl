@@ -15,13 +15,13 @@
 
 %% diameter callbacks
 -export([peer_up/3,
-         peer_down/3,
-         pick_peer/4,
-         prepare_request/3,
-         prepare_retransmit/3,
-         handle_answer/4,
-         handle_error/4,
-         handle_request/3]).
+	 peer_down/3,
+	 pick_peer/4,
+	 prepare_request/3,
+	 prepare_retransmit/3,
+	 handle_answer/4,
+	 handle_error/4,
+	 handle_request/3]).
 
 -define(UNEXPECTED, erlang:error({unexpected, ?MODULE, ?LINE})).
 
@@ -54,8 +54,8 @@ start() ->
     ok = diameter:start_service(?MODULE, SvcOpts),
 
     Opts = [{transport_module, diameter_tcp},
-            {transport_config, [{reuseaddr, true},
-                                {ip, {127,0,0,1}},
+	    {transport_config, [{reuseaddr, true},
+				{ip, {127,0,0,1}},
 				{port, 3868}]}],
     {ok, _} = diameter:add_transport(?MODULE, {listen, Opts}),
     ok.
@@ -93,33 +93,33 @@ handle_request(#diameter_packet{msg = Msg}, _SvcName, {_, Caps})
   when is_record(Msg, diameter_sgi_ACR) ->
     {ok, Apps} = application:get_env(ergw_aaa, applications),
     InterimAccounting = case lists:keyfind(default, 1, Apps) of
-                            {default, {_, _, Opts}} ->
-                                case lists:keyfind(acct_interim_interval, 1, Opts) of
-                                    false ->
-                                        1;
-                                    {_, Interim} ->
-                                        Interim
-                                end;
-                            _ ->
-                                1
-                        end,
+			    {default, {_, _, Opts}} ->
+				case lists:keyfind(acct_interim_interval, 1, Opts) of
+				    false ->
+					1;
+				    {_, Interim} ->
+					Interim
+				end;
+			    _ ->
+				1
+			end,
     #diameter_caps{origin_host = {OH, _},
-                   origin_realm = {OR, _}} = Caps,
+		   origin_realm = {OR, _}} = Caps,
     #diameter_sgi_ACR{'Session-Id' = Id,
-                      'Accounting-Record-Type' = Type,
-                      'Accounting-Record-Number' = Number,
-                      'Acct-Application-Id' = AppId} = Msg,
+		      'Accounting-Record-Type' = Type,
+		      'Accounting-Record-Number' = Number,
+		      'Acct-Application-Id' = AppId} = Msg,
     ACA =  #diameter_sgi_ACA{'Session-Id' = Id,
-                             'Result-Code' = 2001,
-                             'Origin-Host' = OH,
-                             'Origin-Realm' = OR,
-                             'Acct-Interim-Interval' = [InterimAccounting],
-                             'Accounting-Record-Type' = Type,
-                             'Accounting-Record-Number' = Number,
-                             'Acct-Application-Id' = AppId},
+			     'Result-Code' = 2001,
+			     'Origin-Host' = OH,
+			     'Origin-Realm' = OR,
+			     'Acct-Interim-Interval' = [InterimAccounting],
+			     'Accounting-Record-Type' = Type,
+			     'Accounting-Record-Number' = Number,
+			     'Acct-Application-Id' = AppId},
     case Msg#diameter_sgi_ACR.'3GPP-IMSI' of
-         [] -> {reply, ACA};
-         _IMSI -> check_3gpp(Msg, ACA)
+	 [] -> {reply, ACA};
+	 _IMSI -> check_3gpp(Msg, ACA)
     end;
 
 handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
