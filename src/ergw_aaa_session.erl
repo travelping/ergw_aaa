@@ -14,7 +14,7 @@
 
 %% Session Process API
 -export([start_link/2, authenticate/2, authorize/2,
-	 start/2, interim/2, interim_batch/2, stop/2,
+	 start/2, interim/2, stop/2,
 	 terminate/1, get/1, get/2, set/2, set/3]).
 
 %% Session Object API
@@ -28,7 +28,6 @@
 		authenticated = false,
 		started = false,
 		reply,
-		interim_timer,
 		session}).
 
 -define(AAA_TIMEOUT, (30 * 1000)).      %% 30sec for all AAA gen_server:call timeouts
@@ -37,6 +36,37 @@
 -define(DEFAULT_FRAMED_PROTO, 'PPP').
 
 -include("include/ergw_aaa_profile.hrl").
+
+%%===================================================================
+%% Experimental API
+%%===================================================================
+
+-export([trigger/6, trigger_diff/2]).
+
+%% SubSys: atom()
+%% Level: 'IP-CAN' | {'rule', RuleName}
+%% Type: 'time'
+%% Value: term()
+%% Opts: ['recurring']
+trigger(SubSys, Level, time, Value, Opts, Session) ->
+    trigger([SubSys, Level, time], {time, Value, Opts}, Session);
+trigger(_SubSys, _Level, _Type, _Value, _Opts, Session) ->
+    Session.
+
+trigger(Key, Value, Session) ->
+    T = maps:get('Triggers', Session, #{}),
+    Session#{'Triggers' => T#{Key => Value}}.
+
+trigger_diff(OldSession, NewSession) ->
+    Old = maps:get('Triggers', OldSession, #{}),
+    New = maps:get('Triggers', NewSession, #{}),
+
+    Add = maps:without(maps:keys(Old), New),
+    Del = maps:without(maps:keys(New), Old),
+    Upd = maps:filter(fun(K,V) ->
+			      maps:get(K, Old) /= V
+		      end, maps:with(maps:keys(Old), New)),
+    {Add, Del, Upd}.
 
 %%===================================================================
 %% API
@@ -56,9 +86,6 @@ start(Session, SessionOpts) when is_map(SessionOpts) ->
 
 interim(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:cast(Session, {interim, SessionOpts}).
-
-interim_batch(Session, SessionOptsList) when is_list(SessionOptsList) ->
-    gen_server:cast(Session, {interim_batch, SessionOptsList}).
 
 stop(Session, SessionOpts) when is_map(SessionOpts) ->
     gen_server:cast(Session, {stop, SessionOpts}).
@@ -137,32 +164,21 @@ handle_call(Event, _From, State) ->
     lager:warning("unhandled call ~p", [Event]),
     {reply, ok, State}.
 
-handle_cast({start, SessionOpts}, State) ->
-    NewSessionOpts = maps:merge(State#state.session, SessionOpts),
+handle_cast({start, SessionOpts}, State0) ->
+    NewSessionOpts = maps:merge(State0#state.session, SessionOpts),
     {_, NewSession} = ?action('Account', 'Start', NewSessionOpts),
-    State0 = State#state{session = NewSession, started = true},
-    State1 = start_interim_accounting(State0),
-    {noreply, State1};
+    State = State0#state{session = NewSession, started = true},
+    {noreply, State};
 
 handle_cast({interim, SessionOpts}, State) ->
     NewSessionOpts = maps:merge(State#state.session, SessionOpts),
     {_, NewSession} = ?action('Account', 'Interim', NewSessionOpts),
     {noreply, State#state{session = NewSession}};
 
-handle_cast({interim_batch, SessionOptsList}, State) ->
-    NewSession =
-	lists:foldr(fun(SOOptsEntry, S0) ->
-			    NewS = maps:merge(S0, SOOptsEntry),
-			    {_, S1} = ?action('Account', 'Interim', NewS),
-			    S1
-		    end, State#state.session, SessionOptsList),
-    {noreply, State#state{session = NewSession}};
-
 handle_cast({stop, SessionOpts}, State) ->
-    State0 = stop_interim_accounting(State),
     NewSessionOpts = maps:merge(State#state.session, SessionOpts),
     {_, NewSession} = ?action('Account', 'Stop', NewSessionOpts),
-    {noreply, State0#state{session = NewSession, started = false, authenticated = false}};
+    {noreply, State#state{session = NewSession, started = false}};
 
 handle_cast(terminate, State) ->
     lager:info("Handling terminate request: ~p", [State]),
@@ -197,33 +213,10 @@ handle_info(Ev = {'AuthenticationRequestReply', _AuthReply}, State0) ->
     State2 = reply(Reply, State1),
     {noreply, State2};
 
-handle_info(Ev = {'ChangeInterimAccouting', _AuthReply}, State0) ->
-    NewSession = ergw_aaa_profile:handle_reply(fun event/2, Ev, State0#state.session),
-    State = start_interim_accounting(State0#state{session = NewSession}),
-    {noreply, State};
-
-handle_info({timeout, TimerRef, interim},
-	    State = #state{
-		       owner = Owner,
-		       interim_timer = TimerRef,
-		       session = Session}) ->
-    case Session of
-	#{'Accouting-Update-Fun' := UpdateFun}
-	  when is_function(UpdateFun, 2) ->
-	    NewSessionOpts = UpdateFun(Owner, Session),
-	    lager:debug("InternalInterimUpdate: ~p -> ~p", [Session, NewSessionOpts]),
-	    {_, NewSession} = ?action('Account', 'Interim', NewSessionOpts),
-	    State0 = State#state{session = NewSession},
-	    State1 = restart_interim_accounting(State0),
-	    {noreply, State1};
-	_ ->
-	    State0 = stop_interim_accounting(State),
-	    {noreply, State0}
-    end;
-
-handle_info({timeout, TimerRef, interim}, State = #state{interim_timer = TimerRef}) ->
-    State0 = stop_interim_accounting(State),
-    {noreply, State0};
+handle_info(Ev = {'ChangeInterimAccouting', _AuthReply}, State) ->
+    NewSession = ergw_aaa_profile:handle_reply(fun event/2, Ev, State#state.session),
+    State#state.owner ! {change_session_opts, State#state.session, NewSession},
+    {noreply, State#state{session = NewSession}};
 
 handle_info(Info, State) ->
     lager:warning("Received unhandled message ~p", [Info]),
@@ -245,8 +238,8 @@ reply(Reply, State = #state{reply = ReplyTo}) ->
     gen_server:reply(ReplyTo, Reply),
     State#state{reply = undefined}.
 
-event({'ChangeInterimAccouting', Interval}, Session) ->
-    maps:put('Interim-Accounting', Interval * 1000, Session);
+event({'ChangeInterimAccouting', Interim}, Session) ->
+    ergw_aaa_session:trigger(session, 'IP-CAN', time, Interim * 1000, [recurring], Session);
 
 event({'AuthenticationRequestReply', {Verdict, SessionOpts}}, Session0) ->
     Session1 = maps:without(['EAP-Data'], Session0),
@@ -290,45 +283,6 @@ merge(S1, S2) ->
 prepare_next_session_id(State) ->
     AcctAppId = maps:get('AAA-Application-Id', State, default),
     State#{'Session-Id' => ergw_aaa_session_seq:inc(AcctAppId)}.
-
-start_timer(Time, Msg) ->
-    erlang:start_timer(Time, self(), Msg).
-
-cancel_timer(undefined) ->
-    false;
-cancel_timer(Ref) ->
-    case erlang:cancel_timer(Ref) of
-	false ->
-	    receive {timeout, Ref, _} -> 0
-	    after 0 -> false
-	    end;
-	RemainingTime ->
-	    RemainingTime
-    end.
-
-start_interim_accounting(State) ->
-    cancel_timer(State#state.interim_timer),
-    case State#state.session of
-	#{'Interim-Accounting'   := InterimAccounting,
-	  'Accouting-Update-Fun' := UpdateFun}
-	  when is_integer(InterimAccounting), is_function(UpdateFun, 2) ->
-	    State#state{interim_timer = start_timer(InterimAccounting, interim)};
-	_ ->
-	    State
-    end.
-
-stop_interim_accounting(State) ->
-    cancel_timer(State#state.interim_timer),
-    State#state{interim_timer = undefined}.
-
-restart_interim_accounting(State) ->
-    case State#state.session of
-	#{'Interim-Accounting' := InterimAccounting}
-	  when is_integer(InterimAccounting) ->
-	    State#state{interim_timer = start_timer(InterimAccounting, interim)};
-	_ ->
-	    State#state{interim_timer = undefined}
-    end.
 
 handle_owner_exit(State)
   when State#state.authenticated orelse State#state.started ->

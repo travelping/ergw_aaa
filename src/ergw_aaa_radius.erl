@@ -7,6 +7,8 @@
 
 -module(ergw_aaa_radius).
 
+-compile({parse_transform, cut}).
+
 -behaviour(ergw_aaa).
 
 %% AAA API
@@ -16,7 +18,6 @@
 -import(ergw_aaa_session, [attr_get/2, attr_get/3, attr_set/3, attr_append/3, attr_fold/3, merge/2, to_session/1]).
 
 -include("include/ergw_aaa_profile.hrl").
--include("include/ergw_aaa_variable.hrl").
 -include_lib("kernel/include/inet.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
@@ -146,7 +147,7 @@ start_accounting(_From, 'Start', Session, State = #state{acct_server = NAS, radi
     {ok, State};
 
 start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, radius_session = RadiusSession}) ->
-    Now = ergw_aaa_variable:now_ms(),
+    Now = erlang:monotonic_time(milli_seconds),
 
     UserName0 = attr_get('Username', Session, <<>>),
     UserName = case proplists:get_value('Username', RadiusSession) of
@@ -177,7 +178,7 @@ start_accounting(_From, 'Interim', Session, State = #state{acct_server = NAS, ra
     {ok, State};
 
 start_accounting(_From, 'Stop', Session, State = #state{acct_server = NAS}) ->
-    Now = ergw_aaa_variable:now_ms(),
+    Now = erlang:monotonic_time(milli_seconds),
 
     Start = attr_get('Accounting-Start', Session, Now),
 
@@ -309,22 +310,12 @@ session_options('NAS-IP-Address', Value, Acc) ->
 
 session_options('InOctets', Octets, Acc) when is_integer(Octets) ->
     [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
-session_options('InOctets', Value, Acc) when is_record(Value, var) ->
-    Octets = ergw_aaa_variable:get(Value),
-    [{?Acct_Input_Octets, Octets}, {?Acct_Input_Gigawords, Octets bsr 32}|Acc];
 session_options('InPackets', Packets, Acc) when is_integer(Packets) ->
     [{?Acct_Input_Packets, Packets}|Acc];
-session_options('InPackets', Value, Acc) when is_record(Value, var) ->
-    [{?Acct_Input_Packets, ergw_aaa_variable:get(Value)}|Acc];
 session_options('OutOctets', Octets, Acc) when is_integer(Octets) ->
-    [{?Acct_Output_Octets, Octets}, {?Acct_Output_Gigawords, Octets bsr 32}|Acc];
-session_options('OutOctets', Value, Acc) when is_record(Value, var) ->
-    Octets = ergw_aaa_variable:get(Value),
     [{?Acct_Output_Octets, Octets}, {?Acct_Output_Gigawords, Octets bsr 32}|Acc];
 session_options('OutPackets', Packets, Acc) when is_integer(Packets) ->
     [{?Acct_Output_Packets, Packets}|Acc];
-session_options('OutPackets', Value, Acc) when is_record(Value, var) ->
-    [{?Acct_Output_Packets, ergw_aaa_variable:get(Value)}|Acc];
 
 session_options('Port-Type', Value, Acc) ->
     [{?NAS_Port_Type, port_type(Value)}|Acc];
@@ -646,6 +637,8 @@ process_chap_attrs(AVP, {_Verdict, _Opts, _State} = Acc0) ->
 
 verdict(Verdict, {_, Opts, State}) ->
     {Verdict, Opts, State}.
+session_opt(Fun, {Verdict, Opts, State}) ->
+    {Verdict, Fun(Opts), State}.
 session_opt(Key, Opt, {Verdict, Opts, State}) ->
     {Verdict, attr_set(Key, Opt, Opts), State}.
 session_opt_append(Key, Opt, {Verdict, Opts, State}) ->
@@ -666,8 +659,9 @@ process_gen_attrs({#attribute{id = ?State}, State}, Acc) ->
 process_gen_attrs({#attribute{id = ?User_Name}, UserName}, Acc) ->
     radius_session_opt('Username', UserName, Acc);
 
-process_gen_attrs({#attribute{id = ?Acct_Interim_Interval}, InterimAccounting}, Acc) ->
-    session_opt('Interim-Accounting', InterimAccounting * 1000, Acc);
+process_gen_attrs({#attribute{id = ?Acct_Interim_Interval}, Interim}, Acc) ->
+    session_opt(
+      ergw_aaa_session:trigger(session, 'IP-CAN', time, Interim * 1000, [recurring], _), Acc);
 
 %% Session-Timeout
 process_gen_attrs({#attribute{id = ?Session_Timeout}, TimeOut}, Acc) ->
