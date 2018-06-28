@@ -9,8 +9,8 @@
 
 %% Common Test callbacks
 -export([all/0,
-         init_per_suite/1,
-         end_per_suite/1]).
+	 init_per_suite/1,
+	 end_per_suite/1]).
 
 %% Test cases
 -export([accounting/1, acct_interim_interval/1, attrs_3gpp/1]).

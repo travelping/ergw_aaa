@@ -26,11 +26,11 @@
 initialize_provider(Config) ->
     Apps = proplists:get_value(applications, Config, []),
     ProvidersSupSpec = lists:flatmap(
-        fun(App) ->
-            {ok, {Handler, HandlerOpts, _AttrMap}} = get_opts(App),
-            {ok, ProviderSupSpec} = Handler:initialize_provider(HandlerOpts),
-            ProviderSupSpec
-        end, Apps),
+	fun(App) ->
+	    {ok, {Handler, HandlerOpts, _AttrMap}} = get_opts(App),
+	    {ok, ProviderSupSpec} = Handler:initialize_provider(HandlerOpts),
+	    ProviderSupSpec
+	end, Apps),
     {ok, ProvidersSupSpec}.
 
 action('Authenticate', State) ->
@@ -94,24 +94,24 @@ init_provider(State) ->
     {ok, {Provider, ProviderOpts, AttrMap}} = get_application_opts(AppId),
 
     case Provider:init(ProviderOpts) of
-        {ok, PState} ->
+	{ok, PState} ->
 	    State1 = State#{'AuthProvider'        => Provider,
 			    'AuthProviderState'   => PState},
-            State2 = lists:foldl(fun attribute_map/2, State1, AttrMap),
-            {ok, State2};
-        Other ->
-            {error, Other}
+	    State2 = lists:foldl(fun attribute_map/2, State1, AttrMap),
+	    {ok, State2};
+	Other ->
+	    {error, Other}
     end.
 
 get_application_opts(ApplicationID) ->
     case setup:get_env(ergw_aaa, applications) of
-        {ok, Providers} when is_list(Providers) ->
-            case lists:keyfind(ApplicationID, 1, Providers) of
-                false   -> get_opts(lists:keyfind(default, 1, Providers));
-                AppOpts -> get_opts(AppOpts)
-            end;
-        _ ->
-            get_old_application_opts()
+	{ok, Providers} when is_list(Providers) ->
+	    case lists:keyfind(ApplicationID, 1, Providers) of
+		false   -> get_opts(lists:keyfind(default, 1, Providers));
+		AppOpts -> get_opts(AppOpts)
+	    end;
+	_ ->
+	    get_old_application_opts()
     end.
 
 get_old_application_opts() ->

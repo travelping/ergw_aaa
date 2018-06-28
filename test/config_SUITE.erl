@@ -19,7 +19,7 @@
 	?match([_|_], ergw_aaa_config:load_config(Config))).
 
 -define(def_app(Config),
-        [{applications, [{default, Config}]}]).
+	[{applications, [{default, Config}]}]).
 
 -define(RADIUS_OK_CFG,
 	[{nas_identifier,<<"NAS-Identifier">>},
