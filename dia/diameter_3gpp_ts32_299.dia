@@ -1039,6 +1039,7 @@
            [ SCS-AS-Address ]
            [ Unused-Quota-Timer ]
          * [ RAN-Secondary-RAT-Usage-Report ]
+         * [ AVP ]
 
    Radio-Parameter-Set-Info ::= < AVP Header: 3463>
 
