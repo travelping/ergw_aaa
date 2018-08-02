@@ -34,18 +34,23 @@
 	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}}]).
 -define(RADIUS_SERVICE_OPTS, []).
 
+-define(DIAMETER_TRANSPORT,
+	{'diam-test',
+	 [{handler,    ergw_aaa_diameter},
+	  {host,       <<"127.0.0.1">>},
+	  {realm,      <<"example.com">>},
+	  {connect_to, <<"aaa://127.0.0.1:3868">>}
+	 ]}).
 -define(DIAMETER_CONFIG,
-	[{host,                  <<"127.0.0.1">>},
-	 {realm,                 <<"example.com">>},
-	 {connect_to,            <<"aaa://127.0.0.1:3868">>}
-	]).
+	[{transport, 'diam-test'}]).
 -define(DIAMETER_SERVICE_OPTS, []).
 
 -define(CONFIG,
-	[{handlers,
+	[{transports, [?DIAMETER_TRANSPORT]},
+	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
 	   {ergw_aaa_radius, ?RADIUS_ACCT_CONFIG},
-	   {ergw_aaa_diameter, ?DIAMETER_CONFIG}
+	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG}
 	  ]},
 
 	 {services,
@@ -54,7 +59,7 @@
 	   {'RADIUS-Service',
 	    [{handler, 'ergw_aaa_radius'}]},
 	   {'DIAMETER-Service',
-	    [{handler, 'ergw_aaa_diameter'}]}
+	    [{handler, 'ergw_aaa_nasreq'}]}
 	  ]},
 
 	 {apps,
@@ -189,25 +194,28 @@ config(_Config)  ->
 	   get_cfg_value([apps, 'RADIUS-Application', procedures,
 			  authenticate, 'RADIUS-Service'], ValidatedCfg)),
 
-    ?error_set([handlers, ergw_aaa_diameter], []),
-    ?error_set([handlers, ergw_aaa_diameter, invalid_option], []),
-    ?error_set([handlers, ergw_aaa_diameter, host], invalid_host),
-    ?error_set([handlers, ergw_aaa_diameter, realm], invalid_realm),
-    ?error_set([handlers, ergw_aaa_diameter, connect_to], invalid_uri),
-    ?error_set([handlers, ergw_aaa_diameter, host], <<"undefined.example.net">>),
-    ?error_set([handlers, ergw_aaa_diameter, connect_to], <<"http://example.com:12345">>),
+    ?error_set([transports, 'diam-test'], []),
+    ?error_set([transports, 'diam-test', invalid_option], []),
+    ?error_set([transports, 'diam-test', host], invalid_host),
+    ?error_set([transports, 'diam-test', realm], invalid_realm),
+    ?error_set([transports, 'diam-test', connect_to], invalid_uri),
+    ?error_set([transports, 'diam-test', host], <<"undefined.example.net">>),
+    ?error_set([transports, 'diam-test', connect_to], <<"http://example.com:12345">>),
+
+    ?error_set([handlers, ergw_aaa_nasreq], []),
+    ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),
 
     ?error_set([services, 'DIAMETER-Service', handler], invalid_handler),
 
     ?error_set([services, 'DIAMETER-Test-Service'], ?DIAMETER_CONFIG),
-    ?ok_set([services, 'DIAMETER-Test-Service'], [{handler, 'ergw_aaa_diameter'}
+    ?ok_set([services, 'DIAMETER-Test-Service'], [{handler, 'ergw_aaa_nasreq'}
 						  | ?DIAMETER_CONFIG]),
 
     %% make sure the handler config is passed through to the service
-    ?equal(proplists:get_value(realm, ?DIAMETER_CONFIG),
-	   get_cfg_value([services, 'DIAMETER-Service', realm], ValidatedCfg)),
-    %% make sure the handler config is NOT passed through to the session
-    ?equal(maps:from_list(?DIAMETER_SERVICE_OPTS),
+    ?equal(proplists:get_value(transport, ?DIAMETER_CONFIG),
+	   get_cfg_value([services, 'DIAMETER-Service', transport], ValidatedCfg)),
+    %% make sure the handler config is also passed through to the session
+    ?equal(maps:from_list(?DIAMETER_CONFIG ++ ?DIAMETER_SERVICE_OPTS),
 	   get_cfg_value([apps, 'DIAMETER-Application', procedures,
 			  authenticate, 'DIAMETER-Service'], ValidatedCfg)),
 
