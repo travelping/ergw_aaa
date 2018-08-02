@@ -14,30 +14,35 @@
 
 -import(diameter_test_server, [get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
--define(SERVICE, ergw_aaa_diameter).
+-define(SERVICE, 'diam-test').
 
 -define(STATIC_CONFIG,
 	[{'NAS-Identifier',        <<"NAS">>},
 	 {'Framed-Protocol',       'PPP'},
 	 {'Service-Type',          'Framed-User'}]).
 
+-define(DIAMETER_TRANSPORT,
+	{?SERVICE,
+	 [{handler,    ergw_aaa_diameter},
+	  {host,       <<"127.0.0.1">>},
+	  {realm,      <<"example.com">>},
+	  {connect_to, <<"aaa://127.0.0.1">>}
+	 ]}).
 -define(DIAMETER_CONFIG,
-	[{host,                  <<"127.0.0.1">>},
-	 {realm,                 <<"example.com">>},
-	 {connect_to,            <<"aaa://127.0.0.1">>}
-	]).
+	[{transport, ?SERVICE}]).
 -define(DIAMETER_SERVICE_OPTS, []).
 
 -define(CONFIG,
-	[{handlers,
+	[{transports, [?DIAMETER_TRANSPORT]},
+	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_diameter, ?DIAMETER_CONFIG}
+	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG}
 	  ]},
 	 {services,
 	  [{'Default',
 	    [{handler, 'ergw_aaa_static'}]},
 	   {'DIAMETER-Service',
-	    [{handler, 'ergw_aaa_diameter'}]}
+	    [{handler, 'ergw_aaa_nasreq'}]}
 	  ]},
 
 	 {apps,
@@ -166,7 +171,7 @@ acct_interim_interval(_Config) ->
 	     'Service-Type' := 'Framed-User',
 	     'Framed-Protocol' := 'PPP'
 	    }, SessionOpts),
-    ?match([{set,{{ergw_aaa_diameter,'IP-CAN',time},
+    ?match([{set,{{ergw_aaa_nasreq,'IP-CAN',time},
 		  {time,'IP-CAN',1000,[recurring]}}}], Ev),
     ok.
 

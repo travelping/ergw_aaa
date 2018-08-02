@@ -10,7 +10,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/1]).
+-export([start_link/0, start_childs/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -24,18 +24,20 @@
 %% API functions
 %% ===================================================================
 
-start_link(ProviderSupSpecs) ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, ProviderSupSpecs).
+start_link() ->
+    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %% ===================================================================
 %% Supervisor callbacks
 %% ===================================================================
 
-init(ProviderSupSpecs0) ->
-    ProviderSupSpecs = remove_dups(ProviderSupSpecs0),
-    {ok, {{one_for_one, 30, 60}, [?CHILD(ergw_aaa_session_seq, worker),
-				  ?CHILD(ergw_aaa_session_sup, supervisor)]
-				  ++ ProviderSupSpecs}}.
+init([]) ->
+    {ok, {{one_for_one, 30, 60}, [?CHILD(ergw_aaa_diameter_srv, worker),
+				  ?CHILD(ergw_aaa_session_seq, worker),
+				  ?CHILD(ergw_aaa_session_sup, supervisor)]}}.
+
+start_childs(ProviderSupSpecs) ->
+    [{ok, _} = supervisor:start_child(?SERVER, X) || X <- remove_dups(ProviderSupSpecs)].
 
 %% ===================================================================
 
