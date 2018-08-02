@@ -3,6 +3,17 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.0.0 - 01 Aug 2018
+---------------------------
+
+* Rework DIAMETER support
+* Rework configuration system
+* Experimental support for DIAMETER Gx, Rf and Ro protocol
+* Support Erlang OTP 20.1 through 21.0
+* Drop support for OTP 19.x and 20.0
+* Removed tetrapak support
+* Removed flexible attribute support
+
 Version 2.2.1 - 14 Mar 2018
 ---------------------------
 
