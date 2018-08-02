@@ -45,12 +45,16 @@
 	[{transport, 'diam-test'}]).
 -define(DIAMETER_SERVICE_OPTS, []).
 
+-define(RF_CONFIG,
+	[{transport, 'diam-test'}]).
+
 -define(CONFIG,
 	[{transports, [?DIAMETER_TRANSPORT]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
 	   {ergw_aaa_radius, ?RADIUS_ACCT_CONFIG},
-	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG}
+	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG},
+	   {ergw_aaa_rf, ?RF_CONFIG}
 	  ]},
 
 	 {services,
@@ -59,7 +63,9 @@
 	   {'RADIUS-Service',
 	    [{handler, 'ergw_aaa_radius'}]},
 	   {'DIAMETER-Service',
-	    [{handler, 'ergw_aaa_nasreq'}]}
+	    [{handler, 'ergw_aaa_nasreq'}]},
+	   {'RF-Service',
+	    [{handler, 'ergw_aaa_rf'} | ?RF_CONFIG]}
 	  ]},
 
 	 {apps,
@@ -218,5 +224,8 @@ config(_Config)  ->
     ?equal(maps:from_list(?DIAMETER_CONFIG ++ ?DIAMETER_SERVICE_OPTS),
 	   get_cfg_value([apps, 'DIAMETER-Application', procedures,
 			  authenticate, 'DIAMETER-Service'], ValidatedCfg)),
+
+    ?error_set([handlers, ergw_aaa_rf], []),
+    ?error_set([handlers, ergw_aaa_rf, invalid_option], []),
 
     ok.
