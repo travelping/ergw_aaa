@@ -224,7 +224,7 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-handle_cca(['CCA' | #{'Result-Code' := [?'DIAMETER_BASE_RESULT-CODE_SUCCESS']} = Avps],
+handle_cca(['CCA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
 	   Session0, Events0) ->
     {Session, Events} = maps:fold(fun to_session/3, {Session0, Events0}, Avps),
     {ok, Session, Events};
@@ -275,14 +275,6 @@ from_service('CC-Request-Number' = Key, Value, M) ->
     M#{Key => Value};
 from_service(_, _, M) ->
     M.
-
-from_rating_group(RatingGroup, empty, Avps) ->
-    lager:warning("Ro Rating Group: ~p", [RatingGroup]),
-    MSCC = #{'Rating-Group' => RatingGroup},
-    repeated(['Multiple-Services-Credit-Control'], MSCC, Avps);
-from_rating_group(Key, _, Avps) ->
-    lager:error("unknown Ro Rating Group: ~p", [Key]),
-    Avps.
 
 %% ------------------------------------------------------------------
 
@@ -483,11 +475,6 @@ from_session('OutOctets', Value, Avps) ->
     optional([?SI_PSI, 'Traffic-Data-Volumes', 'Accounting-Output-Octets'],
 	     Value, Avps);
 
-from_session(rating_groups, Value, M)
-  when is_map(Value) ->
-    lager:warning("Ro Rating Groups: ~p", [Value]),
-    maps:fold(fun from_rating_group/3, M, Value);
-
 from_session(?MODULE, Value, M) ->
     maps:fold(fun from_service/3, M, Value);
 from_session(_Key, _Value, M) ->
@@ -502,57 +489,34 @@ from_session(Session, Avps0) ->
 
 %% ------------------------------------------------------------------
 
-gsu_to_session(Key, #'diameter_ro_Granted-Service-Unit'{
-		       'CC-Time' = [Interval]}, {Session0, Events}) ->
-    Session = Session0#{
-			'Monitoring-Key'     => Key,
-			'Interim-Accounting' => Interval * 1000
-		       },
-    {Session, Events};
-gsu_to_session(_, _GSU, SessEv) ->
-    SessEv.
-
-umi_to_session(#'diameter_ro_Usage-Monitoring-Information'{
-		  'Monitoring-Key' = Key,
-		  'Granted-Service-Unit' = GSU,
-		  'Usage-Monitoring-Level' =
-		      [?'DIAMETER_RO_USAGE-MONITORING-LEVEL_SESSION_LEVEL']
-		 }, SessEv) ->
-    lists:foldl(fun(G, S) -> gsu_to_session(Key, G, S) end, SessEv, GSU);
-umi_to_session(_, SessEv) ->
-    SessEv.
-
-add_rule(Key, Rule, {Session0, Events}) ->
-    Session = maps:update_with(Key, fun(V) -> [Rule|V] end, [Rule], Session0),
-    {Session, Events}.
-
-del_rule(Key, Rule, {Session0, Events}) ->
-    Session = maps:update_with(Key, fun(V) -> lists:delete(Rule, V) end, [], Session0),
-    {Session, Events}.
-
-rule_to_session(#'diameter_ro_Charging-Rule-Install'{
-		   'Charging-Rule-Base-Name' = Bases,
-		   'Charging-Rule-Name' = Rules}, SessEv0) ->
-    SessEv = lists:foldl(add_rule('PCC-Rules', _, _), SessEv0, Rules),
-    lists:foldl(add_rule('PCC-Groups', _, _), SessEv, Bases);
-rule_to_session(#'diameter_ro_Charging-Rule-Remove'{
-		   'Charging-Rule-Base-Name' = Bases,
-		   'Charging-Rule-Name' = Rules}, SessEv0) ->
-    SessEv = lists:foldl(del_rule('PCC-Rules', _, _), SessEv0, Rules),
-    lists:foldl(del_rule('PCC-Groups', _, _), SessEv, Bases);
-rule_to_session(_, SessEv) ->
-    SessEv.
-
-to_session('Usage-Monitoring-Information', Value, SessEv) ->
-    lists:foldl(fun umi_to_session/2, SessEv, Value);
-to_session('Charging-Rule-Install', Value, SessEv) ->
-    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- Value],
-    lists:foldl(fun rule_to_session/2, SessEv, Value);
-to_session('Charging-Rule-Remove', Value, SessEv) ->
-    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- Value],
-    lists:foldl(fun rule_to_session/2, SessEv, Value);
+to_session('Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
+    {Session#{K => V}, [{update_credits, V} | Events]};
 to_session(_, _, SessEv) ->
     SessEv.
+
+attr_merge(Key, Value, Map) ->
+    maps:update_with(Key,  maps:merge(_, Value), Value, Map).
+
+request_credits(Session, MSCC) ->
+    Credits = maps:get(credits, Session, #{}),
+    maps:fold(
+      fun(RatingGroup, empty, Request) ->
+	      lager:warning("Ro Charging Key: ~p", [RatingGroup]),
+	      Req = #{'Rating-Group' => [RatingGroup],
+		      'Requested-Service-Unit' => [#{}]},
+	      attr_merge(RatingGroup, Req, Request);
+	 (RatingGroup, _, Request) ->
+	      lager:error("unknown Ro Rating Group: ~p", [RatingGroup]),
+	      Request
+      end, MSCC, Credits).
+
+report_credits(Session, MSCC) ->
+    Credits = maps:get(used_credits, Session, #{}),
+    maps:fold(
+      fun(RatingGroup, Used, Report) ->
+	      attr_merge(RatingGroup, #{'Rating-Group' => [RatingGroup],
+					'Used-Service-Unit' => [Used]}, Report)
+      end, MSCC, Credits).
 
 context_id(_Session) ->
     %% TODO: figure out what servive we are.....
@@ -564,5 +528,17 @@ make_CCR(Type, Session, _) ->
 	      'Service-Context-Id'  => context_id(Session),
 	      'Multiple-Services-Indicator' =>
 		  [?'DIAMETER_RO_MULTIPLE-SERVICES-INDICATOR_SUPPORTED']},
-    Avps = from_session(Session, Avps0),
+    Avps1 = from_session(Session, Avps0),
+    MSCC = case Type of
+	       ?'DIAMETER_RO_CC-REQUEST-TYPE_INITIAL_REQUEST' ->
+		   request_credits(Session, #{});
+
+	       ?'DIAMETER_RO_CC-REQUEST-TYPE_UPDATE_REQUEST' ->
+		   MSCC0 = request_credits(Session, #{}),
+		   report_credits(Session, MSCC0);
+
+	       ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST' ->
+		   report_credits(Session, #{})
+	   end,
+    Avps = Avps1#{'Multiple-Services-Credit-Control' => maps:values(MSCC)},
     ['CCR' | Avps ].
