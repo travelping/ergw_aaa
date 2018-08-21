@@ -233,7 +233,6 @@
 
            [ Tariff-Time-Change ]
            [ CC-Time ]
-           [ CC-Money ]
            [ CC-Total-Octets ]
            [ CC-Input-Octets ]
            [ CC-Output-Octets ]
@@ -243,7 +242,6 @@
    Requested-Service-Unit ::= < AVP Header: 437 >
 
            [ CC-Time ]
-           [ CC-Money ]
            [ CC-Total-Octets ]
            [ CC-Input-Octets ]
            [ CC-Output-Octets ]
@@ -252,13 +250,14 @@
 
    Used-Service-Unit ::= < AVP Header: 446 >
 
+           [ Reporting-Reason ]
            [ Tariff-Change-Usage ]
            [ CC-Time ]
-           [ CC-Money ]
            [ CC-Total-Octets ]
            [ CC-Input-Octets ]
            [ CC-Output-Octets ]
            [ CC-Service-Specific-Units ]
+         * [ Event-Charging-TimeStamp ]
          * [ AVP ]
 
    CC-Money ::= < AVP Header: 413 >

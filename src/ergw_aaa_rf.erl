@@ -226,10 +226,11 @@ handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = A
 	   Session0, Events0) ->
     case Avps of
 	#{'Acct-Interim-Interval' := [Interim]} ->
-	    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN',
-						   time, Interim * 1000, [recurring]),
-	    Events = ergw_aaa_session:ev_set(Trigger, Events0),
-	    {ok, Session0, Events};
+	    %% Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN',
+	    %% 					   time, Interim * 1000, [recurring]),
+	    %% Events = ergw_aaa_session:ev_set(Trigger, Events0),
+	    %% {ok, Session0, Events};
+	    {ok, Session0, Events0};
 	_ ->
 	    {ok, Session0, Events0}
 	end;
