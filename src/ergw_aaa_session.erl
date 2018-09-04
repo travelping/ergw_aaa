@@ -7,6 +7,8 @@
 
 -module(ergw_aaa_session).
 
+-compile({parse_transform, cut}).
+
 -behaviour(gen_statem).
 
 %% gen_statem callbacks
@@ -49,7 +51,7 @@
 %%===================================================================
 
 -export([ev_add/2, ev_del/2, ev_set/2]).
--export([trigger/5, event/4]).
+-export([trigger/4, trigger/5, event/4]).
 
 ev_add({K, Ev}, A) ->
     [{add, {K, Ev}}|A].
@@ -64,7 +66,13 @@ ev_set({K, Ev}, A) ->
 %% Type: 'time'
 %% Value: term()
 %% Opts: ['recurring']
+
+trigger(SubSys, Level, Type, Value) ->
+    trigger(SubSys, Level, Type, Value, []).
+
 trigger(SubSys, Level, time, Value, Opts) ->
+    {{SubSys, Level, time}, {time, Level, Value, Opts}};
+trigger(SubSys, Level, periodic, Value, Opts) ->
     {{SubSys, Level, time}, {time, Level, Value, Opts}}.
 
 event(Session, Event, EvOpts, SessionOpts) when is_map(SessionOpts) ->
@@ -242,7 +250,7 @@ handle_event({call, From}, {{Handler, _Level, time}, EvOpts, SessionOpts}, _Stat
 
     Service = proplists:get_value(service, EvOpts, default),
     Procedure = proplists:get_value(procedure, EvOpts, interim),
-    Session = maps:merge(Session0, SessionOpts),
+    Session = session_merge(Session0, SessionOpts),
     {Result, NewSession, Events} = Handler:invoke(Service, Procedure, Session, [], EvOpts),
     Reply = {Result, NewSession, Events},
     {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
@@ -299,12 +307,30 @@ prepare_next_session_id(Session) ->
 handle_owner_exit(Data) ->
     action(stop, Data#data.session, Data).
 
+maps_merge_with(K, Fun, V, Map) ->
+    maps:update_with(K, maps:fold(Fun, V, _), V, Map).
+
+monitor_merge(K, V, M)
+  when is_map(V) ->
+    maps_merge_with(K, fun monitor_merge/3, V, M);
+monitor_merge(K, V, Values)
+  when is_integer(V) ->
+    maps:update_with(K, (_ + V), V, Values).
+
+session_merge(monitors = K, V, Session) ->
+    monitor_merge(K, V, Session);
+session_merge(K, V, Session) ->
+    Session#{K => V}.
+
+session_merge(Session, Opts) ->
+    maps:fold(fun session_merge/3, Session, Opts).
+
 %%===================================================================
 %% provider helpers
 %%===================================================================
 
 exec(Procedure, SessionOpts, Opts, #data{session = SessionIn} = Data) ->
-    Session0 = maps:merge(SessionIn, SessionOpts),
+    Session0 = session_merge(SessionIn, SessionOpts),
     Session1 = handle_session_opts(Opts, Session0),
     Session2 = update_session_state(Procedure, Session1),
     action(Procedure, Session2, Data).
