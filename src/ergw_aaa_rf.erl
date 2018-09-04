@@ -222,18 +222,17 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0) ->
-    case Avps of
-	#{'Acct-Interim-Interval' := [Interim]} ->
-	    %% Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN',
-	    %% 					   time, Interim * 1000, [recurring]),
-	    %% Events = ergw_aaa_session:ev_set(Trigger, Events0),
-	    %% {ok, Session0, Events};
-	    {ok, Session0, Events0};
-	_ ->
-	    {ok, Session0, Events0}
-	end;
+handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+		      'Acct-Interim-Interval' := [Interim]}],
+	   Session, Events) ->
+    Monit = {'IP-CAN', periodic, Interim},
+    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
+    {ok,
+     maps:update_with(monitoring, maps:put(?MODULE, Monit, _), #{?MODULE => Monit}, Session),
+     ergw_aaa_session:ev_set(Trigger, Events)};
+handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'}],
+	   Session, Events) ->
+    {ok, Session, Events};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events};
@@ -473,6 +472,10 @@ from_session('InOctets', Value, Avps) ->
 from_session('OutOctets', Value, Avps) ->
     optional([?SI_PSI, 'Traffic-Data-Volumes', 'Accounting-Output-Octets'],
 	     Value, Avps);
+
+%% Only Session level monitoring for now
+from_session(monitors, #{'IP-CAN' := #{?MODULE := Monitor}}, Avps) ->
+    maps:fold(fun from_session/3, Avps, Monitor);
 
 from_session(?MODULE, Value, M) ->
     maps:fold(fun from_service/3, M, Value);

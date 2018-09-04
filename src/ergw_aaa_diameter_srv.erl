@@ -85,7 +85,7 @@ handle_call({register_service, Transport, SvcOpts}, _From, #state{handlers = H} 
 handle_call({get_services, Transport}, _From, #state{handlers = H} = State) ->
     Reply = case dict:find(Transport, H) of
 		{ok, V} -> V;
-		_       -> #{}
+		_       -> []
 	    end,
     {reply, Reply, State}.
 

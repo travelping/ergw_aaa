@@ -249,6 +249,10 @@ session_options('OutOctets', Octets, Attrs) when is_integer(Octets) ->
 session_options('OutPackets', Packets, Attrs) when is_integer(Packets) ->
     [{?Acct_Output_Packets, Packets}|Attrs];
 
+%% Only Session level monitoring for now
+session_options(monitors, #{'IP-CAN' := #{?MODULE := Monitor}}, Attrs) ->
+    maps:fold(fun session_options/3, Attrs, Monitor);
+
 session_options('Event-Timestamp', Value, Attrs) ->
     [{?Event_Timestamp, Value}|Attrs];
 
@@ -600,8 +604,10 @@ process_gen_attrs({#attribute{id = ?User_Name}, UserName}, Session) ->
     radius_session_opt('Username', UserName, Session);
 
 process_gen_attrs({#attribute{id = ?Acct_Interim_Interval}, Interim}, {Session, Events}) ->
-    Trigger = ergw_aaa_session:trigger(session, 'IP-CAN', time, Interim * 1000, [recurring]),
-    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
+    Monit = {'IP-CAN', periodic, Interim},
+    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
+    {maps:update_with(monitoring, maps:put(?MODULE, Monit, _), #{?MODULE => Monit}, Session),
+     ergw_aaa_session:ev_set(Trigger, Events)};
 
 %% Session-Timeout
 process_gen_attrs({#attribute{id = ?Session_Timeout}, TimeOut}, Session) ->
