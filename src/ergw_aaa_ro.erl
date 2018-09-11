@@ -502,20 +502,19 @@ request_credits(Session, MSCC) ->
     maps:fold(
       fun(RatingGroup, empty, Request) ->
 	      lager:warning("Ro Charging Key: ~p", [RatingGroup]),
-	      Req = #{'Rating-Group' => [RatingGroup],
-		      'Requested-Service-Unit' => [#{}]},
-	      attr_merge(RatingGroup, Req, Request);
+	      RSU = #{'Rating-Group' => [RatingGroup], 'Requested-Service-Unit' => [#{}]},
+	      attr_merge(RatingGroup, RSU, Request);
 	 (RatingGroup, _, Request) ->
 	      lager:error("unknown Ro Rating Group: ~p", [RatingGroup]),
 	      Request
       end, MSCC, Credits).
 
 report_credits(Session, MSCC) ->
-    Credits = maps:get(used_credits, Session, #{}),
-    maps:fold(
-      fun(RatingGroup, Used, Report) ->
-	      attr_merge(RatingGroup, #{'Rating-Group' => [RatingGroup],
-					'Used-Service-Unit' => [Used]}, Report)
+    Credits = maps:get(used_credits, Session, []),
+    lists:foldl(
+      fun({RatingGroup, Used}, Report) ->
+	      USU = #{'Rating-Group' => [RatingGroup], 'Used-Service-Unit' => [Used]},
+	      attr_merge(RatingGroup, USU, Report)
       end, MSCC, Credits).
 
 context_id(_Session) ->
