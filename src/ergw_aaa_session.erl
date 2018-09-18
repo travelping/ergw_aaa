@@ -21,7 +21,8 @@
 	 start/2, start/3,
 	 interim/2, interim/3,
 	 stop/2, stop/3,
-	 terminate/1, get/1, get/2, set/2, set/3, sync/1]).
+	 terminate/1, get/1, get/2, set/2, set/3, sync/1,
+	 request/3, response/3]).
 
 %% Session Object API
 -export([attr_get/2, attr_get/3, attr_set/3,
@@ -30,6 +31,8 @@
 	 native_to_seconds/1]).
 
 -export([get_svc_opt/2, set_svc_opt/3]).
+
+-include("include/ergw_aaa_session.hrl").
 
 -record(data, {'$version' = 1,
 	       owner,
@@ -92,6 +95,12 @@ invoke(Session, SessionOpts, Procedure, Opts, true) ->
     gen_statem:cast(Session, {invoke, SessionOpts, Procedure, Opts});
 invoke(Session, SessionOpts, Procedure, Opts, false) ->
     gen_statem:call(Session, {invoke, SessionOpts, Procedure, Opts}, ?AAA_TIMEOUT).
+
+request(Session, Procedure, Request) ->
+    gen_statem:call(Session, #aaa_request{procedure = Procedure, request = Request}).
+
+response(Session, Result, Avps) when is_map(Avps) ->
+    gen_statem:cast(Session, {'$response', Result, Avps}).
 
 authenticate(Session, SessionOpts)
   when is_map(SessionOpts) ->
@@ -165,14 +174,19 @@ init([Owner, SessionOpts]) ->
 
     App = ergw_aaa_config:get_application(AppId),
     OriginHost = maps:get('Origin-Host', App, net_adm:localhost()),
+    DiamSessionId =
+	iolist_to_binary(diameter:session_id(OriginHost) ++ [";", integer_to_list(SessionId)]),
 
     DefaultSessionOpts =
 	#{'Session-Start'       => erlang:monotonic_time(),
 	  'Session-Id'          => SessionId,
 	  'Multi-Session-Id'    => SessionId,
-	  'Diameter-Session-Id' =>
-	      diameter:session_id(OriginHost) ++ [";", integer_to_list(SessionId)]
+	  'Diameter-Session-Id' => DiamSessionId
 	 },
+
+    ergw_aaa_session_reg:register(SessionId),
+    ergw_aaa_session_reg:register(DiamSessionId),
+
     Data = #data{
 	       owner         = Owner,
 	       owner_monitor = MonRef,
@@ -203,13 +217,24 @@ handle_event(info, {'EXIT', _From, _Reason}, _State, _Data) ->
     %% ignore EXIT from eradius client
     keep_state_and_data;
 
+handle_event(state_timeout, #aaa_request{}, #state{pending = {call, From}} = State, Data) ->
+    Reply = {error, #{}},
+    {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
+
+handle_event(cast, {'$response', Result, Avps}, #state{pending = {call, From}} = State, Data) ->
+    Reply = {Result, Avps},
+    {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
+
 handle_event(info, {'$invoke', Pid, Session, Events}, #state{pending = Pid} = State,
-	     #data{owner = Owner} = Data) ->
+	     #data{owner = Owner} = Data)
+  when is_pid(Pid) ->
     Owner ! {update_session, Session, Events},
     {next_state, State#state{pending = undefined}, Data#data{session = Session}};
 
 handle_event(_Type, _Event, #state{pending = Pending}, _Data)
   when is_pid(Pending) ->
+    {keep_state_and_data, postpone};
+handle_event(_Type, _Event, #state{pending = {call, _}}, _Data) ->
     {keep_state_and_data, postpone};
 
 handle_event({call, From}, sync, _State, _Data) ->
@@ -244,6 +269,11 @@ handle_event(cast, {invoke, SessionOpts, Procedure, Opts}, State, Data) ->
 		    Self ! {'$invoke', self(), Session, Events}
 	    end),
     {next_state, State#state{pending = Pid}, Data};
+
+handle_event({call, _} = Call, #aaa_request{} = Request, State,
+	     #data{owner = Owner} = Data) ->
+    Owner ! Request,
+    {next_state, State#state{pending = Call}, Data, [{state_timeout, 10 * 1000, Request}]};
 
 handle_event({call, From}, {{Handler, _Level, time}, EvOpts, SessionOpts}, _State,
 	     #data{session = Session0} = Data) ->

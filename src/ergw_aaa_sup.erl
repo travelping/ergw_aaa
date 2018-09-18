@@ -34,6 +34,7 @@ start_link() ->
 init([]) ->
     {ok, {{one_for_one, 30, 60}, [?CHILD(ergw_aaa_diameter_srv, worker),
 				  ?CHILD(ergw_aaa_session_seq, worker),
+				  ?CHILD(ergw_aaa_session_reg, worker),
 				  ?CHILD(ergw_aaa_session_sup, supervisor)]}}.
 
 start_childs(ProviderSupSpecs) ->
