@@ -345,6 +345,9 @@ from_session('Diameter-Session-Id', SId, M) ->
 from_session('Username', Value, Avps) when is_binary(Value) ->
     optional(['User-Name'], Value, Avps);
 
+from_session('Termination-Cause', Cause, M) ->
+    optional('Termination-Cause', Cause, M);
+
 %% '3GPP-Charging-Id', 'PDN-Connection-Charging-ID'
 from_session('3GPP-Charging-Id' = Key, Value, Avps0) ->
     Avps1 = optional([?SI_PSI, Key], ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps0),
