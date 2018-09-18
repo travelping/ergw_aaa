@@ -205,7 +205,9 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
 
-handle_request(_Packet, _SvcName, _Peer) ->
+handle_request(#diameter_packet{msg = ['RAR' | Avps]}, _SvcName, Peer) ->
+    handle_rar(Avps, Peer);
+handle_request(_Packet, _SvcName, {_PeerRef, _Caps} = _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
 
 %%%===================================================================
@@ -234,10 +236,44 @@ handle_cca([Answer | #{'Result-Code' := Code}], Session, Events)
 handle_cca({error, _} = Result, Session, Events) ->
     {Result, Session, Events}.
 
+handle_rar(#{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
+    {Result, ReplyAvps0} = R =
+	case ergw_aaa_session_reg:lookup(SessionId) of
+	    Session when is_pid(Session) ->
+		ergw_aaa_session:request(Session, {gy, 'RAR'}, Avps);
+	    Session ->
+		{{error, unknown_session}, #{}}
+	end,
+
+    #diameter_caps{origin_host = {OH,_},
+		   origin_realm = {OR,_},
+		   origin_state_id = {OSid, _}} = Caps,
+
+    ReplyAvps =
+	ReplyAvps0#{'Origin-Host' => OH,
+		    'Origin-Realm' => OR,
+		    'Origin-State-Id' => OSid,
+		    'Session-Id' => SessionId},
+
+    Reply = diameter_reply(Result, ReplyAvps),
+    {reply, ['RAA' | Reply]}.
+
 inc_number(Session) ->
     ModuleOpts = maps:get(?MODULE, Session, #{}),
     Number = maps:get('CC-Request-Number', ModuleOpts, -1),
     Session#{?MODULE => ModuleOpts#{'CC-Request-Number' => Number + 1}}.
+
+diameter_reply({ok, Reply}, _) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
+
+diameter_reply(ok, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
+
+diameter_reply({error, unknown_session}, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNKNOWN_SESSION_ID'};
+
+diameter_reply(_, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_COMPLY'}.
 
 %%%===================================================================
 
