@@ -46,7 +46,8 @@
 -define(DIAMETER_DICT_RO, diameter_3gpp_ts32_299_ro).
 -define(DIAMETER_APP_ID_RO, ?DIAMETER_DICT_RO:id()).
 
--define(DefaultOptions, [{transport, "undefined"}]).
+-define(DefaultOptions, [{function, "undefined"},
+			 {'Destination-Realm', undefined}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -59,7 +60,7 @@
 initialize_handler(_Opts) ->
     {ok, []}.
 
-initialize_service(_ServiceId, #{transport := Transport}) ->
+initialize_service(_ServiceId, #{function := Function}) ->
     SvcOpts =
 	#{'Auth-Application-Id' => ?DIAMETER_APP_ID_RO,
 	  'Vendor-Specific-Application-Id' =>
@@ -69,7 +70,7 @@ initialize_service(_ServiceId, #{transport := Transport}) ->
 	  application => [{alias, ?APP},
 			  {dictionary, ?DIAMETER_DICT_RO},
 			  {module, ?MODULE}]},
-    ergw_aaa_diameter_srv:register_service(Transport, SvcOpts),
+    ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
 validate_handler(Opts) ->
@@ -138,8 +139,8 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{transport := Transport}) ->
-    diameter:call(Transport, ?APP, Request, []).
+call(Request, #{function := Function}) ->
+    diameter:call(Function, ?APP, Request, []).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -166,15 +167,13 @@ pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
 
 prepare_request(#diameter_packet{msg = ['CCR' = T | Avps]}, _, {_PeerRef, Caps})
   when is_map(Avps) ->
-    #diameter_caps{origin_host = {OH, DH},
-		   origin_realm = {OR, DR},
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _},
 		   origin_state_id = {OSid, _}} = Caps,
 
     Msg = [T | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
-		     'Origin-State-Id' => OSid,
-		     'Destination-Host' => [DH],
-		     'Destination-Realm' => DR}],
+		     'Origin-State-Id' => OSid}],
     lager:debug("prepare_request Msg: ~p", [Msg]),
     {send, Msg};
 
@@ -214,7 +213,13 @@ handle_request(_Packet, _SvcName, {_PeerRef, _Caps} = _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
-validate_option(transport, Value) when is_atom(Value) ->
+validate_option(function, Value) when is_atom(Value) ->
+    Value;
+validate_option('Destination-Host', Value) when is_binary(Value) ->
+    [Value];
+validate_option('Destination-Host', [Value]) when is_binary(Value) ->
+    [Value];
+validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
@@ -560,13 +565,14 @@ context_id(_Session) ->
     %% TODO: figure out what servive we are.....
     "14.32251@3gpp.org".
 
-make_CCR(Type, Session, _) ->
-    Avps0 = #{'Auth-Application-Id' => ?DIAMETER_APP_ID_RO,
-	      'CC-Request-Type'     => Type,
-	      'Service-Context-Id'  => context_id(Session),
-	      'Multiple-Services-Indicator' =>
-		  [?'DIAMETER_RO_MULTIPLE-SERVICES-INDICATOR_SUPPORTED']},
-    Avps1 = from_session(Session, Avps0),
+make_CCR(Type, Session, Opts) ->
+    Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
+    Avps1 = Avps0#{'Auth-Application-Id' => ?DIAMETER_APP_ID_RO,
+		   'CC-Request-Type'     => Type,
+		   'Service-Context-Id'  => context_id(Session),
+		   'Multiple-Services-Indicator' =>
+		       [?'DIAMETER_RO_MULTIPLE-SERVICES-INDICATOR_SUPPORTED']},
+    Avps2 = from_session(Session, Avps1),
     MSCC = case Type of
 	       ?'DIAMETER_RO_CC-REQUEST-TYPE_INITIAL_REQUEST' ->
 		   request_credits(Session, #{});
@@ -578,5 +584,5 @@ make_CCR(Type, Session, _) ->
 	       ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST' ->
 		   report_credits(Session, #{})
 	   end,
-    Avps = Avps1#{'Multiple-Services-Credit-Control' => maps:values(MSCC)},
+    Avps = Avps2#{'Multiple-Services-Credit-Control' => maps:values(MSCC)},
     ['CCR' | Avps ].

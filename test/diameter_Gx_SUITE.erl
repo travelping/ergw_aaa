@@ -29,18 +29,23 @@
 	 {'Service-Type',          'Framed-User'}]).
 
 -define(DIAMETER_TRANSPORT,
+	[
+	 {connect_to, <<"aaa://127.0.0.1">>}
+	]).
+-define(DIAMETER_FUNCTION,
 	{?SERVICE,
 	 [{handler, ergw_aaa_diameter},
 	  {'Origin-Host', <<"127.0.0.1">>},
 	  {'Origin-Realm', <<"example.com">>},
-	  {connect_to, <<"aaa://127.0.0.1">>}
+	  {transports, [?DIAMETER_TRANSPORT]}
 	 ]}).
 -define(DIAMETER_CONFIG,
-	[{transport, ?SERVICE}]).
+	[{function, ?SERVICE},
+	 {'Destination-Realm', <<"test-srv.example.com">>}]).
 -define(DIAMETER_SERVICE_OPTS, []).
 
 -define(CONFIG,
-	[{transports, [?DIAMETER_TRANSPORT]},
+	[{functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
 	   {ergw_aaa_gx, ?DIAMETER_CONFIG}
@@ -96,7 +101,7 @@ init_per_suite(Config) ->
     [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
 
     diameter_test_server:start(),
-    application:ensure_all_started(ergw_aaa),
+    {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
 
     case diameter_test_server:wait_for_diameter(?SERVICE, 10) of

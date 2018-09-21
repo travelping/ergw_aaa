@@ -44,8 +44,8 @@
 start() ->
     application:ensure_all_started(diameter),
     SvcState = #{},
-    SvcOpts = [{'Origin-Host', "server.example.com"},
-	       {'Origin-Realm', "example.com"},
+    SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
+	       {'Origin-Realm', "test-srv.example.com"},
 	       {'Vendor-Id', ?VENDOR_ID_TP},
 	       {'Product-Name', "Server"},
 	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,

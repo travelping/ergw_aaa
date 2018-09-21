@@ -22,7 +22,7 @@
 %% API
 -export([start_link/0, stop/0]).
 -export([peer_down/2, is_first_request/2,
-	 register_service/2, get_services/1]).
+	 register_service/2, get_service_opts/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -54,11 +54,11 @@ is_first_request(API, PeerId) ->
 	    false
     end.
 
-register_service(Transport, SvcOpts) ->
-    gen_server:call(?SERVER, {register_service, Transport, SvcOpts}).
+register_service(Service, SvcOpts) ->
+    gen_server:call(?SERVER, {register_service, Service, SvcOpts}).
 
-get_services(Transport) ->
-    gen_server:call(?SERVER, {get_services, Transport}).
+get_service_opts(Service) ->
+    gen_server:call(?SERVER, {get_services, Service}).
 
 %%%===================================================================%
 %% gen_server callbacks
@@ -79,11 +79,11 @@ handle_call({is_first_request, API, PeerId}, _From, State) ->
 	    {reply, false, State}
     end;
 
-handle_call({register_service, Transport, SvcOpts}, _From, #state{handlers = H} = State) ->
-    {reply, ok, State#state{handlers = dict:update(Transport, [SvcOpts | _], [SvcOpts], H)}};
+handle_call({register_service, Service, SvcOpts}, _From, #state{handlers = H} = State) ->
+    {reply, ok, State#state{handlers = dict:update(Service, [SvcOpts | _], [SvcOpts], H)}};
 
-handle_call({get_services, Transport}, _From, #state{handlers = H} = State) ->
-    Reply = case dict:find(Transport, H) of
+handle_call({get_services, Service}, _From, #state{handlers = H} = State) ->
+    Reply = case dict:find(Service, H) of
 		{ok, V} -> V;
 		_       -> []
 	    end,

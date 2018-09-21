@@ -33,7 +33,8 @@
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
 
--define(DefaultOptions, [{transport, "undefined"}]).
+-define(DefaultOptions, [{function, "undefined"},
+			 {'Destination-Realm', undefined}]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
@@ -46,14 +47,14 @@
 initialize_handler(_Opts) ->
     {ok, []}.
 
-initialize_service(_ServiceId, #{transport := Transport}) ->
+initialize_service(_ServiceId, #{function := Function}) ->
     SvcOpts =
 	#{'Auth-Application-Id' => diameter_3gpp_ts29_061_sgi:id(),
 	  'Acct-Application-Id' => diameter_3gpp_ts29_061_sgi:id(),
 	  application => [{alias, nasreq},
 			  {dictionary, diameter_3gpp_ts29_061_sgi},
 			  {module, ?MODULE}]},
-    ergw_aaa_diameter_srv:register_service(Transport, SvcOpts),
+    ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
 validate_handler(Opts) ->
@@ -119,8 +120,8 @@ invoke(_Service, stop, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{transport := Transport}) ->
-    diameter:call(Transport, nasreq, Request, []).
+call(Request, #{function := Function}) ->
+    diameter:call(Function, nasreq, Request, []).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -146,15 +147,13 @@ pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
 
 prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_, Caps})
   when is_map(Avps) ->
-    #diameter_caps{origin_host = {OH, DH},
-		   origin_realm = {OR, DR},
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _},
 		   acct_application_id = {[Ids], _}}
 	= Caps,
 
     {send, [T | Avps#{'Origin-Host' => OH,
 		      'Origin-Realm' => OR,
-		      'Destination-Host' => [DH],
-		      'Destination-Realm' => DR,
 		      'Acct-Application-Id' => Ids}]};
 
 prepare_request(Packet, _SvcName, {PeerRef, _}) ->
@@ -191,7 +190,13 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
-validate_option(transport, Value) when is_atom(Value) ->
+validate_option(function, Value) when is_atom(Value) ->
+    Value;
+validate_option('Destination-Host', Value) when is_binary(Value) ->
+    [Value];
+validate_option('Destination-Host', [Value]) when is_binary(Value) ->
+    [Value];
+validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
@@ -360,7 +365,8 @@ from_session(_Key, _Value, M) -> M.
 from_session(Session, Avps) ->
     maps:fold(fun from_session/3, Avps, Session).
 
-create_ACR(Type, Session, _) ->
-    Avps0 = #{'Accounting-Record-Type' => Type},
-    Avps = from_session(Session, Avps0),
+create_ACR(Type, Session, Opts) ->
+    Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
+    Avps1 = Avps0#{'Accounting-Record-Type' => Type},
+    Avps = from_session(Session, Avps1),
     ['ACR' | Avps].
