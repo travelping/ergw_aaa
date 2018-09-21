@@ -37,8 +37,8 @@
 -define(DIAMETER_TRANSPORT,
 	{'diam-test',
 	 [{handler,    ergw_aaa_diameter},
-	  {host,       <<"127.0.0.1">>},
-	  {realm,      <<"example.com">>},
+	  {'Origin-Host',       <<"127.0.0.1">>},
+	  {'Origin-Realm',      <<"example.com">>},
 	  {connect_to, <<"aaa://127.0.0.1:3868">>}
 	 ]}).
 -define(DIAMETER_CONFIG,
@@ -202,10 +202,10 @@ config(_Config)  ->
 
     ?error_set([transports, 'diam-test'], []),
     ?error_set([transports, 'diam-test', invalid_option], []),
-    ?error_set([transports, 'diam-test', host], invalid_host),
-    ?error_set([transports, 'diam-test', realm], invalid_realm),
+    ?error_set([transports, 'diam-test', 'Origin-Host'], invalid_host),
+    ?error_set([transports, 'diam-test', 'Origin-Realm'], invalid_realm),
     ?error_set([transports, 'diam-test', connect_to], invalid_uri),
-    ?error_set([transports, 'diam-test', host], <<"undefined.example.net">>),
+    ?error_set([transports, 'diam-test', 'Origin-Host'], <<"undefined.example.net">>),
     ?error_set([transports, 'diam-test', connect_to], <<"http://example.com:12345">>),
 
     ?error_set([handlers, ergw_aaa_nasreq], []),

@@ -30,9 +30,9 @@
 
 -define(DIAMETER_TRANSPORT,
 	{?SERVICE,
-	 [{handler,    ergw_aaa_diameter},
-	  {host,       <<"127.0.0.1">>},
-	  {realm,      <<"example.com">>},
+	 [{handler, ergw_aaa_diameter},
+	  {'Origin-Host', <<"127.0.0.1">>},
+	  {'Origin-Realm', <<"example.com">>},
 	  {connect_to, <<"aaa://127.0.0.1">>}
 	 ]}).
 -define(DIAMETER_CONFIG,

@@ -21,8 +21,8 @@
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
 
--define(DefaultOptions, [{host, undefined},
-			 {realm, undefined},
+-define(DefaultOptions, [{'Origin-Host', undefined},
+			 {'Origin-Realm', undefined},
 			 {connect_to, undefined}
 			]).
 
@@ -35,8 +35,8 @@
 %%===================================================================
 
 initialize_transport(Id,
-		   #{host := {OriginHost, Addr},
-		     realm := OriginRealm,
+		   #{'Origin-Host' := {OriginHost, Addr},
+		     'Origin-Realm' := OriginRealm,
 		     connect_to :=
 			 #diameter_uri{type = _AAA, % aaa | aaas
 				       fqdn = Host,
@@ -87,16 +87,16 @@ validate_option(connect_to = Opt, Value) when is_binary(Value) ->
 	    diameter_types:'DiameterURI'(decode, Value, #{rfc => 6733})
     catch _:_ -> validate_option_error(Opt, Value)
     end;
-validate_option(host, {Host, Addr} = Value)
+validate_option('Origin-Host', {Host, Addr} = Value)
   when is_binary(Host), ?IS_IP(Addr) ->
     Value;
-validate_option(host = Opt, Value) when is_binary(Value) ->
+validate_option('Origin-Host' = Opt, Value) when is_binary(Value) ->
     try
 	{ok, {Addr, _Type}} = resolve_hostname(Value),
 	{Value, Addr}
     catch _:_ -> validate_option_error(Opt, Value)
     end;
-validate_option(realm, Value) when is_binary(Value) ->
+validate_option('Origin-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
