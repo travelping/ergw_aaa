@@ -22,7 +22,7 @@ start(_StartType, _StartArgs) ->
 	    Config = ergw_aaa_config:load_config(),
 	    SrvSupSpecs0 = initialize_handlers(Config, []),
 	    SrvSupSpecs1 = initialize_services(Config, SrvSupSpecs0),
-	    SrvSupSpecs = initialize_transports(Config, SrvSupSpecs1),
+	    SrvSupSpecs = initialize_functions(Config, SrvSupSpecs1),
 	    ergw_aaa_sup:start_childs(SrvSupSpecs),
 	    Ret;
 	Other ->
@@ -36,11 +36,11 @@ stop(_State) ->
 %% Internal
 %%===================================================================
 
-initialize_transports(#{transports := Transports}, SupSpecs) ->
-    maps:fold(fun(Transport, #{handler := Handler} = Opts, Specs) ->
-		      {ok, SupSpec} = Handler:initialize_transport(Transport, Opts),
+initialize_functions(#{functions := Functions}, SupSpecs) ->
+    maps:fold(fun(Function, #{handler := Handler} = Opts, Specs) ->
+		      {ok, SupSpec} = Handler:initialize_function(Function, Opts),
 		      Specs ++ SupSpec
-	      end, SupSpecs, Transports).
+	      end, SupSpecs, Functions).
 
 initialize_handlers(#{handlers := Handlers}, SupSpecs) ->
     maps:fold(fun(Handler, Opts, Specs) ->

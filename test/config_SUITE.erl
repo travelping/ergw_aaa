@@ -35,26 +35,37 @@
 -define(RADIUS_SERVICE_OPTS, []).
 
 -define(DIAMETER_TRANSPORT,
+	[
+	 {connect_to, <<"aaa://127.0.0.1">>}
+	]).
+-define(DIAMETER_FUNCTION,
 	{'diam-test',
 	 [{handler,    ergw_aaa_diameter},
 	  {'Origin-Host',       <<"127.0.0.1">>},
-	  {'Origin-Realm',      <<"example.com">>},
-	  {connect_to, <<"aaa://127.0.0.1:3868">>}
+	  {'Origin-Realm',      <<"test-clnt.example.com">>},
+	  {transports, [?DIAMETER_TRANSPORT]}
 	 ]}).
 -define(DIAMETER_CONFIG,
-	[{transport, 'diam-test'}]).
+	[{function, 'diam-test'},
+	 {'Destination-Realm', <<"test-srv.example.com">>}]).
 -define(DIAMETER_SERVICE_OPTS, []).
 
 -define(RF_CONFIG,
-	[{transport, 'diam-test'}]).
+	[{function, 'diam-test'},
+	 {'Destination-Realm', <<"test-srv.example.com">>}]).
+
+-define(RO_CONFIG,
+	[{function, 'diam-test'},
+	 {'Destination-Realm', <<"test-srv.example.com">>}]).
 
 -define(CONFIG,
-	[{transports, [?DIAMETER_TRANSPORT]},
+	[{functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
 	   {ergw_aaa_radius, ?RADIUS_ACCT_CONFIG},
 	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG},
-	   {ergw_aaa_rf, ?RF_CONFIG}
+	   {ergw_aaa_rf, ?RF_CONFIG},
+	   {ergw_aaa_ro, ?RF_CONFIG}
 	  ]},
 
 	 {services,
@@ -65,7 +76,9 @@
 	   {'DIAMETER-Service',
 	    [{handler, 'ergw_aaa_nasreq'}]},
 	   {'RF-Service',
-	    [{handler, 'ergw_aaa_rf'} | ?RF_CONFIG]}
+	    [{handler, 'ergw_aaa_rf'} | ?RF_CONFIG]},
+	   {'RO-Service',
+	    [{handler, 'ergw_aaa_ro'} | ?RO_CONFIG]}
 	  ]},
 
 	 {apps,
@@ -114,6 +127,11 @@ set_cfg_value([{Key, Pos} | T], Value, Config) ->
 set_cfg_value([Pos | T], Value, Config)
   when is_integer(Pos), is_tuple(Config) ->
     setelement(Pos, Config, set_cfg_value(T, Value, element(Pos, Config)));
+set_cfg_value([Pos | T], Value, Config)
+  when is_integer(Pos), is_list(Config) ->
+    Arr0 = array:from_list(Config),
+    Arr1 = array:set(Pos - 1, set_cfg_value(T, Value, array:get(Pos - 1, Arr0)), Arr0),
+    array:to_list(Arr1);
 set_cfg_value([H | T], Value, Config) ->
     Prop = proplists:get_value(H, Config, []),
     lists:keystore(H, 1, Config, {H, set_cfg_value(T, Value, Prop)}).
@@ -200,13 +218,16 @@ config(_Config)  ->
 	   get_cfg_value([apps, 'RADIUS-Application', procedures,
 			  authenticate, 'RADIUS-Service'], ValidatedCfg)),
 
-    ?error_set([transports, 'diam-test'], []),
-    ?error_set([transports, 'diam-test', invalid_option], []),
-    ?error_set([transports, 'diam-test', 'Origin-Host'], invalid_host),
-    ?error_set([transports, 'diam-test', 'Origin-Realm'], invalid_realm),
-    ?error_set([transports, 'diam-test', connect_to], invalid_uri),
-    ?error_set([transports, 'diam-test', 'Origin-Host'], <<"undefined.example.net">>),
-    ?error_set([transports, 'diam-test', connect_to], <<"http://example.com:12345">>),
+    ?error_set([functions, 'diam-test'], []),
+    ?error_set([functions, 'diam-test', invalid_option], []),
+    ?error_set([functions, 'diam-test', 'Origin-Host'], invalid_host),
+    ?error_set([functions, 'diam-test', 'Origin-Host'], <<"undefined.example.net">>),
+    ?error_set([functions, 'diam-test', 'Origin-Realm'], invalid_realm),
+
+    ?error_set([functions, 'diam-test', transports], []),
+    ?error_set([functions, 'diam-test', transports], {}),
+    ?error_set([functions, 'diam-test', transports, 1, connect_to], invalid_uri),
+    ?error_set([functions, 'diam-test', transports, 1, connect_to], <<"http://example.com:12345">>),
 
     ?error_set([handlers, ergw_aaa_nasreq], []),
     ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),
@@ -218,8 +239,8 @@ config(_Config)  ->
 						  | ?DIAMETER_CONFIG]),
 
     %% make sure the handler config is passed through to the service
-    ?equal(proplists:get_value(transport, ?DIAMETER_CONFIG),
-	   get_cfg_value([services, 'DIAMETER-Service', transport], ValidatedCfg)),
+    ?equal(proplists:get_value(function, ?DIAMETER_CONFIG),
+	   get_cfg_value([services, 'DIAMETER-Service', function], ValidatedCfg)),
     %% make sure the handler config is also passed through to the session
     ?equal(maps:from_list(?DIAMETER_CONFIG ++ ?DIAMETER_SERVICE_OPTS),
 	   get_cfg_value([apps, 'DIAMETER-Application', procedures,

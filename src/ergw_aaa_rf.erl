@@ -47,7 +47,8 @@
 -define(DIAMETER_DICT_RF, diameter_3gpp_ts32_299_rf).
 -define(DIAMETER_APP_ID_RF, ?DIAMETER_DICT_RF:id()).
 
--define(DefaultOptions, [{transport, "undefined"}]).
+-define(DefaultOptions, [{function, "undefined"},
+			 {'Destination-Realm', undefined}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -60,7 +61,7 @@
 initialize_handler(_Opts) ->
     {ok, []}.
 
-initialize_service(_ServiceId, #{transport := Transport}) ->
+initialize_service(_ServiceId, #{function := Function}) ->
     SvcOpts =
 	#{'Acct-Application-Id' => ?DIAMETER_APP_ID_RF,
 	  'Vendor-Specific-Application-Id' =>
@@ -70,7 +71,7 @@ initialize_service(_ServiceId, #{transport := Transport}) ->
 	  application => [{alias, ?APP},
 			  {dictionary, ?DIAMETER_DICT_RF},
 			  {module, ?MODULE}]},
-    ergw_aaa_diameter_srv:register_service(Transport, SvcOpts),
+    ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
 validate_handler(Opts) ->
@@ -137,8 +138,8 @@ invoke(_Service, stop, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{transport := Transport}) ->
-    diameter:call(Transport, ?APP, Request, []).
+call(Request, #{function := Function}) ->
+    diameter:call(Function, ?APP, Request, []).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -165,14 +166,12 @@ pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
 
 prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_PeerRef, Caps})
   when is_map(Avps) ->
-    #diameter_caps{origin_host = {OH, DH},
-		   origin_realm = {OR, DR},
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _},
 		   origin_state_id = {OSid, _}} = Caps,
     Msg = [T | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
-		     'Origin-State-Id' => OSid,
-		     'Destination-Host' => [DH],
-		     'Destination-Realm' => DR}],
+		     'Origin-State-Id' => OSid}],
     lager:debug("prepare_request Msg: ~p", [Msg]),
     {send, Msg};
 
@@ -210,7 +209,13 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
-validate_option(transport, Value) when is_atom(Value) ->
+validate_option(function, Value) when is_atom(Value) ->
+    Value;
+validate_option('Destination-Host', Value) when is_binary(Value) ->
+    [Value];
+validate_option('Destination-Host', [Value]) when is_binary(Value) ->
+    [Value];
+validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
@@ -496,14 +501,15 @@ stop_indicator(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD', Avps) ->
 stop_indicator(_Type, Avps) ->
     Avps.
 
-create_ACR(Type, Session, _) ->
-    Avps0 = #{'Accounting-Record-Type' => Type,
-	      'Acct-Application-Id'      => ?DIAMETER_APP_ID_RF,
-	      'Service-Context-Id'       => [context_id(Session)],
-	      'Service-Information'      =>
-		  [#{'Subscription-Id' => [],
-		     'PS-Information'  =>
-			 [#{'PDP-Context-Type' => 0}]}]
-	     },
-    Avps = stop_indicator(Type, Avps0),
+create_ACR(Type, Session, Opts) ->
+    Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
+    Avps1 = Avps0#{'Accounting-Record-Type' => Type,
+		   'Acct-Application-Id'      => ?DIAMETER_APP_ID_RF,
+		   'Service-Context-Id'       => [context_id(Session)],
+		   'Service-Information'      =>
+		       [#{'Subscription-Id' => [],
+			  'PS-Information'  =>
+			      [#{'PDP-Context-Type' => 0}]}]
+		  },
+    Avps = stop_indicator(Type, Avps1),
     ['ACR' | from_session(Session, Avps)].

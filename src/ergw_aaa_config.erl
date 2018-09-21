@@ -18,7 +18,7 @@
 -endif.
 
 -define(DefaultOptions, [{product_name, "erGW-AAA"},
-			 {transports, []}
+			 {functions, []}
 			]).
 
 -define(is_opts(X), (is_list(X) orelse is_map(X))).
@@ -125,7 +125,7 @@ validate_options(Fun, [{Opt, Value} | Tail]) ->
     [validate_option(Fun, Opt, Value) | validate_options(Fun, Tail)].
 
 validate_config(Config0) ->
-    Config1 = validate_keyed_opt(transports, fun validate_transport/2, Config0, []),
+    Config1 = validate_keyed_opt(functions, fun validate_function/2, Config0, []),
     Config2 = validate_keyed_opt(handlers, fun validate_handler/2, Config1, []),
     Config3 = validate_keyed_opt(services, validate_service(_, _, Config2), Config2, []),
     Config = validate_keyed_opt(apps, validate_app(_, _, Config3), Config3, []),
@@ -150,8 +150,8 @@ validate_keyed_opt(Key, Fun, Config, Default) ->
 	    throw({error, {options, {Key, Values}}})
     end.
 
-validate_transport(Transport, Opts)
-  when is_atom(Transport) ->
+validate_function(Function, Opts)
+  when is_atom(Function) ->
     Handler = get_opt(handler, Opts, undefined),
     case code:ensure_loaded(Handler) of
 	{module, _} ->
@@ -159,7 +159,7 @@ validate_transport(Transport, Opts)
 	_ ->
 	    throw({error, {options, {Handler, Opts}}})
     end,
-    OOut = Handler:validate_transport(without_opts([handler], Opts)),
+    OOut = Handler:validate_function(without_opts([handler], Opts)),
     set_opt(handler, Handler, OOut).
 
 validate_handler(Handler, Opts)

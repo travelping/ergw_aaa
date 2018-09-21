@@ -7,9 +7,11 @@
 
 -module(ergw_aaa_diameter).
 
+-compile({parse_transform, cut}).
+
 %% API
--export([validate_transport/1,
-	 initialize_transport/2]).
+-export([validate_function/1,
+	 initialize_function/2]).
 -export(['3gpp_from_session'/2]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -21,28 +23,26 @@
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
 
--define(DefaultOptions, [{'Origin-Host', undefined},
-			 {'Origin-Realm', undefined},
-			 {connect_to, undefined}
-			]).
+-define(DefaultFunctionOptions, [{transports, undefined},
+				 {'Origin-Host', undefined},
+				 {'Origin-Realm', undefined}
+				 ]).
+-define(DefaultTransportOptions, [{connect_to, undefined}
+				 ]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
+-define(non_empty_opts(X), ((is_list(X) andalso length(X) /= 0) orelse
+			    (is_map(X) andalso map_size(X) /= 0))).
 
 %%===================================================================
 %% API
 %%===================================================================
 
-initialize_transport(Id,
-		   #{'Origin-Host' := {OriginHost, Addr},
-		     'Origin-Realm' := OriginRealm,
-		     connect_to :=
-			 #diameter_uri{type = _AAA, % aaa | aaas
-				       fqdn = Host,
-				       port = Port,
-				       transport = Transport,
-				       protocol = _Diameter}}) ->
+initialize_function(Id, #{'Origin-Host' := {OriginHost, Addr},
+			  'Origin-Realm' := OriginRealm,
+			  transports := Transports}) ->
     ProductName = application:get_env(ergw_aaa, product_name, "erGW-AAA"),
 
     SvcOpts0 = #{'Origin-Host' => OriginHost,
@@ -56,52 +56,82 @@ initialize_transport(Id,
 					   ?VENDOR_ID_TP],
 		 string_decode => false,
 		 decode_format => map},
-    Services = ergw_aaa_diameter_srv:get_services(Id),
-    SvcOpts = merge_svc(SvcOpts0, Services),
-
+    SvcOpts = merge_svc(SvcOpts0, ergw_aaa_diameter_srv:get_service_opts(Id)),
     ok = diameter:start_service(Id, svc_to_opts(SvcOpts)),
+    [ok = initialize_transport(Id, X) || X <- Transports],
+    {ok, []}.
 
+initialize_transport(Id, #{connect_to :=
+			       #diameter_uri{type = _AAA, % aaa | aaas
+					     fqdn = Host,
+					     port = Port,
+					     transport = Transport,
+					     protocol = _Diameter}} = Opts) ->
+    Caps = maps:fold(fun build_transport_caps/3, [], Opts),
     {ok, {Raddr, Type}} = resolve_hostname(Host),
-    TransportOpts = [{transport_module, transport_module(Transport)},
+    TransportOpts = [{capabilities, Caps},
+		     {transport_module, transport_module(Transport)},
 		     {transport_config, [{reuseaddr, true},
 					 {raddr, Raddr},
 					 {rport, Port},
 					 Type
 					]}],
     {ok, _} = diameter:add_transport(Id, {connect, TransportOpts}),
-
-    {ok, []}.
-
-validate_transport(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions, map).
+    ok.
 
 %%%===================================================================
 %%% Options Validation
 %%%===================================================================
 
-validate_option(connect_to, Value) when is_record(Value, diameter_uri) ->
-    Value;
-validate_option(connect_to = Opt, Value) when is_binary(Value) ->
-    try
-	#diameter_uri{} =
-	    diameter_types:'DiameterURI'(decode, Value, #{rfc => 6733})
-    catch _:_ -> validate_option_error(Opt, Value)
-    end;
-validate_option('Origin-Host', {Host, Addr} = Value)
+validate_capability('Origin-Host', {Host, Addr} = Value)
   when is_binary(Host), ?IS_IP(Addr) ->
     Value;
-validate_option('Origin-Host' = Opt, Value) when is_binary(Value) ->
+validate_capability('Origin-Host' = Opt, Value) when is_binary(Value) ->
     try
 	{ok, {Addr, _Type}} = resolve_hostname(Value),
 	{Value, Addr}
-    catch _:_ -> validate_option_error(Opt, Value)
+    catch _:_ -> validate_capability_error(Opt, Value)
     end;
-validate_option('Origin-Realm', Value) when is_binary(Value) ->
+validate_capability('Origin-Realm', Value) when is_binary(Value) ->
     Value;
-validate_option(Opt, Value) ->
-    validate_option_error(Opt, Value).
+validate_capability(Opt, Value) ->
+    validate_capability_error(Opt, Value).
 
-validate_option_error(Opt, Value) ->
+validate_capability_error(Opt, Value) ->
+    throw({error, {options, {Opt, Value}}}).
+
+validate_function(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_function/2, Opts,
+				     ?DefaultFunctionOptions, map).
+
+validate_function(transports, Opts) when ?non_empty_opts(Opts) ->
+    lists:map(
+      ergw_aaa_config:validate_options(fun validate_transport/2, _,
+				       ?DefaultTransportOptions, map), Opts);
+validate_function(K, V)
+  when K =:= 'Origin-Host'; K =:= 'Origin-Realm' ->
+    validate_capability(K, V);
+validate_function(Opt, Value) ->
+    validate_function_error(Opt, Value).
+
+validate_function_error(Opt, Value) ->
+    throw({error, {options, {Opt, Value}}}).
+
+validate_transport(connect_to, Value) when is_record(Value, diameter_uri) ->
+    Value;
+validate_transport(connect_to = Opt, Value) when is_binary(Value) ->
+    try
+	#diameter_uri{} =
+	    diameter_types:'DiameterURI'(decode, Value, #{rfc => 6733})
+    catch _:_ -> validate_transport_error(Opt, Value)
+    end;
+validate_transport(K, V)
+  when K =:= 'Origin-Host'; K =:= 'Origin-Realm' ->
+    validate_capability(K, V);
+validate_transport(Opt, Value) ->
+    validate_transport_error(Opt, Value).
+
+validate_transport_error(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
 %%===================================================================
@@ -159,6 +189,13 @@ svc_to_opts(K, V, Opts)
     Opts ++ [{K, X} || X <- sets:to_list(V)];
 svc_to_opts(K, V, Opts) ->
     [{K, V}|Opts].
+
+build_transport_caps('Origin-Host', {Host, Addr}, Caps) ->
+    [{'Origin-Host', Host}, {'Host-IP-Address', [Addr]} | Caps];
+build_transport_caps('Origin-Realm', Realm, Caps) ->
+    [{'Origin-Realm', Realm} | Caps];
+build_transport_caps(_, _, Caps) ->
+    Caps.
 
 %%===================================================================
 %% 3GPP IE
