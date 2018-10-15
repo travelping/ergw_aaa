@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, new/1, inc/1]).
+-export([start_link/0, new/1, inc/1, diameter_session_id/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -19,6 +19,9 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {}).
+
+-define(INT32, 16#FFFFFFFF).
+-define(INT64, 16#FFFFFFFFFFFFFFFF).
 
 %%%===================================================================
 %%% API
@@ -40,6 +43,14 @@ inc(Id) ->
 	    new_id(Id),
 	    ets:update_counter(?MODULE, Id, 1)
     end.
+
+diameter_session_id(Host, SessionId) ->
+    Hi = SessionId bsr 96,
+    Lo = (SessionId bsr 64) band ?INT32,
+    Id = SessionId band ?INT64,
+    [Host, ";", integer_to_list(Hi),
+	   ";", integer_to_list(Lo),
+	   ";", integer_to_list(Id)].
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -75,5 +86,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 new_id(Id) ->
-    Start = (rand:uniform(4294967296) - 1) bsl 128,
+    %% 128bit unique id, inspired by https://github.com/fogfish/uid
+    Start =
+	((erlang:unique_integer([positive]) band 16#3f) bsl 122) bor
+	((erlang:system_time(millisecond) band 16#3ffffffffffff) bsl 72) bor
+	((rand:uniform(?INT32) - 1) bsl 8),
     ets:insert(?MODULE, {Id, Start}).
