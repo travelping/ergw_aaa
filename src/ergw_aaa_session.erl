@@ -175,7 +175,7 @@ init([Owner, SessionOpts]) ->
     App = ergw_aaa_config:get_application(AppId),
     OriginHost = maps:get('Origin-Host', App, net_adm:localhost()),
     DiamSessionId =
-	iolist_to_binary(diameter:session_id(OriginHost) ++ [";", integer_to_list(SessionId)]),
+	iolist_to_binary(ergw_aaa_session_seq:diameter_session_id(OriginHost, SessionId)),
 
     DefaultSessionOpts =
 	#{'Session-Start'       => erlang:monotonic_time(),
