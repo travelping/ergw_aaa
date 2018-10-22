@@ -1,4 +1,4 @@
-%% Copyright 2017, Travelping GmbH <info@travelping.com>
+%% Copyright 2017,2018, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -7,10 +7,15 @@
 
 -module(diameter_test_server).
 
+-compile({parse_transform, do}).
+
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include("../include/diameter_rfc4006_cc.hrl").
 -include("../include/diameter_3gpp_ts29_061_sgi.hrl").
 -include("../include/diameter_3gpp_ts29_212.hrl").
+-include("../include/diameter_3gpp_ts32_299.hrl").
+-include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
 -export([start/0, stop/0]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
@@ -33,6 +38,9 @@
 -define(DIAMETER_DICT_GX, diameter_3gpp_ts29_212).
 -define(DIAMETER_APP_ID_GX, ?DIAMETER_DICT_GX:id()).
 
+-define(DIAMETER_DICT_RO, diameter_3gpp_ts32_299_ro).
+-define(DIAMETER_APP_ID_RO, ?DIAMETER_DICT_RO:id()).
+
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
@@ -43,7 +51,6 @@
 
 start() ->
     application:ensure_all_started(diameter),
-    SvcState = #{},
     SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
 	       {'Origin-Realm', "test-srv.example.com"},
 	       {'Vendor-Id', ?VENDOR_ID_TP},
@@ -52,7 +59,8 @@ start() ->
 					?VENDOR_ID_ETSI,
 					?VENDOR_ID_TP]},
 	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
-					?DIAMETER_APP_ID_GX]},
+					?DIAMETER_APP_ID_GX,
+					?DIAMETER_APP_ID_RO]},
 	       {'Vendor-Specific-Application-Id',
 		[#'diameter_base_Vendor-Specific-Application-Id'{
 		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -62,10 +70,13 @@ start() ->
 	       {decode_format, map},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
-			      {module, [?MODULE, SvcState]}]},
+			      {module, [?MODULE, nasreq]}]},
 	       {application, [{alias, diameter_gx},
 			      {dictionary, ?DIAMETER_DICT_GX},
-			      {module, [?MODULE, SvcState]}]}],
+			      {module, [?MODULE, gx]}]},
+	       {application, [{alias, diameter_gy},
+			      {dictionary, ?DIAMETER_DICT_RO},
+			      {module, [?MODULE, gy]}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
     Opts = [{transport_module, diameter_tcp},
@@ -122,9 +133,12 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	     'Accounting-Record-Type' => Type,
 	     'Accounting-Record-Number' => Number,
 	     'Acct-Application-Id' => AppId},
-    case maps:get('3GPP-IMSI', Msg, []) of
-	[] -> {reply, ['ACA' | ACA]};
-	_IMSI -> check_3gpp(Msg, ACA)
+    case check_3gpp(Msg) of
+	Result when Result =:= ok;
+		    Result =:= {ok, no_imsi} ->
+	    {reply, ['ACA' | ACA]};
+	_ ->
+	    {answer_message, 5005}
     end;
 
 handle_request(#diameter_packet{
@@ -134,8 +148,7 @@ handle_request(#diameter_packet{
 	       _SvcName, _, _Extra) ->
     {answer_message, 3001};  %% DIAMETER_COMMAND_UNSUPPORTED
 
-handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, _Extra)
-  when is_map(Msg) ->
+handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, gx) ->
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _}} = Caps,
     #{'Session-Id' := Id,
@@ -169,6 +182,44 @@ handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, _Extr
      },
     {reply, ['CCA' | Reply]};
 
+handle_request(#diameter_packet{
+		  msg = ['CCR' |
+			 #{'Service-Information' :=
+			       [#{'PS-Information' := [PS]}]} = Msg]},
+	       _SvcName, {_, Caps}, gy) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _}} = Caps,
+    #{'Session-Id' := Id,
+      'Auth-Application-Id' := AppId,
+      'CC-Request-Type' := Type,
+      'CC-Request-Number' := Number} = Msg,
+
+    CCA0 =
+	#{'Session-Id' => Id,
+	  'Auth-Application-Id' => AppId,
+	  'Origin-Host' => OH,
+	  'Origin-Realm' => OR,
+	  'CC-Request-Type' => Type,
+	  'CC-Request-Number' => Number,
+	  'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+
+	  'CC-Session-Failover' => [?'CC-SESSION-FAILOVER_SUPPORTED'],
+	  'Credit-Control-Failure-Handling' =>
+	      [?'CREDIT-CONTROL-FAILURE-HANDLING_RETRY_AND_TERMINATE']
+	 },
+    CCA = gy_ccr(Msg, CCA0),
+
+    case do([error_m ||
+		check_3gpp(PS),
+		check_subscription(Msg),
+		check_user_equipment(Msg)]) of
+	ok ->
+	    {reply, ['CCA' | CCA]};
+	_Other ->
+	    ct:pal("Check Fail: ~p", [_Other]),
+	    {answer_message, 3001}
+    end;
+
 handle_request(#diameter_packet{msg = _Msg}, _SvcName, _, _Extra) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
@@ -185,10 +236,77 @@ check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
 	     '3GPP-RAT-Type'          := [<<6>>],
 	     '3GPP-NSAPI'             := [<<"5">>],
 	     '3GPP-Selection-Mode'    := [<<"0">>]
-	    }, ACA) ->
-    {reply, ['ACA' | ACA]};
-check_3gpp(_Msg, _ACA) ->
-    {answer_message, 3001}.
+	    }) ->
+    ok;
+check_3gpp(Msg) ->
+    case maps:get('3GPP-IMSI', Msg, []) of
+	[] -> error_m:return(no_imsi);
+	_  ->
+	    ct:pal("3GPP attribute check failed on ~p", [Msg]),
+	    error_m:fail(Msg)
+    end.
+
+check_subscription(#{'Subscription-Id' := SId}) ->
+    Map = lists:foldl(fun(#{'Subscription-Id-Type' := Type,
+			    'Subscription-Id-Data' := Data}, M) ->
+			      M#{Type => Data}
+		      end, #{}, SId),
+    case Map of
+	#{?'DIAMETER_RO_SUBSCRIPTION-ID-TYPE_END_USER_E164' := <<"46702123456">>,
+	  ?'DIAMETER_RO_SUBSCRIPTION-ID-TYPE_END_USER_IMSI' := <<"250071234567890">>} ->
+	    ok;
+	_ ->
+	    error_m:fail(SId)
+    end;
+check_subscription(Msg) ->
+    error_m:fail(Msg).
+
+check_user_equipment(#{'User-Equipment-Info' :=
+			   [#{'User-Equipment-Info-Type' :=
+				  ?'DIAMETER_RO_USER-EQUIPMENT-INFO-TYPE_IMEISV',
+			      'User-Equipment-Info-Value' :=
+				  <<82,21,50,96,32,80,30,0>>}]}) ->
+    ok;
+check_user_equipment(Msg) ->
+    error_m:fail(Msg).
+
+%%%===================================================================
+%%% Request processing
+%%%===================================================================
+
+gy_ccr(#{'CC-Request-Type' := Type, 'Multiple-Services-Credit-Control' := MSCCreq}, CCA)
+  when Type =:= ?'CC-REQUEST-TYPE_INITIAL_REQUEST';
+       Type =:= ?'CC-REQUEST-TYPE_UPDATE_REQUEST' ->
+    MSCC =
+	lists:map(
+	  fun(#{'Rating-Group' := [RatingGroup],
+		'Requested-Service-Unit' := [#{}]}) ->
+		  #{'Envelope-Reporting' =>
+			[?'DIAMETER_3GPP_CHARGING_ENVELOPE-REPORTING_DO_NOT_REPORT_ENVELOPES'],
+		    'Granted-Service-Unit' =>
+			[#{'CC-Time' => [36000],
+			   'CC-Total-Octets' => [10485760]}],
+		    'Rating-Group' => [RatingGroup],
+		    'Result-Code' => [?'DIAMETER_BASE_RESULT-CODE_SUCCESS'],
+		    'Time-Quota-Threshold' => [3600],
+		    'Validity-Time' => [3600],
+		    'Volume-Quota-Threshold' => [1048576]
+		   }
+	  end, MSCCreq),
+    CCA#{'Multiple-Services-Credit-Control' => MSCC};
+gy_ccr(#{'CC-Request-Type' := ?'CC-REQUEST-TYPE_TERMINATION_REQUEST',
+	 'Multiple-Services-Credit-Control' := MSCCreq}, CCA) ->
+    MSCC =
+	lists:map(
+	  fun(#{'Rating-Group' := [RatingGroup]}) ->
+		  #{'Rating-Group' => [RatingGroup],
+		    'Result-Code' => [?'DIAMETER_BASE_RESULT-CODE_SUCCESS']
+		   }
+	  end, MSCCreq),
+    CCA#{'Multiple-Services-Credit-Control' => MSCC};
+gy_ccr(_, CCA) ->
+    CCA#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}.
+
 
 %%%===================================================================
 %%% Helper functions
