@@ -14,6 +14,16 @@
 	 initialize_function/2]).
 -export(['3gpp_from_session'/2]).
 
+%% diameter callbacks
+-export([peer_up/3,
+	 peer_down/3,
+	 pick_peer/4,
+	 prepare_request/3,
+	 prepare_retransmit/3,
+	 handle_answer/4,
+	 handle_error/4,
+	 handle_request/3]).
+
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
@@ -54,8 +64,13 @@ initialize_function(Id, #{'Origin-Host' := {OriginHost, Addr},
 		 'Supported-Vendor-Id' => [?VENDOR_ID_3GPP,
 					   ?VENDOR_ID_ETSI,
 					   ?VENDOR_ID_TP],
+		 'Auth-Application-Id' => sets:from_list([0]),
 		 string_decode => false,
-		 decode_format => map},
+		 decode_format => map,
+		 application => sets:from_list([[{alias, common},
+						 {dictionary, diameter_gen_base_rfc6733},
+						 {module, ?MODULE}]])
+		},
     SvcOpts = merge_svc(SvcOpts0, ergw_aaa_diameter_srv:get_service_opts(Id)),
     ok = diameter:start_service(Id, svc_to_opts(SvcOpts)),
     [ok = initialize_transport(Id, X) || X <- Transports],
@@ -135,9 +150,81 @@ validate_transport_error(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
 %%===================================================================
+%% DIAMETER handler callbacks
+%%===================================================================
+
+-define(UNEXPECTED, erlang:error({unexpected, ?MODULE, ?LINE})).
+
+peer_up(_SvcName, _Peer, State) ->
+    lager:debug("peer_up: ~p~n", [_Peer]),
+    State.
+
+peer_down(_SvcName, _Peer, State) ->
+    State.
+
+pick_peer(_, _, _SvcName, _State) ->
+    ?UNEXPECTED.
+
+prepare_request(_, _SvcName, _Peer) ->
+    ?UNEXPECTED.
+
+prepare_retransmit(_Packet, _SvcName, _Peer) ->
+    ?UNEXPECTED.
+
+handle_answer(_Packet, _Request, _SvcName, _Peer) ->
+    ?UNEXPECTED.
+
+handle_error(_Reason, _Request, _SvcName, _Peer) ->
+    ?UNEXPECTED.
+
+handle_request(#diameter_packet{msg = ['ASR' | Avps]}, _SvcName, Peer) ->
+    handle_asr(Avps, Peer);
+handle_request(#diameter_packet{msg = _Msg}, _SvcName, _) ->
+    {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
+
+%%===================================================================
 %% internal helpers
 %%===================================================================
 
+handle_asr(#{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
+    lager:debug("SessionReg: ~p~n", [ergw_aaa_session_reg:all()]),
+
+    {Result, ReplyAvps0} = R =
+	case ergw_aaa_session_reg:lookup(SessionId) of
+	    Session when is_pid(Session) ->
+		ergw_aaa_session:request(Session, {diameter, 'ASR'}, Avps);
+	    Session ->
+		lager:debug("SessionId: ~p, ~p~n", [Session, SessionId]),
+		{{error, unknown_session}, #{}}
+	end,
+
+    #diameter_caps{origin_host = {OH,_},
+		   origin_realm = {OR,_},
+		   origin_state_id = {OSid, _}} = Caps,
+
+    ReplyAvps =
+	ReplyAvps0#{'Origin-Host' => OH,
+		    'Origin-Realm' => OR,
+		    'Origin-State-Id' => OSid,
+		    'Session-Id' => SessionId},
+    lager:info("ASR reply Avps: ~p", [ReplyAvps]),
+
+    Reply = diameter_reply(Result, ReplyAvps),
+    {reply, ['ASA' | Reply]}.
+
+diameter_reply({ok, Reply}, _) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
+
+diameter_reply(ok, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
+
+diameter_reply({error, unknown_session}, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNKNOWN_SESSION_ID'};
+
+diameter_reply(_, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_COMPLY'}.
+
+%%%===================================================================
 resolve_hostname(Name) when is_binary(Name) -> resolve_hostname(binary_to_list(Name));
 resolve_hostname(Name) ->
     Name1 = case inet:gethostbyname(Name, inet6) of
@@ -293,4 +380,3 @@ pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
 	Key =:= '3GPP-Selection-Mode') andalso
        is_integer(Value) ->
     erlang:integer_to_binary(Value, 16).
-
