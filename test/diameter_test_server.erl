@@ -17,7 +17,7 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
--export([start/0, stop/0]).
+-export([start/0, stop/0, abort_session_request/4]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
 %% diameter callbacks
@@ -58,7 +58,8 @@ start() ->
 	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
 					?VENDOR_ID_ETSI,
 					?VENDOR_ID_TP]},
-	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
+	       {'Auth-Application-Id', [0,
+					?DIAMETER_APP_ID_NASREQ,
 					?DIAMETER_APP_ID_GX,
 					?DIAMETER_APP_ID_RO]},
 	       {'Vendor-Specific-Application-Id',
@@ -68,6 +69,9 @@ start() ->
 	       {restrict_connections, false},
 	       {string_decode, false},
 	       {decode_format, map},
+	       {application, [{alias, common},
+			      {dictionary, diameter_gen_base_rfc6733},
+			      {module, [?MODULE, base]}]},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
 			      {module, [?MODULE, nasreq]}]},
@@ -90,6 +94,13 @@ stop() ->
     diameter:stop_service(?MODULE),
     application:stop(diameter).
 
+abort_session_request(gy, SessionId, DH, DR) ->
+    ASR = #{'Session-Id' => SessionId,
+	    'Destination-Realm' => DR,
+	    'Destination-Host' => DH,
+	    'Auth-Application-Id' => ?DIAMETER_APP_ID_RO},
+    diameter:call(?MODULE, common, [ 'ASR' | ASR ], [detach]).
+
 %%===================================================================
 %% DIAMETER handler callbacks
 %%===================================================================
@@ -101,17 +112,30 @@ peer_up(_SvcName, _Peer, State, _Extra) ->
 peer_down(_SvcName, _Peer, State, _Extra) ->
     State.
 
-pick_peer(_, _, _SvcName, _State, _Extra) ->
-    ?UNEXPECTED.
+pick_peer([Peer|_], _RemoteCandidates, _SvcName, _State, _Extra) ->
+    {ok, Peer}.
 
-prepare_request(_, _SvcName, _Peer, _Extra) ->
-    ?UNEXPECTED.
+prepare_request(#diameter_packet{msg = [T | Avps]} = Packet, _, {_PeerRef, Caps}, _Extra)
+  when is_map(Avps) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _},
+		   origin_state_id = {OSid, _}} = Caps,
+
+    Msg = [T | Avps#{'Origin-Host' => OH,
+		     'Origin-Realm' => OR,
+		     'Origin-State-Id' => OSid}],
+    lager:debug("prepare_request Msg: ~p", [Msg]),
+    {send, Packet#diameter_packet{msg = Msg}};
+
+prepare_request(Packet, _SvcName, {PeerRef, _}, _Extra) ->
+    lager:debug("prepare_request to ~p: ~p", [PeerRef, Packet]),
+    {send, Packet}.
 
 prepare_retransmit(_Packet, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
 
-handle_answer(_Packet, _Request, _SvcName, _Peer, _Extra) ->
-    ?UNEXPECTED.
+handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _Extra) ->
+    Msg.
 
 handle_error(_Reason, _Request, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
