@@ -307,6 +307,72 @@ dynamic_address_flag(#{'3GPP-PDP-Type' := 'IPv6',
 dynamic_address_flag(_Session, Avps) ->
     Avps.
 
+%% 'InOctets'
+accounting(Base, 'InOctets', Value, Avps) ->
+    optional(Base ++ ['Accounting-Input-Octets'], Value, Avps);
+%% 'OutOctets'
+accounting(Base, 'OutOctets', Value, Avps) ->
+    optional(Base ++ ['Accounting-Output-Octets'], Value, Avps).
+
+%% Service-Data-Container
+
+%%   [ AF-Correlation-Information ]
+%%   [ Charging-Rule-Base-Name ]
+
+%%   [ Accounting-Input-Octets ]
+%%   [ Accounting-Output-Octets ]
+service_data(Key, Value, Avps)
+  when Key =:= 'InOctets'; Key =:= 'OutOctets' ->
+    accounting([], Key, Value, Avps);
+
+%%   [ Local-Sequence-Number ]
+%%   [ QoS-Information ]
+%%   [ Rating-Group ]
+%%   [ Change-Time ]
+%%   [ Service-Identifier ]
+%%   [ Service-Specific-Info ]
+%%   [ ADC-Rule-Base-Name ]
+%%   [ SGSN-Address ]
+%%   [ Time-First-Usage ]
+%%   [ Time-Last-Usage ]
+
+%%   [ Time-Usage ]
+service_data('Session-Time', Value, Avps) ->
+    optional('Time-Usage', Value, Avps);
+
+%% * [ Change-Condition]
+%%   [ 3GPP-User-Location-Info ]
+%%   [ 3GPP2-BSID ]
+%%   [ UWAN-User-Location-Info ]
+%%   [ TWAN-User-Location-Info ]
+%%   [ Sponsor-Identity ]
+%%   [ Application-Service-Provider-Identity ]
+%% * [ Presence-Reporting-Area-Information]
+%%   [ Presence-Reporting-Area-Status ]
+%%   [ User-CSG-Information ]
+%%   [ 3GPP-RAT-Type ]
+%%   [ Related-Change-Condition-Information ]
+%%   [ Serving-PLMN-Rate-Control ]
+%%   [ APN-Rate-Control ]
+%%   [ 3GPP-PS-Data-Off-Status ]
+%%   [ Traffic-Steering-Policy-Identifier-DL ]
+%%   [ Traffic-Steering-Policy-Identifier-UL ]
+service_data(_Key, _Value, Avps) ->
+    Avps.
+
+service_data_container(Key, Value, Avps)
+  when is_integer(Key) ->
+    SDC0 = #{'Rating-Group' => Key},
+    SDC = maps:fold(fun service_data/3, SDC0, Value),
+    repeated([?SI_PSI, 'Service-Data-Container'], SDC, Avps).
+
+monitors_from_session('IP-CAN', #{?MODULE := Monitor}, Avps) ->
+    maps:fold(fun from_session/3, Avps, Monitor);
+monitors_from_session(offline, Offline, Avps) ->
+    maps:fold(fun service_data_container/3, Avps, Offline);
+monitors_from_session(_, _, Avps) ->
+    Avps.
+
 from_session('Event-Timestamp' = Key, Value, M) ->
     optional(Key, system_time_to_universal_time(Value, second), M);
 
@@ -470,17 +536,14 @@ from_session('Accounting-Stop', Value, Avps) ->
 %% 'Traffic-Data-Volumes' ========================
 
 %% 'InOctets'
-from_session('InOctets', Value, Avps) ->
-    optional([?SI_PSI, 'Traffic-Data-Volumes', 'Accounting-Input-Octets'],
-	     Value, Avps);
 %% 'OutOctets'
-from_session('OutOctets', Value, Avps) ->
-    optional([?SI_PSI, 'Traffic-Data-Volumes', 'Accounting-Output-Octets'],
-	     Value, Avps);
+from_session(Key, Value, Avps)
+  when Key =:= 'InOctets'; Key =:= 'OutOctets' ->
+    accounting([?SI_PSI, 'Traffic-Data-Volumes'], Key, Value, Avps);
 
 %% Only Session level monitoring for now
-from_session(monitors, #{'IP-CAN' := #{?MODULE := Monitor}}, Avps) ->
-    maps:fold(fun from_session/3, Avps, Monitor);
+from_session(monitors, Monitors, Avps) ->
+    maps:fold(fun monitors_from_session/3, Avps, Monitors);
 
 from_session(?MODULE, Value, M) ->
     maps:fold(fun from_service/3, M, Value);
