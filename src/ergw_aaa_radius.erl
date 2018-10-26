@@ -67,13 +67,15 @@ session_auth_options(_, _Session, Attrs) ->
 invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
-invoke(_Service, authenticate, Session, Events, Opts) ->
+invoke(_Service, authenticate, Session, Events, #{now := Now} = Opts) ->
     RadiusSession = maps:get(?MODULE, Session, #{}),
 
     UserName0 = maps:get('Username', Session, <<>>),
     UserName = maps:get('Username', RadiusSession, UserName0),
 
-    Attrs0 = [{?User_Name,      UserName}],
+    Attrs0 = [{?User_Name, UserName},
+	      {?Event_Timestamp,
+	       system_time_to_universal_time(Now + erlang:time_offset(), native)}],
     Attrs1 = session_auth_options(
 	       maps:get('Authentication-Method', Session, 'PAP'), Session, Attrs0),
     Attrs2 = radius_session_options(RadiusSession, Attrs1),
@@ -135,14 +137,16 @@ invoke(_Service, stop, Session, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-accounting(Type, Attrs0, Session0, Events, RadiusSession, Opts) ->
+accounting(Type, Attrs0, Session0, Events, RadiusSession, #{now := Now} = Opts) ->
     UserName0 = maps:get('Username', Session0, <<>>),
     UserName = maps:get('Username', RadiusSession, UserName0),
 
     Attrs1 = radius_session_options(RadiusSession, Attrs0),
     Attrs2 = session_options(Session0, Attrs1),
     Attrs = [{?RStatus_Type,   Type},
-	     {?User_Name,      UserName}
+	     {?User_Name,      UserName},
+	     {?Event_Timestamp,
+	      system_time_to_universal_time(Now + erlang:time_offset(), native)}
 	     | Attrs2],
     Req = #radius_request{cmd = accreq, attrs = Attrs, msg_hmac = false},
     send_request(Req, Session0, Opts),
@@ -188,6 +192,23 @@ validate_option(Opt, Value) ->
 %%===================================================================
 %% Internal Helpers
 %%===================================================================
+
+-ifdef(OTP_RELEASE).
+%% OTP 21 or higher
+system_time_to_universal_time(Time, TimeUnit) ->
+    calendar:system_time_to_universal_time(Time, TimeUnit).
+
+-else.
+%% from Erlang R21:
+
+-define(SECONDS_PER_DAY, 86400).
+-define(DAYS_FROM_0_TO_1970, 719528).
+-define(SECONDS_FROM_0_TO_1970, (?DAYS_FROM_0_TO_1970*?SECONDS_PER_DAY)).
+
+system_time_to_universal_time(Time, TimeUnit) ->
+    Secs = erlang:convert_time_unit(Time, TimeUnit, second),
+    calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
+-endif.
 
 gethostbyname(Name) ->
     case inet:gethostbyname(Name, inet6) of
@@ -252,9 +273,6 @@ session_options('OutPackets', Packets, Attrs) when is_integer(Packets) ->
 %% Only Session level monitoring for now
 session_options(monitors, #{'IP-CAN' := #{?MODULE := Monitor}}, Attrs) ->
     maps:fold(fun session_options/3, Attrs, Monitor);
-
-session_options('Event-Timestamp', Value, Attrs) ->
-    [{?Event_Timestamp, Value}|Attrs];
 
 session_options('Port-Type', Value, Attrs) ->
     [{?NAS_Port_Type, port_type(Value)}|Attrs];
