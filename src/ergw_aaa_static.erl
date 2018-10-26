@@ -34,6 +34,8 @@ validate_service(_Service, HandlerOpts, Opts) ->
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
 
+invoke(_Service, _Procedure, Session, Events, #{answers := Answers, answer := Answer}) ->
+    {ok, maps:merge(Session, maps:get(Answer, Answers, #{})), Events};
 invoke(_Service, _Procedure, Session, Events, Opts) ->
     {ok, maps:merge(Session, Opts), Events}.
 
@@ -42,6 +44,10 @@ invoke(_Service, _Procedure, Session, Events, Opts) ->
 %%%===================================================================
 
 %% TODO: only permit session options
+validate_option(answers, Value) when is_map(Value) ->
+    Value;
+validate_option(answer, Value) when is_atom(Value) ->
+    Value;
 validate_option(_Opt, Value) ->
     Value.
 %% validate_option(Opt, Value) ->
