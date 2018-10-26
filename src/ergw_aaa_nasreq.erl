@@ -339,9 +339,6 @@ from_session('IP', Value, M) ->
 from_session('Framed-IP-Address' = Key, Value, M) ->
     M#{Key => [format_address(Value)]};
 
-from_session('Event-Timestamp' = Key, Value, M) ->
-    M#{Key => [system_time_to_universal_time(Value, second)]};
-
 from_session('Diameter-Session-Id', SId, M) ->
     M#{'Session-Id' => SId};
 
@@ -365,8 +362,10 @@ from_session(_Key, _Value, M) -> M.
 from_session(Session, Avps) ->
     maps:fold(fun from_session/3, Avps, Session).
 
-create_ACR(Type, Session, Opts) ->
+create_ACR(Type, Session, #{now := Now} = Opts) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
-    Avps1 = Avps0#{'Accounting-Record-Type' => Type},
+    Avps1 = Avps0#{'Accounting-Record-Type' => Type,
+		   'Event-Timestamp' =>
+		       [system_time_to_universal_time(Now + erlang:time_offset(), native)]},
     Avps = from_session(Session, Avps1),
     ['ACR' | Avps].

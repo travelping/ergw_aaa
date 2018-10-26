@@ -104,7 +104,7 @@ invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_INITIAL_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    handle_cca(call(Request, Opts), Session, Events);
+	    handle_cca(call(Request, Opts), Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -282,6 +282,12 @@ diameter_reply(_, Reply) ->
 
 %%%===================================================================
 
+-ifdef(OTP_RELEASE).
+%% OTP 21 or higher
+system_time_to_universal_time(Time, TimeUnit) ->
+    calendar:system_time_to_universal_time(Time, TimeUnit).
+
+-else.
 %% from Erlang R21:
 
 -define(SECONDS_PER_DAY, 86400).
@@ -291,6 +297,7 @@ diameter_reply(_, Reply) ->
 system_time_to_universal_time(Time, TimeUnit) ->
     Secs = erlang:convert_time_unit(Time, TimeUnit, second),
     calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
+-endif.
 
 assign([Key], Fun, Avps) ->
     Fun(Key, Avps);
@@ -339,9 +346,6 @@ dynamic_address_flag(#{'3GPP-PDP-Type' := 'IPv6',
     dynamic_address_flag([?SI_PSI, 'Dynamic-Address-Flag'], IP6, Avps);
 dynamic_address_flag(_Session, Avps) ->
     Avps.
-
-from_session('Event-Timestamp' = Key, Value, M) ->
-    optional(Key, system_time_to_universal_time(Value, second), M);
 
 from_session('Diameter-Session-Id', SId, M) ->
     M#{'Session-Id' => SId};
@@ -565,11 +569,13 @@ context_id(_Session) ->
     %% TODO: figure out what servive we are.....
     "14.32251@3gpp.org".
 
-make_CCR(Type, Session, Opts) ->
+make_CCR(Type, Session, #{now := Now} = Opts) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Application-Id' => ?DIAMETER_APP_ID_RO,
 		   'CC-Request-Type'     => Type,
 		   'Service-Context-Id'  => context_id(Session),
+		   'Event-Timestamp' =>
+		       [system_time_to_universal_time(Now + erlang:time_offset(), native)],
 		   'Multiple-Services-Indicator' =>
 		       [?'DIAMETER_RO_MULTIPLE-SERVICES-INDICATOR_SUPPORTED']},
     Avps2 = from_session(Session, Avps1),

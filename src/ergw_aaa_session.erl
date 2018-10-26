@@ -88,13 +88,17 @@ event(Session, Event, EvOpts, SessionOpts) when is_map(SessionOpts) ->
 start_link(Owner, SessionData) ->
     gen_statem:start_link(?MODULE, [Owner, SessionData], []).
 
-invoke(Session, SessionOpts, Procedure, Opts) ->
-    invoke(Session, SessionOpts, Procedure, Opts, proplists:get_bool(async, Opts)).
+invoke(Session, SessionOpts, Procedure, Opts)
+  when is_list(Opts) ->
+    invoke(Session, SessionOpts, Procedure, normalize_opts(Opts));
+invoke(Session, SessionOpts, Procedure, Opts)
+  when is_map(Opts) ->
+    invoke(Session, SessionOpts, Procedure, Opts, maps:get(async, Opts, false)).
 
 invoke(Session, SessionOpts, Procedure, Opts, true) ->
-    gen_statem:cast(Session, {invoke, SessionOpts, Procedure, Opts});
+    gen_statem:cast(Session, {invoke, SessionOpts, Procedure, normalize_opts(Opts)});
 invoke(Session, SessionOpts, Procedure, Opts, false) ->
-    gen_statem:call(Session, {invoke, SessionOpts, Procedure, Opts}, ?AAA_TIMEOUT).
+    gen_statem:call(Session, {invoke, SessionOpts, Procedure, normalize_opts(Opts)}, ?AAA_TIMEOUT).
 
 request(Session, Procedure, Request) ->
     gen_statem:call(Session, #aaa_request{procedure = Procedure, request = Request}).
@@ -194,8 +198,7 @@ init([Owner, SessionOpts]) ->
 	       session       = DefaultSessionOpts
 	      },
     State = #state{pending = undefined},
-    {Reply, Session, _Events} = exec(init, SessionOpts, [], Data),
-
+    {Reply, Session, _Events} = exec(init, SessionOpts, #{}, Data),
     {Reply, State, Data#data{session = Session}}.
 
 handle_event({call, From}, get, _State, Data) ->
@@ -335,7 +338,8 @@ prepare_next_session_id(Session) ->
     Session#{'Session-Id' => ergw_aaa_session_seq:inc(AcctAppId)}.
 
 handle_owner_exit(Data) ->
-    action(stop, Data#data.session, Data).
+    Opts = #{now => erlang:monotonic_time()},
+    action(stop, Data#data.session, Opts, Data).
 
 maps_merge_with(K, Fun, V, Map) ->
     maps:update_with(K, maps:fold(Fun, V, _), V, Map).
@@ -355,51 +359,46 @@ session_merge(K, V, Session) ->
 session_merge(Session, Opts) ->
     maps:fold(fun session_merge/3, Session, Opts).
 
+normalize_opts(Opts) when is_list(Opts) ->
+    maps:from_list(proplists:unfold(Opts));
+normalize_opts(Opts) when is_map(Opts) ->
+    Opts.
+
 %%===================================================================
 %% provider helpers
 %%===================================================================
 
-exec(Procedure, SessionOpts, Opts, #data{session = SessionIn} = Data) ->
+exec(Procedure, SessionOpts, Opts0, #data{session = SessionIn} = Data) ->
+    Opts = maps:put(now, maps:get(now, Opts0, erlang:monotonic_time()), Opts0),
     Session0 = session_merge(SessionIn, SessionOpts),
-    Session1 = handle_session_opts(Opts, Session0),
-    Session2 = update_session_state(Procedure, Session1),
-    action(Procedure, Session2, Data).
+    Session1 = maps:fold(fun handle_session_opts/3, Session0, Opts),
+    Session2 = update_accounting_state(Procedure, Session1, Opts),
+    action(Procedure, Session2, Opts, Data).
 
 native_to_seconds(Native) ->
     round(Native / erlang:convert_time_unit(1, second, native)).
 
-handle_session_opts([], Session) ->
-    Session;
-handle_session_opts([inc_session_id|Tail], Session) ->
-    handle_session_opts(Tail, prepare_next_session_id(Session));
-handle_session_opts([_|Tail], Session) ->
-    handle_session_opts(Tail, Session).
-
-update_session_state(Procedure, Session) ->
-    Now = erlang:monotonic_time(),
-    update_accounting_state(
-      Procedure,
-      Session#{'Now' => erlang:monotonic_time(),
-	       'Event-Timestamp' => native_to_seconds(Now + erlang:time_offset())}).
+handle_session_opts(inc_session_id, true, Session) ->
+    prepare_next_session_id(Session);
+handle_session_opts(_K, _V, Session) ->
+    Session.
 
 accounting_start(#{'Accounting-Start' := Start}) ->
     Start;
 accounting_start(#{'Session-Start' := Start}) ->
     Start.
 
-update_accounting_state(start, Session) ->
-    Session#{'Accounting-Start' => maps:get('Now', Session)};
-update_accounting_state(interim, Session) ->
+update_accounting_state(start, Session, #{now := Now}) ->
+    Session#{'Accounting-Start' => Now};
+update_accounting_state(interim, Session, #{now := Now}) ->
     Start = accounting_start(Session),
-    #{'Now' := Now} = Session,
     Session#{'Acct-Session-Time' => native_to_seconds(Now - Start),
 	     'Last-Interim-Update' => Now};
-update_accounting_state(stop, Session) ->
+update_accounting_state(stop, Session, #{now := Now}) ->
     Start = accounting_start(Session),
-    #{'Now' := Now} = Session,
     Session#{'Acct-Session-Time' => native_to_seconds(Now - Start),
 	     'Accounting-Stop' => Now};
-update_accounting_state(_Procedure, Session) ->
+update_accounting_state(_Procedure, Session, _Opts) ->
     Session.
 
 services(init, App) ->
@@ -408,22 +407,23 @@ services(Procedure, App) ->
     Procedures = maps:get(procedures, App, #{}),
     maps:get(Procedure, Procedures, []).
 
-action(Procedure, Session, #data{application = App} = _Data) ->
+action(Procedure, Session, Opts, #data{application = App} = _Data) ->
     Pipeline = services(Procedure, App),
-    pipeline(Procedure, Session, [], Pipeline).
+    pipeline(Procedure, Session, [], Opts, Pipeline).
 
-pipeline(_, Session, Events, []) ->
+pipeline(_, Session, Events, _Opts, []) ->
     {ok, Session, Events};
-pipeline(Procedure, SessionIn, EventsIn, [Head|Tail]) ->
-    case step(Head, Procedure, SessionIn, EventsIn) of
+pipeline(Procedure, SessionIn, EventsIn, Opts, [Head|Tail]) ->
+    case step(Head, Procedure, SessionIn, EventsIn, Opts) of
 	{ok, SessionOut, EventsOut} ->
-	    pipeline(Procedure, SessionOut, EventsOut, Tail);
+	    pipeline(Procedure, SessionOut, EventsOut, Opts, Tail);
 	Other ->
 	    Other
     end.
 
-step({Service, Opts}, Procedure, Session, Events)
+step({Service, SvcOpts}, Procedure, Session, Events, Opts)
   when is_atom(Service) ->
     Svc = ergw_aaa_config:get_service(Service),
+    StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),
-    Handler:invoke(Service, Procedure, Session, Events, Opts).
+    Handler:invoke(Service, Procedure, Session, Events, StepOpts).

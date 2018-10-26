@@ -251,6 +251,12 @@ inc_number(Session) ->
 
 %%%===================================================================
 
+-ifdef(OTP_RELEASE).
+%% OTP 21 or higher
+system_time_to_universal_time(Time, TimeUnit) ->
+    calendar:system_time_to_universal_time(Time, TimeUnit).
+
+-else.
 %% from Erlang R21:
 
 -define(SECONDS_PER_DAY, 86400).
@@ -260,6 +266,7 @@ inc_number(Session) ->
 system_time_to_universal_time(Time, TimeUnit) ->
     Secs = erlang:convert_time_unit(Time, TimeUnit, second),
     calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
+-endif.
 
 assign([Key], Fun, Avps) ->
     Fun(Key, Avps);
@@ -369,12 +376,10 @@ service_data_container(Key, Value, Avps)
 monitors_from_session('IP-CAN', #{?MODULE := Monitor}, Avps) ->
     maps:fold(fun from_session/3, Avps, Monitor);
 monitors_from_session(offline, Offline, Avps) ->
+    lager:info("Rf Offline: ~p", [Offline]),
     maps:fold(fun service_data_container/3, Avps, Offline);
 monitors_from_session(_, _, Avps) ->
     Avps.
-
-from_session('Event-Timestamp' = Key, Value, M) ->
-    optional(Key, system_time_to_universal_time(Value, second), M);
 
 from_session('Diameter-Session-Id', SId, M) ->
     M#{'Session-Id' => SId};
@@ -564,11 +569,13 @@ stop_indicator(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD', Avps) ->
 stop_indicator(_Type, Avps) ->
     Avps.
 
-create_ACR(Type, Session, Opts) ->
+create_ACR(Type, Session, #{now := Now} = Opts) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Accounting-Record-Type' => Type,
 		   'Acct-Application-Id'      => ?DIAMETER_APP_ID_RF,
 		   'Service-Context-Id'       => [context_id(Session)],
+		   'Event-Timestamp' =>
+		       [system_time_to_universal_time(Now + erlang:time_offset(), native)],
 		   'Service-Information'      =>
 		       [#{'Subscription-Id' => [],
 			  'PS-Information'  =>
