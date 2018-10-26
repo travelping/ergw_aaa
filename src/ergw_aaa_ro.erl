@@ -116,7 +116,9 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_UPDATE_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    handle_cca(call(Request, Opts), Session, Events);
+	    handle_cca(call(Request, Opts), Session, Events, Opts);
+	peer_down ->
+	    handle_cca({error, no_connection}, Session0, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -131,7 +133,9 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    handle_cca(call(Request, Opts), Session, Events);
+	    handle_cca(call(Request, Opts), Session, Events, Opts);
+	peer_down ->
+	    handle_cca({error, no_connection}, Session0, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -221,6 +225,10 @@ validate_option('Destination-Host', [Value]) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
+validate_option(answers, Value) when is_map(Value) ->
+    Value;
+validate_option(answer_if_down, Value) when is_atom(Value) ->
+    Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
@@ -232,13 +240,26 @@ validate_option_error(Opt, Value) ->
 %%===================================================================
 
 handle_cca(['CCA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0) ->
+	   Session0, Events0, _Opts) ->
     {Session, Events} = maps:fold(fun to_session/3, {Session0, Events0}, Avps),
     {ok, Session, Events};
-handle_cca([Answer | #{'Result-Code' := Code}], Session, Events)
+handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
+  when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' andalso
+       (Answer =:= 'CCA' orelse Answer =:= 'answer-message') ->
+    {{fail, Code}, Session, [stop | Events]};
+handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events};
-handle_cca({error, _} = Result, Session, Events) ->
+handle_cca({error, no_connection} = Result, Session, Events,
+	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
+    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
+					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
+    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
+    NewSession = ergw_aaa_session:set_svc_opt(
+		   ?MODULE, DiamSession#{'State' => peer_down}, Session),
+    handle_cca(['CCA' | Avps], NewSession, Events, Opts);
+handle_cca({error, _} = Result, Session, Events, _Opts) ->
+    lager:error("CCA Result: ~p", [Result]),
     {Result, Session, Events}.
 
 handle_rar(#{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
