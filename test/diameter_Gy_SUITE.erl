@@ -237,7 +237,7 @@ abort_session_request(Config) ->
     ?equal(ok, diameter_test_server:abort_session_request(gy, SessionId, ?'Origin-Host', ?'Origin-Realm')),
 
     receive
-	#aaa_request{procedure = {diameter, 'ASR'}} ->
+	#aaa_request{procedure = {_, 'ASR'}} ->
 	    ergw_aaa_session:response(SId, ok, #{})
     after 1000 ->
 	    ct:fail("no ASR")

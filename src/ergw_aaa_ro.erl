@@ -208,10 +208,13 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
 
-handle_request(#diameter_packet{msg = ['RAR' | Avps]}, _SvcName, Peer) ->
-    handle_rar(Avps, Peer);
+handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
+  when Command =:= 'ASR'; Command =:= 'RAR' ->
+    handle_common_request(Command, Avps, Peer);
 handle_request(_Packet, _SvcName, {_PeerRef, _Caps} = _Peer) ->
-    erlang:error({unexpected, ?MODULE, ?LINE}).
+    lager:error("~p:handle_request(~p, ~p, ~p)",
+		[?MODULE, _Packet, _SvcName, lager:pr(_Caps, ?MODULE)]),
+    {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
 %%%===================================================================
 %%% Options Validation
@@ -262,11 +265,11 @@ handle_cca({error, _} = Result, Session, Events, _Opts) ->
     lager:error("CCA Result: ~p", [Result]),
     {Result, Session, Events}.
 
-handle_rar(#{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
-    {Result, ReplyAvps0} = R =
+handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
+    {Result, ReplyAvps0} =
 	case ergw_aaa_session_reg:lookup(SessionId) of
 	    Session when is_pid(Session) ->
-		ergw_aaa_session:request(Session, {gy, 'RAR'}, Avps);
+		ergw_aaa_session:request(Session, {'gy', Command}, Avps);
 	    Session ->
 		{{error, unknown_session}, #{}}
 	end,
@@ -280,25 +283,28 @@ handle_rar(#{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
 		    'Origin-Realm' => OR,
 		    'Origin-State-Id' => OSid,
 		    'Session-Id' => SessionId},
-
-    Reply = diameter_reply(Result, ReplyAvps),
-    {reply, ['RAA' | Reply]}.
+    ReplyCode = diameter_reply_code(Command),
+    ReplyAvps = diameter_reply_avps(Result, ReplyAvps),
+    {reply, [ReplyCode | ReplyAvps]}.
 
 inc_number(Session) ->
     ModuleOpts = maps:get(?MODULE, Session, #{}),
     Number = maps:get('CC-Request-Number', ModuleOpts, -1),
     Session#{?MODULE => ModuleOpts#{'CC-Request-Number' => Number + 1}}.
 
-diameter_reply({ok, Reply}, _) ->
+diameter_reply_code('ASR') -> 'ASA';
+diameter_reply_code('RAR') -> 'RAA'.
+
+diameter_reply_avps({ok, Reply}, _) ->
     Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
 
-diameter_reply(ok, Reply) ->
+diameter_reply_avps(ok, Reply) ->
     Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
 
-diameter_reply({error, unknown_session}, Reply) ->
+diameter_reply_avps({error, unknown_session}, Reply) ->
     Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNKNOWN_SESSION_ID'};
 
-diameter_reply(_, Reply) ->
+diameter_reply_avps(_, Reply) ->
     Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_COMPLY'}.
 
 %%%===================================================================
