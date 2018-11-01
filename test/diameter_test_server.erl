@@ -58,8 +58,7 @@ start() ->
 	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
 					?VENDOR_ID_ETSI,
 					?VENDOR_ID_TP]},
-	       {'Auth-Application-Id', [0,
-					?DIAMETER_APP_ID_NASREQ,
+	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
 					?DIAMETER_APP_ID_GX,
 					?DIAMETER_APP_ID_RO]},
 	       {'Vendor-Specific-Application-Id',
@@ -69,9 +68,6 @@ start() ->
 	       {restrict_connections, false},
 	       {string_decode, false},
 	       {decode_format, map},
-	       {application, [{alias, common},
-			      {dictionary, diameter_gen_base_rfc6733},
-			      {module, [?MODULE, base]}]},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
 			      {module, [?MODULE, nasreq]}]},
@@ -99,7 +95,7 @@ abort_session_request(gy, SessionId, DH, DR) ->
 	    'Destination-Realm' => DR,
 	    'Destination-Host' => DH,
 	    'Auth-Application-Id' => ?DIAMETER_APP_ID_RO},
-    diameter:call(?MODULE, common, [ 'ASR' | ASR ], [detach]).
+    diameter:call(?MODULE, diameter_gy, [ 'ASR' | ASR ], [detach]).
 
 %%===================================================================
 %% DIAMETER handler callbacks
