@@ -18,9 +18,12 @@
 -compile([nowarn_export_all, export_all]).
 
 -include_lib("common_test/include/ct.hrl").
+-include("ergw_aaa_test_lib.hrl").
 
--import(diameter_test_server, [get_stats/1, diff_stats/2, wait_for_diameter/2]).
+-import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
+			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
+-define(HUT, ergw_aaa_gx).
 -define(SERVICE, ergw_aaa_gx).
 
 -define(STATIC_CONFIG,
@@ -70,24 +73,6 @@
 	  ]}
 	]).
 
--define(equal(Expected, Actual),
-    (fun (Expected@@@, Expected@@@) -> true;
-	 (Expected@@@, Actual@@@) ->
-	     ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
-		    [?FILE, ?LINE, ??Actual, Expected@@@, Actual@@@]),
-	     false
-     end)(Expected, Actual) orelse error(badmatch)).
-
--define(match(Guard, Expr),
-	((fun () ->
-		  case (Expr) of
-		      Guard -> ok;
-		      V -> ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
-				   [?FILE, ?LINE, ??Expr, ??Guard, V]),
-			    error(badmatch)
-		  end
-	  end)())).
-
 %%%===================================================================
 %%% Common Test callbacks
 %%%===================================================================
@@ -96,15 +81,19 @@ all() ->
     [handle_failure,
      authenticate].
 
-init_per_suite(Config) ->
+init_per_suite(Config0) ->
+    Config = [{handler_under_test, ?HUT} | Config0],
+
     application:load(ergw_aaa),
     [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
+
+    meck_init(Config),
 
     diameter_test_server:start(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
 
-    case diameter_test_server:wait_for_diameter(?SERVICE, 10) of
+    case wait_for_diameter(?SERVICE, 10) of
 	ok ->
 	    Config;
 	Other ->
@@ -112,17 +101,25 @@ init_per_suite(Config) ->
 	    ct:fail(Other)
     end.
 
-end_per_suite(_Config) ->
+end_per_suite(Config) ->
+    meck_unload(Config),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
     diameter_test_server:stop(),
+    ok.
+
+init_per_testcase(Config) ->
+    meck_reset(Config),
+    Config.
+
+end_per_testcase(_Config) ->
     ok.
 
 %%%===================================================================
 %%% Test cases
 %%%===================================================================
 
-handle_failure(_Config) ->
+handle_failure(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'3GPP-IMSI' => <<"FAIL">>}),
@@ -134,9 +131,12 @@ handle_failure(_Config) ->
     ?equal(1, proplists:get_value({{16777238, 272, 1}, send}, Statistics)),
     % check that client has received CCA
     ?equal(1, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',3001}}, Statistics)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
     ok.
 
-authenticate(_Config) ->
+authenticate(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'3GPP-IMSI' => <<"IMSI">>}),
@@ -148,6 +148,9 @@ authenticate(_Config) ->
     ?equal(1, proplists:get_value({{16777238, 272, 1}, send}, Statistics)),
     % check that client has received CCA
     ?equal(1, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',2001}}, Statistics)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
     ok.
 
 %%%===================================================================

@@ -11,9 +11,12 @@
 -compile([export_all, nowarn_export_all]).
 
 -include_lib("common_test/include/ct.hrl").
+-include("ergw_aaa_test_lib.hrl").
 
--import(diameter_test_server, [get_stats/1, diff_stats/2, wait_for_diameter/2]).
+-import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
+			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
+-define(HUT, ergw_aaa_nasreq).
 -define(SERVICE, 'diam-test').
 
 -define(STATIC_CONFIG,
@@ -63,24 +66,6 @@
 	  ]}
 	]).
 
--define(equal(Expected, Actual),
-    (fun (Expected@@@, Expected@@@) -> true;
-	 (Expected@@@, Actual@@@) ->
-	     ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
-		    [?FILE, ?LINE, ??Actual, Expected@@@, Actual@@@]),
-	     false
-     end)(Expected, Actual) orelse error(badmatch)).
-
--define(match(Guard, Expr),
-	((fun () ->
-		  case (Expr) of
-		      Guard -> ok;
-		      V -> ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
-				   [?FILE, ?LINE, ??Expr, ??Guard, V]),
-			    error(badmatch)
-		  end
-	  end)())).
-
 %%%===================================================================
 %%% Common Test callbacks
 %%%===================================================================
@@ -91,15 +76,19 @@ all() ->
      acct_interim_interval,
      attrs_3gpp].
 
-init_per_suite(Config) ->
+init_per_suite(Config0) ->
+    Config = [{handler_under_test, ?HUT} | Config0],
+
     application:load(ergw_aaa),
     [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
+
+    meck_init(Config),
 
     diameter_test_server:start(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
 
-    case diameter_test_server:wait_for_diameter(?SERVICE, 10) of
+    case wait_for_diameter(?SERVICE, 10) of
 	ok ->
 	    Config;
 	Other ->
@@ -107,10 +96,18 @@ init_per_suite(Config) ->
 	    {skip, Other}
     end.
 
-end_per_suite(_Config) ->
+end_per_suite(Config) ->
+    meck_unload(Config),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
     diameter_test_server:stop(),
+    ok.
+
+init_per_testcase(Config) ->
+    meck_reset(Config),
+    Config.
+
+end_per_testcase(_Config) ->
     ok.
 
 %%%===================================================================
@@ -119,7 +116,7 @@ end_per_suite(_Config) ->
 
 compat() ->
     [{doc, "Check that the old API is still working"}].
-compat(_Config) ->
+compat(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
@@ -137,11 +134,14 @@ compat(_Config) ->
     ?equal(3, proplists:get_value({{1, 271, 1}, send}, Statistics)),
     % check that client has received ACA
     ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
     ok.
 
 accounting() ->
     [{doc, "Check that we can successfully send ACR's and get ACA's"}].
-accounting(_Config) ->
+accounting(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
@@ -158,12 +158,15 @@ accounting(_Config) ->
     ?equal(3, proplists:get_value({{1, 271, 1}, send}, Statistics)),
     % check that client has received ACA
     ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
     ok.
 
 acct_interim_interval() ->
     [{doc, "test diameter provider can reset interim interval"
       "by data from ACA Acct-Interim-Interval"}].
-acct_interim_interval(_Config) ->
+acct_interim_interval(Config) ->
     Fun = fun(_, S) -> S end,
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'Accouting-Update-Fun' => Fun}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
@@ -178,11 +181,14 @@ acct_interim_interval(_Config) ->
 	    }, SessionOpts),
     ?match([{set,{{ergw_aaa_nasreq,'IP-CAN',time},
 		  {time,'IP-CAN',1000,[recurring]}}}], Ev),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
     ok.
 
 attrs_3gpp() ->
     [{doc, "Check encoding of 3GPP attributes"}].
-attrs_3gpp(_Config) ->
+attrs_3gpp(Config) ->
     Attrs = #{
       '3GPP-GGSN-Address'       => {199,255,4,125},
       '3GPP-IMEISV'             => <<82,21,50,96,32,80,30,0>>,
@@ -220,4 +226,6 @@ attrs_3gpp(_Config) ->
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(1, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
+    %% make sure nothing crashed
+    meck_validate(Config),
     ok.
