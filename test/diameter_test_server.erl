@@ -18,7 +18,6 @@
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
 -export([start/0, stop/0, abort_session_request/4]).
--export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
 %% diameter callbacks
 -export([peer_up/4,
@@ -326,45 +325,3 @@ gy_ccr(#{'CC-Request-Type' := ?'CC-REQUEST-TYPE_TERMINATION_REQUEST',
     CCA#{'Multiple-Services-Credit-Control' => MSCC};
 gy_ccr(_, CCA) ->
     CCA#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}.
-
-
-%%%===================================================================
-%%% Helper functions
-%%%===================================================================
-
-wait_for_diameter(_SvcName, 0) ->
-    "DIAMETER connection failed";
-wait_for_diameter(SvcName, Cnt) ->
-    case diameter:service_info(SvcName, connections) of
-	[] ->
-	    ct:sleep(100),
-	    wait_for_diameter(SvcName, Cnt - 1);
-	_ ->
-	    ok
-    end.
-
-%% pretty_print(Record) ->
-%%     io_lib_pretty:print(Record, fun pretty_print/2).
-
-%% pretty_print(diameter_gx_CCA, N) ->
-%%     N = record_info(size, diameter_gx_CCA) - 1,
-%%     record_info(fields, diameter_gx_CCA);
-%% pretty_print(_, _) ->
-%%     no.
-
-get_stats(SvcName) ->
-    [Transport] = diameter:service_info(SvcName, transport),
-    proplists:get_value(statistics, Transport).
-
-diff_stats(S1, S2) ->
-    {Stats, Rest} =
-	lists:mapfoldl(
-	  fun({Key, Value} = S, StatsIn) ->
-		  case lists:keytake(Key, 1, StatsIn) of
-		      {value, {_, NewValue}, StatsOut} ->
-			  {{Key, NewValue - Value}, StatsOut};
-		      _ ->
-			  {S, StatsIn}
-		  end
-	  end, S2, S1),
-    Stats ++ Rest.
