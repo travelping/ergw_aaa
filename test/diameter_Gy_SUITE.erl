@@ -225,6 +225,7 @@ abort_session_request(Config) ->
 	 },
 
     Stats0 = get_stats(?SERVICE),
+    StatsTestSrv0 = get_stats(diameter_test_server),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
@@ -267,7 +268,16 @@ abort_session_request(Config) ->
     ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session2),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
+
+    %% check that client has recieved CCA
     ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% check that client has send ACA
+    ?equal(1, proplists:get_value({{4, 274, 0}, send, {'Result-Code',2001}}, Stats1)),
+
+    %% check that test server has recieved ACA
+    ?equal(1, proplists:get_value({{4, 274, 0}, recv, {'Result-Code',2001}}, StatsTestSrv)),
 
     %% make sure nothing crashed
     meck_validate(Config),

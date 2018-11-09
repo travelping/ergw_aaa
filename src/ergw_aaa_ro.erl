@@ -278,13 +278,14 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
 		   origin_realm = {OR,_},
 		   origin_state_id = {OSid, _}} = Caps,
 
-    ReplyAvps =
+    ReplyAvps1 =
 	ReplyAvps0#{'Origin-Host' => OH,
 		    'Origin-Realm' => OR,
 		    'Origin-State-Id' => OSid,
 		    'Session-Id' => SessionId},
     ReplyCode = diameter_reply_code(Command),
-    ReplyAvps = diameter_reply_avps(Result, ReplyAvps),
+    ReplyAvps = diameter_reply_avps(Result, ReplyAvps1),
+    lager:debug("~p reply Avps: ~p", [Command, ReplyAvps]),
     {reply, [ReplyCode | ReplyAvps]}.
 
 inc_number(Session) ->
