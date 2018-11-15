@@ -434,9 +434,9 @@ from_session('Framed-IPv6-Prefix', {IP, PrefixLen}, Avps0) ->
     Avps = repeated([?SI_PSI, 'PDP-Address'], IP, Avps0),
     optional([?SI_PSI, 'PDP-Address-Prefix-Length'], PrefixLen, Avps);
 
-%% 'Dynamic-Address-Flag'
-%% 'Dynamic-Address-Flag-Extension'
 %% 'QoS-Information'
+from_session('QoS-Information' = Key, Value, Avps) ->
+    optional([?SI_PSI, Key], ergw_aaa_diameter:qos_from_session(Value), Avps);
 
 %% 'SGSN-Address'
 from_session(Key, IP, Avps)

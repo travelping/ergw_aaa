@@ -12,7 +12,7 @@
 %% API
 -export([validate_function/1,
 	 initialize_function/2]).
--export(['3gpp_from_session'/2]).
+-export(['3gpp_from_session'/2, qos_from_session/1]).
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
@@ -293,3 +293,65 @@ pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
 	Key =:= '3GPP-Selection-Mode') andalso
        is_integer(Value) ->
     erlang:integer_to_binary(Value, 16).
+
+
+arp_from_session('Priority-Level' = Key, PL, ARP) ->
+    ARP#{Key => PL};
+arp_from_session(Key, Value, ARP)
+  when Key == 'Pre-emption-Capability';
+       Key == 'Pre-emption-Vulnerability' ->
+    ARP#{Key => [Value]};
+arp_from_session(_K, _V, ARP) ->
+    ARP.
+
+-define(UINT32MAX, 16#ffffffff).
+
+%% 3GPP TS 29.214 version 15.4.0, Section 4.4.10:
+%%
+%%   When the Rx session is being established, if the AF supports the corresponding
+%%   feature [...] and needs to indicate bandwidth values higher than 2^32-1 bps,
+%%   AVPs representing bitrate in bps shall be provided with value set to 2^32-1 bps
+%%   and bandwidth AVPs representing bitrate in kbps shall be provided with the actual
+%%   required bandwidth.
+
+qos_from_session('Allocation-Retention-Priority' = Key, ARP, Info) ->
+    Info#{Key => [maps:fold(fun arp_from_session/3, #{}, ARP)]};
+
+qos_from_session('Max-Requested-Bandwidth-UL' = Key, MBR, Info)
+  when MBR > ?UINT32MAX ->
+    Info#{Key => ?UINT32MAX, 'Extended-Max-Requested-BW-UL' => [MBR div 1000]};
+qos_from_session('Max-Requested-Bandwidth-DL' = Key, MBR, Info)
+  when MBR > ?UINT32MAX ->
+    Info#{Key => ?UINT32MAX, 'Extended-Max-Requested-BW-DL' => [MBR div 1000]};
+qos_from_session('Guaranteed-Bitrate-UL' = Key, GBR, Info)
+  when GBR > ?UINT32MAX ->
+    Info#{Key => ?UINT32MAX, 'Extended-GBR-UL' => [GBR div 1000]};
+qos_from_session('Guaranteed-Bitrate-DL' = Key, GBR, Info)
+  when GBR > ?UINT32MAX ->
+    Info#{Key => ?UINT32MAX, 'Extended-GBR-DL' => [GBR div 1000]};
+qos_from_session('APN-Aggregate-Max-Bitrate-UL' = Key, AMBR, Info)
+  when AMBR > ?UINT32MAX ->
+    Info#{Key => ?UINT32MAX, 'Extended-APN-AMBR-UL' => [AMBR div 1000]};
+qos_from_session('APN-Aggregate-Max-Bitrate-DL' = Key, AMBR, Info)
+  when AMBR > ?UINT32MAX ->
+    Info#{Key => ?UINT32MAX, 'Extended-APN-AMBR-DL' => [AMBR div 1000]};
+
+qos_from_session(Key, Value, Info)
+  when Key == 'QoS-Class-Identifier';
+       Key == 'Max-Requested-Bandwidth-UL';
+       Key == 'Max-Requested-Bandwidth-DL';
+       Key == 'Guaranteed-Bitrate-UL';
+       Key == 'Guaranteed-Bitrate-DL';
+       Key == 'APN-Aggregate-Max-Bitrate-UL';
+       Key == 'APN-Aggregate-Max-Bitrate-DL' ->
+    Info#{Key => [Value]};
+
+%% TBD:
+%%   [ Bearer-Identifier ]
+%%  *[ Conditional-APN-Aggregate-Max-Bitrate ]
+
+qos_from_session(_K, _V, Info) ->
+    Info.
+
+qos_from_session(Info) ->
+    maps:fold(fun qos_from_session/3, #{}, Info).
