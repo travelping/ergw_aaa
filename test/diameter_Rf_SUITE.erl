@@ -5,7 +5,7 @@
 %% as published by the Free Software Foundation; either version
 %% 2 of the License, or (at your option) any later version.
 
--module(diameter_Gy_SUITE).
+-module(diameter_Rf_SUITE).
 
 %% Common Test callbacks
 -compile([export_all, nowarn_export_all]).
@@ -19,7 +19,7 @@
 -import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
 			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
--define(HUT, ergw_aaa_ro).
+-define(HUT, ergw_aaa_rf).
 -define(SERVICE, 'diam-test').
 
 -define('Origin-Host', <<"127.0.0.1">>).
@@ -41,7 +41,7 @@
 	  {'Origin-Realm', ?'Origin-Realm'},
 	  {transports, [?DIAMETER_TRANSPORT]}
 	 ]}).
--define(DIAMETER_RO_CONFIG,
+-define(DIAMETER_RF_CONFIG,
 	[{function, ?SERVICE},
 	 {'Destination-Realm', <<"test-srv.example.com">>}]).
 -define(DIAMETER_SERVICE_OPTS, []).
@@ -50,13 +50,13 @@
 	[{functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_ro, ?DIAMETER_RO_CONFIG}
+	   {ergw_aaa_rf, ?DIAMETER_RF_CONFIG}
 	  ]},
 	 {services,
 	  [{'Default',
 	    [{handler, 'ergw_aaa_static'}]},
-	   {'Ro',
-	    [{handler, 'ergw_aaa_ro'}]}
+	   {'Rf',
+	    [{handler, 'ergw_aaa_rf'}]}
 	  ]},
 
 	 {apps,
@@ -64,12 +64,9 @@
 	    [{session, ['Default']},
 	     {procedures, [{authenticate, []},
 			   {authorize, []},
-			   {start, []},
-			   {interim, []},
-			   {stop, []},
-			   {{gy, 'CCR-Initial'},   ['Ro']},
-			   {{gy, 'CCR-Update'},    ['Ro']},
-			   {{gy, 'CCR-Terminate'}, ['Ro']}
+			   {start, ['Rf']},
+			   {interim, ['Rf']},
+			   {stop, ['Rf']}
 			  ]}
 	    ]}
 	  ]}
@@ -80,7 +77,7 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, abort_session_request].
+    [simple_session].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -177,122 +174,42 @@ init_session(Session, _Config) ->
 %%%===================================================================
 
 simple_session() ->
-    [{doc, "Simple Gy session"}].
+    [{doc, "Simple Rf session"}].
 simple_session(Config) ->
     Session = init_session(#{}, Config),
-    GyOpts =
-	#{credits =>
-	      #{1000 => empty,
-		2000 => empty,
-		3000 => empty
-	       }
-	 },
-
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-    {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-    ?match([{update_credits,[_,_,_]}], Events1),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session1),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, [], false),
 
-    UsedCredits =
-	#{3000 => #{'CC-Input-Octets'  => [1092],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [1092],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']},
-	  2000 => #{'CC-Input-Octets'  => [0],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [0],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']},
-	  1000 => #{'CC-Input-Octets'  => [0],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [0],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
+    OfflineMonitors =
+	#{3000 => #{'InOctets'     => 1092,
+		    'OutOctets'    => 0,
+		    'Session-Time' => 60},
+	  2000 => #{'InOctets'     => 0,
+		    'OutOctets'    => 0,
+		    'Session-Time' => 60},
+	  1000 => #{'InpOctets'    => 0,
+		    'OutOctets'    => 0,
+		    'Session-Time' => 60}
 	 },
-    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
-	       used_credits => maps:to_list(UsedCredits)},
-    {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
-    ?match([{update_credits,[_,_,_]}], Events2),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session2),
+    IPCanMonitor =
+	#{?HUT => #{'InOctets'     => 1092,
+		    'OutOctets'    => 0,
+		    'Session-Time' => 60}},
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       monitors => #{
+			     'IP-CAN' => IPCanMonitor,
+			     offline => OfflineMonitors
+			    }},
+    {ok, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, stop, [], false),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
-    ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
-
-    %% make sure nothing crashed
-    meck_validate(Config),
-    ok.
-
-abort_session_request() ->
-    [{doc, "Stop Gy session with ASR"}].
-abort_session_request(Config) ->
-    Session = init_session(#{}, Config),
-    GyOpts =
-	#{credits =>
-	      #{1000 => empty,
-		2000 => empty,
-		3000 => empty
-	       }
-	 },
-
-    Stats0 = get_stats(?SERVICE),
-    StatsTestSrv0 = get_stats(diameter_test_server),
-
-    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-    {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-    ?match([{update_credits,[_,_,_]}], Events1),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session1),
-
-    SessionId = maps:get('Diameter-Session-Id', Session1),
-    ?equal(ok, diameter_test_server:abort_session_request(gy, SessionId, ?'Origin-Host', ?'Origin-Realm')),
-
-    receive
-	#aaa_request{procedure = {_, 'ASR'}} ->
-	    ergw_aaa_session:response(SId, ok, #{})
-    after 1000 ->
-	    ct:fail("no ASR")
-    end,
-
-    UsedCredits =
-	#{3000 => #{'CC-Input-Octets'  => [1092],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [1092],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']},
-	  2000 => #{'CC-Input-Octets'  => [0],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [0],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']},
-	  1000 => #{'CC-Input-Octets'  => [0],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [0],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
-	 },
-    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
-	       used_credits => maps:to_list(UsedCredits)},
-    {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
-    ?match([{update_credits,[_,_,_]}], Events2),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session2),
-
-    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
-    StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
-
-    %% check that client has recieved CCA
-    ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
-
-    %% check that client has send ACA
-    ?equal(1, proplists:get_value({{4, 274, 0}, send, {'Result-Code',2001}}, Stats1)),
-
-    %% check that test server has recieved ACA
-    ?equal(1, proplists:get_value({{4, 274, 0}, recv, {'Result-Code',2001}}, StatsTestSrv)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
     meck_validate(Config),

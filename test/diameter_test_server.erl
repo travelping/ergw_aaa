@@ -40,6 +40,9 @@
 -define(DIAMETER_DICT_RO, diameter_3gpp_ts32_299_ro).
 -define(DIAMETER_APP_ID_RO, ?DIAMETER_DICT_RO:id()).
 
+-define(DIAMETER_DICT_RF, diameter_3gpp_ts32_299_rf).
+-define(DIAMETER_APP_ID_RF, ?DIAMETER_DICT_RF:id()).
+
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
@@ -60,6 +63,7 @@ start() ->
 	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
 					?DIAMETER_APP_ID_GX,
 					?DIAMETER_APP_ID_RO]},
+	       {'Acct-Application-Id', [?DIAMETER_APP_ID_RF]},
 	       {'Vendor-Specific-Application-Id',
 		[#'diameter_base_Vendor-Specific-Application-Id'{
 		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -75,7 +79,10 @@ start() ->
 			      {module, [?MODULE, gx]}]},
 	       {application, [{alias, diameter_gy},
 			      {dictionary, ?DIAMETER_DICT_RO},
-			      {module, [?MODULE, gy]}]}],
+			      {module, [?MODULE, gy]}]},
+	       {application, [{alias, diameter_rf},
+			      {dictionary, ?DIAMETER_DICT_RF},
+			      {module, [?MODULE, rf]}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
     Opts = [{transport_module, diameter_tcp},
@@ -231,7 +238,11 @@ handle_request(#diameter_packet{
     case do([error_m ||
 		check_3gpp(PS),
 		check_subscription(Msg),
-		check_user_equipment(Msg)]) of
+		check_user_equipment(Msg),
+		check_qos_info(get_avp(['Service-Information',
+					'PS-Information',
+					'QoS-Information'], Msg), true)
+	    ]) of
 	ok ->
 	    {reply, ['CCA' | CCA]};
 	_Other ->
@@ -289,6 +300,23 @@ check_user_equipment(#{'User-Equipment-Info' :=
 check_user_equipment(Msg) ->
     error_m:fail(Msg).
 
+check_qos_info(#{'APN-Aggregate-Max-Bitrate-DL' := [84000000],
+		 'APN-Aggregate-Max-Bitrate-UL' := [8640000],
+		 'Allocation-Retention-Priority' :=
+		     [#{'Pre-emption-Capability' := [1],
+			'Pre-emption-Vulnerability' := [0],
+			'Priority-Level' := 10}],
+		 'Guaranteed-Bitrate-DL' := [0],
+		 'Guaranteed-Bitrate-UL' := [0],
+		 'Max-Requested-Bandwidth-DL' := [0],
+		 'Max-Requested-Bandwidth-UL' := [0],
+		 'QoS-Class-Identifier' := "\b"}, _) ->
+    ok;
+check_qos_info(_, _Required = false) ->
+    ok;
+check_qos_info(Msg, _Required = true) ->
+    error_m:fail(Msg).
+
 %%%===================================================================
 %%% Request processing
 %%%===================================================================
@@ -325,3 +353,22 @@ gy_ccr(#{'CC-Request-Type' := ?'CC-REQUEST-TYPE_TERMINATION_REQUEST',
     CCA#{'Multiple-Services-Credit-Control' => MSCC};
 gy_ccr(_, CCA) ->
     CCA#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}.
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
+
+get_avp([], Value) ->
+    Value;
+get_avp([K | T], Msg)
+  when is_map(Msg) ->
+    case maps:get(K, Msg, #{}) of
+	[Map] when is_map(Map) ->
+	    get_avp(T, Map);
+	V when is_map(V) ->
+	    get_avp(T, V);
+	Other ->
+	    Other
+    end;
+get_avp(_, Msg) ->
+    Msg.
