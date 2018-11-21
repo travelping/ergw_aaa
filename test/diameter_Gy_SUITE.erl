@@ -153,22 +153,25 @@ init_session(Session, _Config) ->
 	  '3GPP-GPRS-Negotiated-QoS-Profile' =>   <<11,146,31,147,150,64,64,255,
 						    255,255,255,17,1,1,64,64>>,
 	  '3GPP-Allocation-Retention-Priority' => 2,
-	  '3GPP-Charging-Characteristics' =>      <<8,0>>,
+	  '3GPP-Charging-Characteristics' =>  <<8,0>>
 
-	  'QoS-Information' =>
-	      #{
-		'QoS-Class-Identifier' => 8,
-		'Max-Requested-Bandwidth-DL' => 0,
-		'Max-Requested-Bandwidth-UL' => 0,
-		'Guaranteed-Bitrate-DL' => 0,
-		'Guaranteed-Bitrate-UL' => 0,
-		'Allocation-Retention-Priority' =>
-		    #{'Priority-Level' => 10,
-		      'Pre-emption-Capability' => 1,
-		      'Pre-emption-Vulnerability' => 0},
-		'APN-Aggregate-Max-Bitrate-DL' => 84000000,
-		'APN-Aggregate-Max-Bitrate-UL' => 8640000
-	       }
+	  %%
+	  %% some OCSs don't like this attribute on Gy, disable it for now
+	  %%
+	  %% 'QoS-Information' =>
+	  %%     #{
+	  %% 	'QoS-Class-Identifier' => 8,
+	  %% 	'Max-Requested-Bandwidth-DL' => 0,
+	  %% 	'Max-Requested-Bandwidth-UL' => 0,
+	  %% 	'Guaranteed-Bitrate-DL' => 0,
+	  %% 	'Guaranteed-Bitrate-UL' => 0,
+	  %% 	'Allocation-Retention-Priority' =>
+	  %% 	    #{'Priority-Level' => 10,
+	  %% 	      'Pre-emption-Capability' => 1,
+	  %% 	      'Pre-emption-Vulnerability' => 0},
+	  %% 	'APN-Aggregate-Max-Bitrate-DL' => 84000000,
+	  %% 	'APN-Aggregate-Max-Bitrate-UL' => 8640000
+	  %%      }
 	 },
     maps:merge(Defaults, Session).
 
