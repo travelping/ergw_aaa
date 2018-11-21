@@ -239,9 +239,12 @@ handle_request(#diameter_packet{
 		check_3gpp(PS),
 		check_subscription(Msg),
 		check_user_equipment(Msg),
+		%%
+		%% some OCSs don't like the QoS attribute on Gy, make it optional now
+		%%
 		check_qos_info(get_avp(['Service-Information',
 					'PS-Information',
-					'QoS-Information'], Msg), true)
+					'QoS-Information'], Msg), false)
 	    ]) of
 	ok ->
 	    {reply, ['CCA' | CCA]};
