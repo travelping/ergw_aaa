@@ -64,9 +64,13 @@
 	    [{session, ['Default']},
 	     {procedures, [{authenticate, []},
 			   {authorize, []},
-			   {start, ['Rf']},
-			   {interim, ['Rf']},
-			   {stop, ['Rf']}
+			   {start, []},
+			   {interim, []},
+			   {stop, []},
+
+			   {{rf, 'Initial'},   ['Rf']},
+			   {{rf, 'Update'},    ['Rf']},
+			   {{rf, 'Terminate'}, ['Rf']}
 			  ]}
 	    ]}
 	  ]}
@@ -179,33 +183,38 @@ simple_session(Config) ->
     Session = init_session(#{}, Config),
     Stats0 = get_stats(?SERVICE),
 
+    SOpts = #{now => erlang:monotonic_time()},
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, _Session1, _} =
-	ergw_aaa_session:invoke(SId, #{}, start, [], false),
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
 
-    OfflineMonitors =
-	#{3000 => #{'InOctets'     => 1092,
-		    'OutOctets'    => 0,
-		    'Session-Time' => 60},
-	  2000 => #{'InOctets'     => 0,
-		    'OutOctets'    => 0,
-		    'Session-Time' => 60},
-	  1000 => #{'InpOctets'    => 0,
-		    'OutOctets'    => 0,
-		    'Session-Time' => 60}
-	 },
-    IPCanMonitor =
-	#{?HUT => #{'InOctets'     => 1092,
-		    'OutOctets'    => 0,
-		    'Session-Time' => 60}},
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
 
     RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
-	       monitors => #{
-			     'IP-CAN' => IPCanMonitor,
-			     offline => OfflineMonitors
-			    }},
+	       service_data => SDC},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
     {ok, _Session2, _} =
-	ergw_aaa_session:invoke(SId, RfTerm, stop, [], false),
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ct:pal("Stats: ~p~n", [Stats1]),

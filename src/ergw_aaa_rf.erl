@@ -92,44 +92,43 @@ invoke(_Service, authenticate, Session, Events, _Opts) ->
 invoke(_Service, authorize, Session, Events, _Opts) ->
     {ok, Session, Events};
 
-invoke(_Service, start, Session0, Events, Opts) ->
+invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
     DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
     case maps:get('State', DiamSession, stopped) of
 	stopped ->
 	    Session1 = ergw_aaa_session:set_svc_opt(
 			 ?MODULE, DiamSession#{'State' => 'started'}, Session0),
-	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
-	    Session = maps:without(Keys, inc_number(Session1)),
+	    Keys = ['service_data', 'InPackets', 'OutPackets',
+		    'InOctets', 'OutOctets', 'Acct-Session-Time'],
+	    Session2 = maps:without(Keys, Session1),
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
-	    Request = create_ACR(RecType, Session, Opts),
+	    {Request, Session} = create_ACR(RecType, Session2, Opts),
 	    lager:debug("Session Start: ~p", [Session]),
 	    handle_aca(call(Request, Opts), Session, Events);
 	_ ->
 	    {ok, Session0, Events}
     end;
 
-invoke(_Service, interim, Session0, Events, Opts) ->
+invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
     DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
     case maps:get('State', DiamSession, stopped) of
 	started ->
-	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
-	    Request = create_ACR(RecType, Session, Opts),
+	    {Request, Session} = create_ACR(RecType, Session0, Opts),
 	    handle_aca(call(Request, Opts), Session, Events);
 	_ ->
 	    {ok, Session0, Events}
     end;
 
-invoke(_Service, stop, Session0, Events, Opts) ->
+invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
     lager:debug("Session Stop: ~p", [Session0]),
     DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
     case maps:get('State', DiamSession, stopped) of
 	started ->
 	    Session1 = ergw_aaa_session:set_svc_opt(
 			 ?MODULE, DiamSession#{'State' => 'stopped'}, Session0),
-	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
-	    Request = create_ACR(RecType, Session, Opts),
+	    {Request, Session} = create_ACR(RecType, Session1, Opts),
 	    handle_aca(call(Request, Opts), Session, Events);
 	_ ->
 	    {ok, Session0, Events}
@@ -242,12 +241,13 @@ handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events};
 handle_aca({error, _} = Result, Session, Events) ->
+    lager:error("ACR failed with: ~p", [Result]),
     {Result, Session, Events}.
 
-inc_number(Session) ->
+inc_number(Key, Session) ->
     ModuleOpts = maps:get(?MODULE, Session, #{}),
-    Number = maps:get('Accounting-Record-Number', ModuleOpts, -1),
-    Session#{?MODULE => ModuleOpts#{'Accounting-Record-Number' => Number + 1}}.
+    Number = maps:get(Key, ModuleOpts, -1) + 1,
+    {Number, Session#{?MODULE => ModuleOpts#{Key => Number}}}.
 
 %%%===================================================================
 
@@ -268,11 +268,13 @@ system_time_to_universal_time(Time, TimeUnit) ->
     calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
 -endif.
 
-assign([Key], Fun, Avps) ->
+assign([Key], Fun, Avps) when is_function(Fun) ->
     Fun(Key, Avps);
-assign([Key | Next], Fun, Avps) ->
+assign([Key], Value, Avps) when is_map(Avps) ->
+    Avps#{Key => Value};
+assign([Key | Next], FunOrValue, Avps) ->
     [V] = maps:get(Key, Avps, [#{}]),
-    Avps#{Key => [assign(Next, Fun, V)]}.
+    Avps#{Key => [assign(Next, FunOrValue, V)]}.
 
 repeated(Keys, Value, Avps) when is_list(Keys) ->
     assign(Keys, repeated(_, Value, _), Avps);
@@ -288,8 +290,6 @@ optional(Key, Value, Avps)
 
 %%%===================================================================
 
-from_service('Accounting-Record-Number' = Key, Value, M) ->
-    M#{Key => Value};
 from_service(_, _, M) ->
     M.
 
@@ -325,13 +325,8 @@ accounting(Base, 'OutOctets', Value, Avps) ->
 
 %%   [ AF-Correlation-Information ]
 %%   [ Charging-Rule-Base-Name ]
-
 %%   [ Accounting-Input-Octets ]
 %%   [ Accounting-Output-Octets ]
-service_data(Key, Value, Avps)
-  when Key =:= 'InOctets'; Key =:= 'OutOctets' ->
-    accounting([], Key, Value, Avps);
-
 %%   [ Local-Sequence-Number ]
 %%   [ QoS-Information ]
 %%   [ Rating-Group ]
@@ -342,11 +337,7 @@ service_data(Key, Value, Avps)
 %%   [ SGSN-Address ]
 %%   [ Time-First-Usage ]
 %%   [ Time-Last-Usage ]
-
 %%   [ Time-Usage ]
-service_data('Session-Time', Value, Avps) ->
-    optional('Time-Usage', Value, Avps);
-
 %% * [ Change-Condition]
 %%   [ 3GPP-User-Location-Info ]
 %%   [ 3GPP2-BSID ]
@@ -364,20 +355,26 @@ service_data('Session-Time', Value, Avps) ->
 %%   [ 3GPP-PS-Data-Off-Status ]
 %%   [ Traffic-Steering-Policy-Identifier-DL ]
 %%   [ Traffic-Steering-Policy-Identifier-UL ]
-service_data(_Key, _Value, Avps) ->
-    Avps.
 
-service_data_container(Key, Value, Avps)
-  when is_integer(Key) ->
-    SDC0 = #{'Rating-Group' => Key},
-    SDC = maps:fold(fun service_data/3, SDC0, Value),
-    repeated([?SI_PSI, 'Service-Data-Container'], SDC, Avps).
+service_data(Session0, Avps0) ->
+    case maps:take(service_data, Session0) of
+	{SDC0, Session1} when is_list(SDC0) ->
+	    {SDC, Session} =
+		lists:mapfoldr(
+		  fun(SD, SessIn) ->
+			  {LocSeqNo, SessOut} =
+			      inc_number(' SD-Local-Sequence-Number', SessIn),
+			  {SD#{'Local-Sequence-Number' => LocSeqNo}, SessOut}
+		  end,
+		  Session1, SDC0),
+	    Avps = assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0),
+	    {Avps, Session};
+	_ ->
+	    {Avps0, Session0}
+    end.
 
 monitors_from_session('IP-CAN', #{?MODULE := Monitor}, Avps) ->
     maps:fold(fun from_session/3, Avps, Monitor);
-monitors_from_session(offline, Offline, Avps) ->
-    lager:info("Rf Offline: ~p", [Offline]),
-    maps:fold(fun service_data_container/3, Avps, Offline);
 monitors_from_session(_, _, Avps) ->
     Avps.
 
@@ -569,11 +566,13 @@ stop_indicator(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD', Avps) ->
 stop_indicator(_Type, Avps) ->
     Avps.
 
-create_ACR(Type, Session, #{now := Now} = Opts) ->
+create_ACR(Type, Session0, #{now := Now} = Opts) ->
+    {RecNumber, Session1} = inc_number('Accounting-Record-Number', Session0),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Accounting-Record-Type' => Type,
+		   'Accounting-Record-Number' => RecNumber,
 		   'Acct-Application-Id'      => ?DIAMETER_APP_ID_RF,
-		   'Service-Context-Id'       => [context_id(Session)],
+		   'Service-Context-Id'       => [context_id(Session0)],
 		   'Event-Timestamp' =>
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)],
 		   'Service-Information'      =>
@@ -581,5 +580,7 @@ create_ACR(Type, Session, #{now := Now} = Opts) ->
 			  'PS-Information'  =>
 			      [#{'PDP-Context-Type' => 0}]}]
 		  },
-    Avps = stop_indicator(Type, Avps1),
-    ['ACR' | from_session(Session, Avps)].
+    Avps2 = stop_indicator(Type, Avps1),
+    {Avps, Session} = service_data(Session1, Avps2),
+
+    {['ACR' | from_session(Session, Avps)], Session}.
