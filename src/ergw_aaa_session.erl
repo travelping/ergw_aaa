@@ -21,7 +21,7 @@
 	 start/2, start/3,
 	 interim/2, interim/3,
 	 stop/2, stop/3,
-	 terminate/1, get/1, get/2, set/2, set/3, sync/1,
+	 terminate/1, get/1, get/2, set/2, set/3, unset/2, sync/1,
 	 request/3, response/3]).
 
 %% Session Object API
@@ -153,6 +153,11 @@ set(Session, Option, Value) ->
 set(Session, Values) when is_map(Values) ->
     gen_statem:call(Session, {set, Values}).
 
+unset(Session, Options) when is_list(Options) ->
+    gen_statem:call(Session, {unset, Options});
+unset(Session, Option) when is_atom(Option) ->
+    gen_statem:call(Session, {unset, [Option]}).
+
 sync(Session) ->
     gen_statem:call(Session, sync).
 
@@ -212,6 +217,9 @@ handle_event({call, From}, {set, Opt, Value}, _State, Data = #data{session = Ses
 
 handle_event({call, From}, {set, Values}, _State, Data) ->
     {keep_state, Data#data{session = maps:merge(Data#data.session, Values)}, [{reply, From, ok}]};
+
+handle_event({call, From}, {unset, Options}, _State, Data = #data{session = Session}) ->
+    {keep_state, Data#data{session = maps:without(Options, Session)}, [{reply, From, ok}]};
 
 handle_event(info, {'EXIT', Pid, _Reason}, #state{pending = Pid} = State, Data) ->
     {next_state, State#state{pending = undefined}, Data};
