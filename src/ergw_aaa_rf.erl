@@ -111,13 +111,17 @@ invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
 
 invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
     DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
-	started ->
+    State = maps:get('State', DiamSession, stopped),
+    GyEvent = maps:get(gy_event, Opts, interim),
+    case {State, GyEvent} of
+	{started, cdr_closure} ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
-	    {Request, Session} = create_ACR(RecType, Session0, Opts),
+	    Session1 = close_service_data_containers(Session0),
+	    {Request, Session} = create_ACR(RecType, Session1, Opts),
 	    handle_aca(call(Request, Opts), Session, Events);
 	_ ->
-	    {ok, Session0, Events}
+	    Session = close_service_data_containers(Session0),
+	    {ok, Session, Events}
     end;
 
 invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
@@ -128,7 +132,8 @@ invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
 	    Session1 = ergw_aaa_session:set_svc_opt(
 			 ?MODULE, DiamSession#{'State' => 'stopped'}, Session0),
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
-	    {Request, Session} = create_ACR(RecType, Session1, Opts),
+	    Session2 = close_service_data_containers(Session1),
+	    {Request, Session} = create_ACR(RecType, Session2, Opts),
 	    handle_aca(call(Request, Opts), Session, Events);
 	_ ->
 	    {ok, Session0, Events}
@@ -171,7 +176,7 @@ prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_PeerRef, Caps})
     Msg = [T | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
 		     'Origin-State-Id' => OSid}],
-    lager:debug("prepare_request Msg: ~p", [Msg]),
+    lager:debug("prepare_request Msg: ~0p", [Msg]),
     {send, Msg};
 
 prepare_request(Packet, _SvcName, {PeerRef, _}) ->
@@ -245,9 +250,9 @@ handle_aca({error, _} = Result, Session, Events) ->
     {Result, Session, Events}.
 
 inc_number(Key, Session) ->
-    ModuleOpts = maps:get(?MODULE, Session, #{}),
+    ModuleOpts = ergw_aaa_session:get_svc_opt(?MODULE, Session),
     Number = maps:get(Key, ModuleOpts, -1) + 1,
-    {Number, Session#{?MODULE => ModuleOpts#{Key => Number}}}.
+    {Number, ergw_aaa_session:set_svc_opt(?MODULE, ModuleOpts#{Key => Number}, Session)}.
 
 %%%===================================================================
 
@@ -289,6 +294,24 @@ optional(Key, Value, Avps)
     Avps#{Key => [Value]}.
 
 %%%===================================================================
+
+close_service_data_containers(#{service_data := SDC0} = Session0) ->
+    DiamSession0 = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    {SDC, DiamSession1} =
+	lists:mapfoldr(
+	  fun(SD, SessIn) ->
+		  {LocSeqNo, SessOut} =
+		      inc_number('SD-Local-Sequence-Number', SessIn),
+		  {SD#{'Local-Sequence-Number' => LocSeqNo}, SessOut}
+	  end,
+	  DiamSession0, SDC0),
+    DiamSession =
+	maps:update_with('Service-Data-Container',
+			 fun(S) -> S ++ SDC end, SDC, DiamSession1),
+    Session = maps:without([service_data], Session0),
+    ergw_aaa_session:set_svc_opt(?MODULE, DiamSession, Session);
+close_service_data_containers(Session) ->
+    Session.
 
 from_service(_, _, M) ->
     M.
@@ -357,21 +380,18 @@ accounting(Base, 'OutOctets', Value, Avps) ->
 %%   [ Traffic-Steering-Policy-Identifier-UL ]
 
 service_data(Session0, Avps0) ->
-    case maps:take(service_data, Session0) of
-	{SDC0, Session1} when is_list(SDC0) ->
-	    {SDC, Session} =
-		lists:mapfoldr(
-		  fun(SD, SessIn) ->
-			  {LocSeqNo, SessOut} =
-			      inc_number(' SD-Local-Sequence-Number', SessIn),
-			  {SD#{'Local-Sequence-Number' => LocSeqNo}, SessOut}
-		  end,
-		  Session1, SDC0),
-	    Avps = assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0),
-	    {Avps, Session};
-	_ ->
-	    {Avps0, Session0}
-    end.
+    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    Avps =
+	case DiamSession of
+	    #{'Service-Data-Container' := SDC}
+	      when is_list(SDC) ->
+		assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0);
+	    _ ->
+		Avps0
+	end,
+    Session = ergw_aaa_session:set_svc_opt(
+		?MODULE, DiamSession#{'Service-Data-Container' => []}, Session0),
+    {Avps, Session}.
 
 monitors_from_session('IP-CAN', #{?MODULE := Monitor}, Avps) ->
     maps:fold(fun from_session/3, Avps, Monitor);

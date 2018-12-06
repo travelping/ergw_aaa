@@ -81,7 +81,7 @@
 %%%===================================================================
 
 all() ->
-    [simple_session].
+    [simple_session, multi_event_session].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -219,6 +219,68 @@ simple_session(Config) ->
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ct:pal("Stats: ~p~n", [Stats1]),
     ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
+multi_event_session() ->
+    [{doc, "Rf session with multiple charing events"}].
+multi_event_session(Config) ->
+    Session = init_session(#{}, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
+
+    RfUpd = #{service_data => SDC},
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+				SOpts#{'gy_event' => cdr_closure}),
+
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    {ok, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
     meck_validate(Config),
