@@ -4,7 +4,7 @@
 /_build
 /log*
 
-/tetrapak/.local.cache
+/rebar.lock
 
 # diameter compiler atrifacts
 /src/diameter_*
