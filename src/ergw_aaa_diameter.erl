@@ -71,11 +71,7 @@ initialize_transport(Id, #{connect_to :=
     {ok, {Raddr, Type}} = resolve_hostname(Host),
     TransportOpts = [{capabilities, Caps},
 		     {transport_module, transport_module(Transport)},
-		     {transport_config, [{reuseaddr, true},
-					 {raddr, Raddr},
-					 {rport, Port},
-					 Type
-					]}],
+		     {transport_config, transport_config(Transport, Type, Raddr, Port)}],
     {ok, _} = diameter:add_transport(Id, {connect, TransportOpts}),
     ok.
 
@@ -153,6 +149,16 @@ resolve_hostname(Name) ->
 transport_module(tcp) -> diameter_tcp;
 transport_module(sctp) -> diameter_sctp;
 transport_module(_) -> unknown.
+
+transport_config(tcp, Type, Raddr, Port) ->
+    [{reuseaddr, true},
+     Type, {raddr, Raddr}, {rport, Port}
+    ];
+transport_config(sctp, Type, Raddr, Port) ->
+    [{reuseaddr, true},
+     {unordered, true},
+     Type, {raddr, Raddr}, {rport, Port}
+    ].
 
 svc_set(Key, Value, Opts)
   when is_atom(Key), is_list(Value) ->
