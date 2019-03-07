@@ -106,8 +106,8 @@ Example of possible config.
 [1]: https://github.com/travelping/ergw
 
 <!-- Badges -->
-[travis]: https://travis-ci.org/travelping/ergw_aaa
-[travis badge]: https://img.shields.io/travis/travelping/ergw_aaa/master.svg?style=flat-square
+[travis]: https://travis-ci.com/travelping/ergw_aaa
+[travis badge]: https://img.shields.io/travis/com/travelping/ergw_aaa/master.svg?style=flat-square
 [coveralls]: https://coveralls.io/github/travelping/ergw_aaa
 [coveralls badge]: https://img.shields.io/coveralls/travelping/ergw_aaa/master.svg?style=flat-square
-[erlang version badge]: https://img.shields.io/badge/erlang-R20.1%20to%2021.0-blue.svg?style=flat-square
+[erlang version badge]: https://img.shields.io/badge/erlang-R20.3%20to%2021.2-blue.svg?style=flat-square
