@@ -8,6 +8,7 @@
 -module(diameter_test_server).
 
 -compile({parse_transform, do}).
+-compile({parse_transform, cut}).
 
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
@@ -239,6 +240,7 @@ handle_request(#diameter_packet{
 		check_3gpp(PS),
 		check_subscription(Msg),
 		check_user_equipment(Msg),
+		check_tarif_time_change(Msg),
 		%%
 		%% some OCSs don't like the QoS attribute on Gy, make it optional now
 		%%
@@ -301,6 +303,35 @@ check_user_equipment(#{'User-Equipment-Info' :=
 				  <<82,21,50,96,32,80,30,0>>}]}) ->
     ok;
 check_user_equipment(Msg) ->
+    error_m:fail(Msg).
+
+check_usu(Units) ->
+    M = lists:foldl(
+	  fun(#{'Tariff-Change-Usage' := [TCU]}, A) ->
+		  maps:update_with(TCU, _ + 1, 1, A);
+	     (_, A) -> A
+	  end, #{}, Units),
+    ct:pal("USU Map: ~p", [M]),
+    case M of
+	_ when map_size(M) =:= 0 ->
+	    ok;
+	#{?'DIAMETER_3GPP_CHARGING_TARIFF-CHANGE-USAGE_UNIT_BEFORE_TARIFF_CHANGE' := 1,
+	  ?'DIAMETER_3GPP_CHARGING_TARIFF-CHANGE-USAGE_UNIT_AFTER_TARIFF_CHANGE'  := 1} ->
+	    ok;
+	_ ->
+	    error_m:fail(Units)
+    end.
+
+check_tarif_time_change(#{'Multiple-Services-Credit-Control' := MSCCreq}) ->
+    F = fun Check([], Result) ->
+		Result;
+	    Check([#{'Used-Service-Unit' := Unit}|T], ok) ->
+		Check(T, check_usu(Unit));
+	    Check([_|T], Result) ->
+		Check(T, Result)
+      end,
+    F(MSCCreq, ok);
+check_tarif_time_change(Msg) ->
     error_m:fail(Msg).
 
 check_qos_info(#{'APN-Aggregate-Max-Bitrate-DL' := [84000000],

@@ -80,7 +80,7 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, abort_session_request].
+    [simple_session, abort_session_request, tarif_time_change].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -296,6 +296,54 @@ abort_session_request(Config) ->
 
     %% check that test server has recieved ACA
     ?equal(1, proplists:get_value({{4, 274, 0}, recv, {'Result-Code',2001}}, StatsTestSrv)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
+tarif_time_change() ->
+    [{doc, "Simple Gy session"}].
+tarif_time_change(Config) ->
+    Session = init_session(#{}, Config),
+    GyOpts = #{credits => #{1000 => empty}},
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, Session1, Events1} =
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+    ?match([{update_credits,[_]}], Events1),
+    ?match(#{'Multiple-Services-Credit-Control' := [_]}, Session1),
+
+    UsedCredits =
+	[{1000, #{'CC-Input-Octets'  => [0],
+		  'CC-Output-Octets' => [0],
+		  'CC-Time'          => [60],
+		  'CC-Total-Octets'  => [0],
+		  'Tariff-Change-Usage' =>
+		      [?'DIAMETER_3GPP_CHARGING_TARIFF-CHANGE-USAGE_UNIT_AFTER_TARIFF_CHANGE'],
+		  'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}},
+	 {1000, #{'CC-Input-Octets'  => [0],
+		  'CC-Output-Octets' => [0],
+		  'CC-Time'          => [60],
+		  'CC-Total-Octets'  => [0],
+		  'Tariff-Change-Usage' =>
+		      [?'DIAMETER_3GPP_CHARGING_TARIFF-CHANGE-USAGE_UNIT_BEFORE_TARIFF_CHANGE'],
+		  'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}}
+	],
+    GyUpdate = #{used_credits => UsedCredits},
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
+
+    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       used_credits => UsedCredits},
+    {ok, Session2, Events2} =
+	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+    ?match([{update_credits,[_]}], Events2),
+    ?match(#{'Multiple-Services-Credit-Control' := [_]}, Session2),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(3, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
     meck_validate(Config),

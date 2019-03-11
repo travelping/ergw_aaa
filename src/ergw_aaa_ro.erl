@@ -573,16 +573,32 @@ to_session('Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
 to_session(_, _, SessEv) ->
     SessEv.
 
-attr_merge(Key, Value, Map) ->
-    maps:update_with(Key,  maps:merge(_, Value), Value, Map).
+%% see 3GPP TS 32.299, Sect. 7.1.9 Multiple-Services-Credit-Control AVP
+merge_mscc({Key, Value}, MSCC)
+  when Key =:= 'Used-Service-Unit';
+       Key =:= 'Service-Identifier';
+       Key =:= 'G-S-U-Pool-Reference';
+       Key =:= 'Reporting-Reason';
+       Key =:= 'AF-Correlation-Information';
+       Key =:= 'Envelope';
+       Key =:= 'Service-Specific-Info';
+       Key =:= 'Announcement-Information' ->
+    maps:update_with(Key, [Value|_], [Value], MSCC);
+merge_mscc({Key, Value}, MSCC) ->
+    MSCC#{Key => Value}.
+
+merge_mscc(RatingGroup, Values, Report) ->
+    Init = #{'Rating-Group' => [RatingGroup]},
+    Report#{RatingGroup =>
+		lists:foldl(fun merge_mscc/2, maps:get(RatingGroup, Report, Init), Values)}.
 
 request_credits(Session, MSCC) ->
     Credits = maps:get(credits, Session, #{}),
     maps:fold(
       fun(RatingGroup, empty, Request) ->
 	      lager:warning("Ro Charging Key: ~p", [RatingGroup]),
-	      RSU = #{'Rating-Group' => [RatingGroup], 'Requested-Service-Unit' => [#{}]},
-	      attr_merge(RatingGroup, RSU, Request);
+	      RSU = [{'Requested-Service-Unit', #{}}],
+	      merge_mscc(RatingGroup, RSU, Request);
 	 (RatingGroup, _, Request) ->
 	      lager:error("unknown Ro Rating Group: ~p", [RatingGroup]),
 	      Request
@@ -592,8 +608,8 @@ report_credits(Session, MSCC) ->
     Credits = maps:get(used_credits, Session, []),
     lists:foldl(
       fun({RatingGroup, Used}, Report) ->
-	      USU = #{'Rating-Group' => [RatingGroup], 'Used-Service-Unit' => [Used]},
-	      attr_merge(RatingGroup, USU, Report)
+	      RSU = [{'Used-Service-Unit', Used}],
+	      merge_mscc(RatingGroup, RSU, Report)
       end, MSCC, Credits).
 
 context_id(_Session) ->
