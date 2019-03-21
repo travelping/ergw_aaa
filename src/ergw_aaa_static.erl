@@ -34,8 +34,17 @@ validate_service(_Service, HandlerOpts, Opts) ->
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
 
-invoke(_Service, _Procedure, Session, Events, #{answers := Answers, answer := Answer}) ->
-    {ok, maps:merge(Session, maps:get(Answer, Answers, #{})), Events};
+invoke(_Service, _Procedure, Session, Events0, #{answers := Answers, answer := Answer}) ->
+    Response = maps:get(Answer, Answers, #{}),
+    Events =
+	case Response of
+	    #{'Multiple-Services-Credit-Control' := K} ->
+		%% mirror Ro
+		[{update_credits, K} | Events0];
+	    _ ->
+		Events0
+	end,
+    {ok, maps:merge(Session, Response), Events};
 invoke(_Service, _Procedure, Session, Events, Opts) ->
     {ok, maps:merge(Session, Opts), Events}.
 
