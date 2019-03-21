@@ -47,7 +47,9 @@
 -define(DIAMETER_APP_ID_RO, ?DIAMETER_DICT_RO:id()).
 
 -define(DefaultOptions, [{function, "undefined"},
-			 {'Destination-Realm', undefined}]).
+			 {'Destination-Realm', undefined},
+			 {answer_if_down, reject},
+			 {answer_if_timeout, reject}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -232,6 +234,8 @@ validate_option(answers, Value) when is_map(Value) ->
     Value;
 validate_option(answer_if_down, Value) when is_atom(Value) ->
     Value;
+validate_option(answer_if_timeout, Value) when is_atom(Value) ->
+    Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
@@ -261,9 +265,14 @@ handle_cca({error, no_connection} = Result, Session, Events,
     NewSession = ergw_aaa_session:set_svc_opt(
 		   ?MODULE, DiamSession#{'State' => peer_down}, Session),
     handle_cca(['CCA' | Avps], NewSession, Events, Opts);
+handle_cca({error, no_connection} = Result, Session, Events,
+	   #{answer_if_timeout := Answer, answers := Answers} = Opts) ->
+    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
+					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
+    handle_cca(['CCA' | Avps], Session, Events, Opts);
 handle_cca({error, _} = Result, Session, Events, _Opts) ->
     lager:error("CCA Result: ~p", [Result]),
-    {Result, Session, Events}.
+    {Result, Session, [stop | Events]}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
     {Result, ReplyAvps0} =
