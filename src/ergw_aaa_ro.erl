@@ -257,7 +257,7 @@ handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
 handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events};
-handle_cca({error, no_connection} = Result, Session, Events,
+handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
@@ -265,7 +265,7 @@ handle_cca({error, no_connection} = Result, Session, Events,
     NewSession = ergw_aaa_session:set_svc_opt(
 		   ?MODULE, DiamSession#{'State' => peer_down}, Session),
     handle_cca(['CCA' | Avps], NewSession, Events, Opts);
-handle_cca({error, no_connection} = Result, Session, Events,
+handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
@@ -279,7 +279,7 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
 	case ergw_aaa_session_reg:lookup(SessionId) of
 	    Session when is_pid(Session) ->
 		ergw_aaa_session:request(Session, {'gy', Command}, Avps);
-	    Session ->
+	    _ ->
 		{{error, unknown_session}, #{}}
 	end,
 

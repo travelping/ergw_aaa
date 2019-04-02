@@ -171,7 +171,7 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 handle_request(#diameter_packet{
 		  msg = ['CCR' |
 			 #{'Subscription-Id' :=
-			       [#{'Subscription-Id-Data' := <<"FAIL">>}]}]},
+			       [#{'Subscription-Id-Data' := <<"FAIL">>}|_]}]},
 	       _SvcName, _, _Extra) ->
     {answer_message, 3001};  %% DIAMETER_COMMAND_UNSUPPORTED
 
