@@ -22,6 +22,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/5]).
+-export([to_session/3]).
 
 %% diameter callbacks
 -export([peer_up/3,

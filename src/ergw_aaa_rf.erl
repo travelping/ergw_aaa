@@ -22,6 +22,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/5]).
+-export([to_session/3]).
 
 %%
 %% diameter callbacks
@@ -231,16 +232,9 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
-		      'Acct-Interim-Interval' := [Interim]}],
-	   Session, Events) ->
-    Monit = {'IP-CAN', periodic, Interim},
-    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
-    {ok,
-     maps:update_with(monitoring, maps:put(?MODULE, Monit, _), #{?MODULE => Monit}, Session),
-     ergw_aaa_session:ev_set(Trigger, Events)};
-handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'}],
-	   Session, Events) ->
+handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
+	   Session0, Events0) ->
+    {Session, Events} = maps:fold(fun to_session/3, {Session0, Events0}, Avps),
     {ok, Session, Events};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
@@ -253,6 +247,14 @@ inc_number(Key, Session) ->
     ModuleOpts = ergw_aaa_session:get_svc_opt(?MODULE, Session),
     Number = maps:get(Key, ModuleOpts, -1) + 1,
     {Number, ergw_aaa_session:set_svc_opt(?MODULE, ModuleOpts#{Key => Number}, Session)}.
+
+to_session('Acct-Interim-Interval', [Interim], {Session, Events}) ->
+    Monit = {'IP-CAN', periodic, Interim},
+    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
+    {maps:update_with(monitoring, maps:put(?MODULE, Monit, _), #{?MODULE => Monit}, Session),
+     ergw_aaa_session:ev_set(Trigger, Events)};
+to_session(_, _, SessEv) ->
+    SessEv.
 
 %%%===================================================================
 

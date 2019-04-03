@@ -192,8 +192,9 @@ simple_session(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-    {ok, _Session1, _Events1} =
+    {ok, _Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+    ?match([{pcc, install, [_|_]}], Events1),
 
     GxTerm =
 	#{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},

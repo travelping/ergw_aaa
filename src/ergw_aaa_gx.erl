@@ -22,6 +22,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/5]).
+-export([to_session/3]).
 
 %% diameter callbacks
 -export([peer_up/3,
@@ -560,35 +561,14 @@ umi_to_session(#'diameter_gx_Usage-Monitoring-Information'{
 umi_to_session(_, SessEv) ->
     SessEv.
 
-add_rule(Key, Rule, {Session0, Events}) ->
-    Session = maps:update_with(Key, fun(V) -> [Rule|V] end, [Rule], Session0),
-    {Session, Events}.
-
-del_rule(Key, Rule, {Session0, Events}) ->
-    Session = maps:update_with(Key, fun(V) -> lists:delete(Rule, V) end, [], Session0),
-    {Session, Events}.
-
-rule_to_session(#'diameter_gx_Charging-Rule-Install'{
-		   'Charging-Rule-Base-Name' = Bases,
-		   'Charging-Rule-Name' = Rules}, SessEv0) ->
-    SessEv = lists:foldl(add_rule('PCC-Rules', _, _), SessEv0, Rules),
-    lists:foldl(add_rule('PCC-Groups', _, _), SessEv, Bases);
-rule_to_session(#'diameter_gx_Charging-Rule-Remove'{
-		   'Charging-Rule-Base-Name' = Bases,
-		   'Charging-Rule-Name' = Rules}, SessEv0) ->
-    SessEv = lists:foldl(del_rule('PCC-Rules', _, _), SessEv0, Rules),
-    lists:foldl(del_rule('PCC-Groups', _, _), SessEv, Bases);
-rule_to_session(_, SessEv) ->
-    SessEv.
-
 to_session('Usage-Monitoring-Information', Value, SessEv) ->
     lists:foldl(fun umi_to_session/2, SessEv, Value);
-to_session('Charging-Rule-Install', Value, SessEv) ->
-    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- Value],
-    lists:foldl(fun rule_to_session/2, SessEv, Value);
-to_session('Charging-Rule-Remove', Value, SessEv) ->
-    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- Value],
-    lists:foldl(fun rule_to_session/2, SessEv, Value);
+to_session('Charging-Rule-Install', V, {Session, Events}) ->
+    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- V],
+    {Session, [{pcc, install, V} | Events]};
+to_session('Charging-Rule-Remove', V, {Session, Events}) ->
+    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- V],
+    {Session, [{pcc, remove, V} | Events]};
 to_session(_, _, SessEv) ->
     SessEv.
 
