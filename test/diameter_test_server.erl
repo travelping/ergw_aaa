@@ -18,7 +18,9 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
--export([start/0, start/2, stop/0, abort_session_request/4]).
+-export([start/0, start/2, stop/0,
+	 abort_session_request/4,
+	 re_auth_request/5]).
 
 %% diameter callbacks
 -export([peer_up/4,
@@ -107,6 +109,25 @@ stop() ->
     diameter:stop_service(?MODULE),
     application:stop(diameter).
 
+re_auth_request(gx, SessionId, DH, DR, AVPs)
+  when is_map(AVPs) ->
+    RAR = AVPs#{'Session-Id' => SessionId,
+		'Destination-Realm' => DR,
+		'Destination-Host' => DH,
+		'Auth-Application-Id' => ?DIAMETER_APP_ID_GX,
+		'Re-Auth-Request-Type' =>
+		    ?'DIAMETER_BASE_RE-AUTH-REQUEST-TYPE_AUTHORIZE_ONLY',
+		'Charging-Rule-Install' =>
+		    [#{'Charging-Rule-Name' => <<"service01">>}]
+	       },
+    diameter:call(?MODULE, diameter_gx, [ 'RAR' | RAR ], [detach]).
+
+abort_session_request(gx, SessionId, DH, DR) ->
+    ASR = #{'Session-Id' => SessionId,
+	    'Destination-Realm' => DR,
+	    'Destination-Host' => DH,
+	    'Auth-Application-Id' => ?DIAMETER_APP_ID_GX},
+    diameter:call(?MODULE, diameter_gx, [ 'ASR' | ASR ], [detach]);
 abort_session_request(gy, SessionId, DH, DR) ->
     ASR = #{'Session-Id' => SessionId,
 	    'Destination-Realm' => DR,

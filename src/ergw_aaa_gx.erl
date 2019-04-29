@@ -273,7 +273,7 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
     {Result, ReplyAvps0} =
 	case ergw_aaa_session_reg:lookup(SessionId) of
 	    Session when is_pid(Session) ->
-		ergw_aaa_session:request(Session, {'gy', Command}, Avps);
+		ergw_aaa_session:request(Session, ?MODULE, {'gx', Command}, Avps);
 	    _ ->
 		{{error, unknown_session}, #{}}
 	end,

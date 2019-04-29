@@ -22,7 +22,7 @@
 	 interim/2, interim/3,
 	 stop/2, stop/3,
 	 terminate/1, get/1, get/2, set/2, set/3, unset/2, sync/1,
-	 request/3, response/3]).
+	 request/4, response/3]).
 
 %% Session Object API
 -export([attr_get/2, attr_get/3, attr_set/3,
@@ -102,8 +102,8 @@ invoke(Session, SessionOpts, Procedure, Opts, true) ->
 invoke(Session, SessionOpts, Procedure, Opts, false) ->
     gen_statem:call(Session, {invoke, SessionOpts, Procedure, normalize_opts(Opts)}, ?AAA_TIMEOUT).
 
-request(Session, Procedure, Request) ->
-    gen_statem:call(Session, #aaa_request{procedure = Procedure, request = Request}).
+request(Session, Handler, Procedure, Avps) ->
+    gen_statem:call(Session, {request, Handler, Procedure, Avps}).
 
 response(Session, Result, Avps) when is_map(Avps) ->
     gen_statem:cast(Session, {'$response', Result, Avps}).
@@ -283,8 +283,15 @@ handle_event(cast, {invoke, SessionOpts, Procedure, Opts}, State, Data) ->
 	    end),
     {next_state, State#state{pending = Pid}, Data};
 
-handle_event({call, _} = Call, #aaa_request{} = Request, State,
-	     #data{owner = Owner} = Data) ->
+handle_event({call, _} = Call, {request, Handler, Procedure, Avps}, State,
+	     #data{owner = Owner, session = Session0} = Data) ->
+
+    {Session, Events} = maps:fold(fun Handler:to_session/3, {Session0, []}, Avps),
+
+    Request = #aaa_request{
+		 procedure = Procedure,
+		 session = Session,
+		 events = Events},
     Owner ! Request,
     {next_state, State#state{pending = Call}, Data, [{state_timeout, 10 * 1000, Request}]};
 

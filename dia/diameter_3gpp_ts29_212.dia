@@ -320,6 +320,38 @@
             * [ Proxy-Info ]
             * [ AVP ]
 
+;; imported from RFC 6733, Diameter Base Procotol
+
+   ASR ::= < Diameter Header: 274, REQ, PXY >
+           < Session-Id >
+           { Origin-Host }
+           { Origin-Realm }
+           { Destination-Realm }
+           { Destination-Host }
+           { Auth-Application-Id }
+           [ User-Name ]
+           [ Origin-State-Id ]
+         * [ Proxy-Info ]
+         * [ Route-Record ]
+         * [ AVP ]
+
+   ASA ::= < Diameter Header: 274, PXY >
+           < Session-Id >
+           { Result-Code }
+           { Origin-Host }
+           { Origin-Realm }
+           [ User-Name ]
+           [ Origin-State-Id ]
+           [ Error-Message ]
+           [ Error-Reporting-Host ]
+           [ Failed-AVP ]
+         * [ Redirect-Host ]
+           [ Redirect-Host-Usage ]
+           [ Redirect-Max-Cache-Time ]
+         * [ Proxy-Info ]
+         * [ AVP ]
+
+;; ===========================================================================
 
 @enum AN-GW-Status
 

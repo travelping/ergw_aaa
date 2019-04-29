@@ -29,6 +29,9 @@
 -define(HUT, ergw_aaa_gx).
 -define(SERVICE, ergw_aaa_gx).
 
+-define('Origin-Host', <<"127.0.0.1">>).
+-define('Origin-Realm', <<"example.com">>).
+
 -define(STATIC_CONFIG,
 	[{'NAS-Identifier',        <<"NAS">>},
 	 {'Framed-Protocol',       'PPP'},
@@ -41,8 +44,8 @@
 -define(DIAMETER_FUNCTION,
 	{?SERVICE,
 	 [{handler, ergw_aaa_diameter},
-	  {'Origin-Host', <<"127.0.0.1">>},
-	  {'Origin-Realm', <<"example.com">>},
+	  {'Origin-Host', ?'Origin-Host'},
+	  {'Origin-Realm', ?'Origin-Realm'},
 	  {transports, [?DIAMETER_TRANSPORT]}
 	 ]}).
 -define(DIAMETER_CONFIG,
@@ -85,7 +88,9 @@
 all() ->
     [
      simple_session,
-     handle_failure
+     abort_session_request,
+     handle_failure,
+     re_auth_request
     ].
 
 init_per_suite(Config0) ->
@@ -212,6 +217,52 @@ simple_session(Config) ->
     meck_validate(Config),
     ok.
 
+abort_session_request() ->
+    [{doc, "Stop Gx session with ASR"}].
+abort_session_request(Config) ->
+    Session = init_session(#{}, Config),
+    GxOpts =
+	#{'3GPP-IMSI' => <<"IMSI">>},
+
+    Stats0 = get_stats(?SERVICE),
+    StatsTestSrv0 = get_stats(diameter_test_server),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, Session1, Events1} =
+	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+    ?match([{pcc, install, [_|_]}], Events1),
+
+    SessionId = maps:get('Diameter-Session-Id', Session1),
+    ?equal(ok, diameter_test_server:abort_session_request(gx, SessionId, ?'Origin-Host', ?'Origin-Realm')),
+
+    receive
+	#aaa_request{procedure = {_, 'ASR'}} ->
+	    ergw_aaa_session:response(SId, ok, #{})
+    after 1000 ->
+	    ct:fail("no ASR")
+    end,
+
+    GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
+    {ok, _Session2, _Events2} =
+	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, [], false),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
+
+    %% check that client has recieved CCA
+    ?equal(2, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% check that client has send ACA
+    ?equal(1, proplists:get_value({{16777238, 274, 0}, send, {'Result-Code',2001}}, Stats1)),
+
+    %% check that test server has recieved ACA
+    ?equal(1, proplists:get_value({{16777238, 274, 0}, recv, {'Result-Code',2001}},
+				  StatsTestSrv)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
 handle_failure(Config) ->
     Session = init_session(#{}, Config),
     GxOpts =
@@ -234,6 +285,61 @@ handle_failure(Config) ->
     %% make sure nothing crashed
     meck_validate(Config),
     ok.
+
+re_auth_request() ->
+    [{doc, "Send a Re-Auth-Request (RAR) on the Gx session"}].
+re_auth_request(Config) ->
+    Session = init_session(#{}, Config),
+    GxOpts =
+	#{'3GPP-IMSI' => <<"IMSI">>},
+
+    Stats0 = get_stats(?SERVICE),
+    StatsTestSrv0 = get_stats(diameter_test_server),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, Session1, Events1} =
+	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+    ?match([{pcc, install, [_|_]}], Events1),
+
+    RAROpts =
+	#{'Charging-Rule-Remove' => [],
+	  'Charging-Rule-Install' => []},
+
+    SessionId = maps:get('Diameter-Session-Id', Session1),
+    ?equal(ok, diameter_test_server:re_auth_request(gx, SessionId,
+						    ?'Origin-Host', ?'Origin-Realm',
+						    RAROpts)),
+
+    receive
+	#aaa_request{procedure = {_, 'RAR'}, events = Events} ->
+	    ?match([{pcc, install, [#{'Charging-Rule-Name' := [<<"service01">>]}]}],
+		   Events),
+	    ergw_aaa_session:response(SId, ok, #{})
+    after 1000 ->
+	    ct:fail("no ASR")
+    end,
+
+    GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
+    {ok, _Session2, _Events2} =
+	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, [], false),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
+
+    %% check that client has recieved CCA
+    ?equal(2, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% check that client has send RAA
+    ?equal(1, proplists:get_value({{16777238, 258, 0}, send, {'Result-Code',2001}}, Stats1)),
+
+    %% check that test server has recieved RAA
+    ?equal(1, proplists:get_value({{16777238, 258, 0}, recv, {'Result-Code',2001}},
+				  StatsTestSrv)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
 
 %%%===================================================================
 %%% Internal functions
