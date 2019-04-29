@@ -15,5 +15,6 @@
 
 -record(aaa_request, {
 		      procedure,
-		      request
+		      session,
+		      events = []
 		     }).
