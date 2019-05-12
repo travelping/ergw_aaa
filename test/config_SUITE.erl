@@ -229,6 +229,18 @@ config(_Config)  ->
     ?error_set([functions, 'diam-test', transports, 1, connect_to], invalid_uri),
     ?error_set([functions, 'diam-test', transports, 1, connect_to], <<"http://example.com:12345">>),
 
+    % transport options
+    ?ok_set([functions, 'diam-test', transports, 1, recbuf], 424242),
+    ?ok_set([functions, 'diam-test', transports, 1, sndbuf], 424242),
+    ?ok_set([functions, 'diam-test', transports, 1, unordered], false),
+    ?ok_set([functions, 'diam-test', transports, 1, reuseaddr], false),
+    ?error_set([functions, 'diam-test', transports, 1, recbuf], invalid),
+    ?error_set([functions, 'diam-test', transports, 1, recbuf], 13),
+    ?error_set([functions, 'diam-test', transports, 1, sndbuf], invalid),
+    ?error_set([functions, 'diam-test', transports, 1, sndbuf], 13),
+    ?error_set([functions, 'diam-test', transports, 1, unordered], invalid),
+    ?error_set([functions, 'diam-test', transports, 1, reuseaddr], invalid),
+
     ?error_set([handlers, ergw_aaa_nasreq], []),
     ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),
 

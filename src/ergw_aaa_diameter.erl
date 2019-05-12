@@ -27,7 +27,9 @@
 				 {'Origin-Host', undefined},
 				 {'Origin-Realm', undefined}
 				 ]).
--define(DefaultTransportOptions, [{connect_to, undefined}
+-define(DefaultTransportOptions, [{connect_to, undefined}, 
+				  {unordered, true},
+ 				  {reuseaddr, true}
 				 ]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
@@ -71,7 +73,7 @@ initialize_transport(Id, #{connect_to :=
     {ok, {Raddr, Type}} = resolve_hostname(Host),
     TransportOpts = [{capabilities, Caps},
 		     {transport_module, transport_module(Transport)},
-		     {transport_config, transport_config(Transport, Type, Raddr, Port)}],
+		     {transport_config, transport_config(Transport, Type, Raddr, Port, Opts)}],
     {ok, _} = diameter:add_transport(Id, {connect, TransportOpts}),
     ok.
 
@@ -124,6 +126,14 @@ validate_transport(connect_to = Opt, Value) when is_binary(Value) ->
 validate_transport(K, V)
   when K =:= 'Origin-Host'; K =:= 'Origin-Realm' ->
     validate_capability(K, V);
+validate_transport(recbuf, Value) when is_integer(Value), Value >= 16*1024 ->
+    Value;
+validate_transport(sndbuf, Value) when is_integer(Value), Value >= 16*1024 ->
+    Value;
+validate_transport(reuseaddr, Value) when is_boolean(Value) ->
+    Value;
+validate_transport(unordered, Value) when is_boolean(Value) ->
+    Value;
 validate_transport(Opt, Value) ->
     validate_transport_error(Opt, Value).
 
@@ -150,15 +160,12 @@ transport_module(tcp) -> diameter_tcp;
 transport_module(sctp) -> diameter_sctp;
 transport_module(_) -> unknown.
 
-transport_config(tcp, Type, Raddr, Port) ->
-    [{reuseaddr, true},
-     Type, {raddr, Raddr}, {rport, Port}
-    ];
-transport_config(sctp, Type, Raddr, Port) ->
-    [{reuseaddr, true},
-     {unordered, true},
-     Type, {raddr, Raddr}, {rport, Port}
-    ].
+transport_config(tcp, Type, Raddr, Port, Opts) ->
+    [Type, {raddr, Raddr}, {rport, Port}
+     | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf], Opts))];
+transport_config(sctp, Type, Raddr, Port, Opts) ->
+    [Type, {raddr, Raddr}, {rport, Port}
+     | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, unordered], Opts))].
 
 svc_set(Key, Value, Opts)
   when is_atom(Key), is_list(Value) ->
