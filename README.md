@@ -4,7 +4,9 @@ erGW-AAA - AAA component for the [erGW project][1]
 [![Coverage Status][coveralls badge]][coveralls]
 [![Erlang Versions][erlang version badge]][travis]
 
-This is a companion project for the [erGW project][1] to provide an abstract AAA (Authentication, Authorization and Accounting) interface for protocols based on erGW.
+This is a companion project for the [erGW project][1] to provide an abstract
+AAA (Authentication, Authorization and Accounting) interface for protocols
+based on erGW.
 
 Supported backend providers are:
 
@@ -31,18 +33,22 @@ Using rebar3:
 CONFIGURATION
 -------------
 
-For all releases in the 3.x stream, the configuration syntax might change at any point and might not be backward compatible.
+For all releases in the 3.x stream, the configuration syntax might change at
+any point and might not be backward compatible.
 
 Example of possible config.
 
 ```erlang
  {ergw_aaa,
-  [{transports,
+  [{functions,
     [{'ergw-pgw-epc',
       [{handler, ergw_aaa_diameter},
-       {host, <<"ergw-pgw.dia.example.net">>},
-       {realm, <<"dia.example.net">>},
-       {connect_to, <<"aaa://srv1.dia.example.net;transport=sctp">>}
+       {'Origin-Host', <<"ergw-pgw.dia.example.net">>},
+       {'Origin-Realm', <<"dia.example.net">>},
+       {transports, [
+           [{connect_to, <<"aaa://srv1.dia.example.net;transport=sctp">>},
+            {recbuf, 32768}]
+        ]},
       ]}
     ]},
    {handlers,
