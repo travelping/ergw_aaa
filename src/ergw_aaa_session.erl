@@ -86,7 +86,9 @@ event(Session, Event, EvOpts, SessionOpts) when is_map(SessionOpts) ->
 %%===================================================================
 
 start_link(Owner, SessionData) ->
-    gen_statem:start_link(?MODULE, [Owner, SessionData], []).
+    Opts = [{hibernate_after, 500},
+	    {spawn_opt,[{fullsweep_after, 0}]}],
+    gen_statem:start_link(?MODULE, [Owner, SessionData], Opts).
 
 invoke(Session, SessionOpts, Procedure, Opts)
   when is_list(Opts) ->
