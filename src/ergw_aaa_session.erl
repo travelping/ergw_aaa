@@ -286,7 +286,7 @@ handle_event(cast, {invoke, SessionOpts, Procedure, Opts}, State, Data) ->
 handle_event({call, _} = Call, {request, Handler, Procedure, Avps}, State,
 	     #data{owner = Owner, session = Session0} = Data) ->
 
-    {Session, Events} = maps:fold(fun Handler:to_session/3, {Session0, []}, Avps),
+    {Session, Events} = Handler:to_session(Procedure, {Session0, []}, Avps),
 
     Request = #aaa_request{
 		 procedure = Procedure,

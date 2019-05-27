@@ -243,7 +243,7 @@ validate_option_error(Opt, Value) ->
 
 handle_cca(['CCA' | #{'Result-Code' := [?'DIAMETER_BASE_RESULT-CODE_SUCCESS']} = Avps],
 	   Session0, Events0, _Opts) ->
-    {Session, Events} = maps:fold(fun to_session/3, {Session0, Events0}, Avps),
+    {Session, Events} = to_session({gx, 'CCA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
 handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
   when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' andalso
@@ -552,15 +552,20 @@ umi_to_session(#'diameter_gx_Usage-Monitoring-Information'{
 umi_to_session(_, SessEv) ->
     SessEv.
 
-to_session('Usage-Monitoring-Information', Value, SessEv) ->
+%% to_session/3
+to_session(Procedure, SessEvs, Avps) ->
+    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
+
+%% to_session/4
+to_session(_, 'Usage-Monitoring-Information', Value, SessEv) ->
     lists:foldl(fun umi_to_session/2, SessEv, Value);
-to_session('Charging-Rule-Install', V, {Session, Events}) ->
+to_session(_, 'Charging-Rule-Install', V, {Session, Events}) ->
     [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- V],
     {Session, [{pcc, install, V} | Events]};
-to_session('Charging-Rule-Remove', V, {Session, Events}) ->
+to_session(_, 'Charging-Rule-Remove', V, {Session, Events}) ->
     [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- V],
     {Session, [{pcc, remove, V} | Events]};
-to_session(_, _, SessEv) ->
+to_session(_, _, _, SessEv) ->
     SessEv.
 
 %% make_request(Type, #{sid := SId, cc_req_number := ReqNum}) ->
