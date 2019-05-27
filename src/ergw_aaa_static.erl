@@ -60,18 +60,19 @@ validate_option(_Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-to_session({rf, _}, Session, Events, Avps) ->
-    maps:fold(fun ergw_aaa_rf:to_session/3, {Session, Events}, Avps);
-to_session({gx, _}, Session, Events, Avps) ->
-    maps:fold(fun ergw_aaa_gx:to_session/3, {Session, Events}, Avps);
-to_session({gy, _}, Session, Events, Avps) ->
-    maps:fold(fun ergw_aaa_ro:to_session/3, {Session, Events}, Avps);
-to_session(_Procedure, Session, Events, Avps) ->
+%% to_session/3
+to_session({rf, _} = Procedure, SessEvs, Avps) ->
+    ergw_aaa_rf:to_session(Procedure, SessEvs, Avps);
+to_session({gx, _} = Procedure, SessEvs, Avps) ->
+    ergw_aaa_gx:to_session(Procedure, SessEvs, Avps);
+to_session({gy, _} = Procedure, SessEvs, Avps) ->
+    ergw_aaa_ro:to_session(Procedure, SessEvs, Avps);
+to_session(_Procedure, {Session, Events}, Avps) ->
     {maps:merge(Session, Avps), Events}.
 
 handle_response(Procedure, #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps,
 		Session0, Events0) ->
-    {Session, Events} = to_session(Procedure, Session0, Events0, Avps),
+    {Session, Events} = to_session(Procedure, {Session0, Events0}, Avps),
     {ok, Session, Events};
 handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events)
   when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' ->

@@ -319,7 +319,7 @@ validate_option_error(Opt, Value) ->
 
 handle_cca(['CCA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
 	   Session0, Events0, _Opts) ->
-    {Session, Events} = maps:fold(fun to_session/3, {Session0, Events0}, Avps),
+    {Session, Events} = to_session({gy, 'CCA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
 handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
   when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' andalso
@@ -677,9 +677,16 @@ apply_answer_config(Answer, Answers, Session, DefaultAnswerApvs) ->
 	    {AVPs, Session}
     end.
 
-to_session('Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
+%% to_session/3
+to_session(Procedure, SessEvs, Avps) ->
+    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
+
+%% to_session/4
+to_session(_, 'Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
     {Session#{K => V}, [{update_credits, V} | Events]};
-to_session(_, _, SessEv) ->
+to_session({_, 'RAR'}, 'Rating-Group', V, {Session, Events}) ->
+    {Session, [Events | {report_rating_group, V}]};
+to_session(_, _, _, SessEv) ->
     SessEv.
 
 %% see 3GPP TS 32.299, Sect. 7.1.9 Multiple-Services-Credit-Control AVP
