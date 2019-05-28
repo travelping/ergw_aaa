@@ -236,8 +236,8 @@ abort_session_request(Config) ->
     ?equal(ok, diameter_test_server:abort_session_request(gx, SessionId, ?'Origin-Host', ?'Origin-Realm')),
 
     receive
-	#aaa_request{procedure = {_, 'ASR'}} ->
-	    ergw_aaa_session:response(SId, ok, #{})
+	#aaa_request{procedure = {_, 'ASR'}} = Request ->
+	    ergw_aaa_session:response(Request, ok, #{})
     after 1000 ->
 	    ct:fail("no ASR")
     end,
@@ -311,10 +311,10 @@ re_auth_request(Config) ->
 						    RAROpts)),
 
     receive
-	#aaa_request{procedure = {_, 'RAR'}, events = Events} ->
+	#aaa_request{procedure = {_, 'RAR'}, events = Events} = Request ->
 	    ?match([{pcc, install, [#{'Charging-Rule-Name' := [<<"service01">>]}]}],
 		   Events),
-	    ergw_aaa_session:response(SId, ok, #{})
+	    ergw_aaa_session:response(Request, ok, #{})
     after 1000 ->
 	    ct:fail("no ASR")
     end,
