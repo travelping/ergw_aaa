@@ -105,8 +105,9 @@ invoke(Session, SessionOpts, Procedure, Opts, false) ->
 request(Session, Handler, Procedure, Avps) ->
     gen_statem:call(Session, {request, Handler, Procedure, Avps}).
 
-response(Session, Result, Avps) when is_map(Avps) ->
-    gen_statem:cast(Session, {'$response', Result, Avps}).
+response(#aaa_request{from = {Pid, _}} = Request, Result, Avps)
+  when is_pid(Pid), is_map(Avps) ->
+    gen_statem:cast(Pid, {'$response', Request, Result, Avps}).
 
 authenticate(Session, SessionOpts)
   when is_map(SessionOpts) ->
@@ -234,7 +235,8 @@ handle_event(state_timeout, #aaa_request{}, #state{pending = {call, From}} = Sta
     Reply = {error, #{}},
     {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
 
-handle_event(cast, {'$response', Result, Avps}, #state{pending = {call, From}} = State, Data) ->
+handle_event(cast, {'$response', _Request, Result, Avps},
+	     #state{pending = {call, From}} = State, Data) ->
     Reply = {Result, Avps},
     {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
 
@@ -289,6 +291,7 @@ handle_event({call, _} = Call, {request, Handler, Procedure, Avps}, State,
     {Session, Events} = Handler:to_session(Procedure, {Session0, []}, Avps),
 
     Request = #aaa_request{
+		 from = {self(), make_ref()},
 		 procedure = Procedure,
 		 session = Session,
 		 events = Events},

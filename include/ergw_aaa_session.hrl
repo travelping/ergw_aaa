@@ -14,6 +14,7 @@
 %% along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 -record(aaa_request, {
+		      from		:: {pid(), reference()},
 		      procedure,
 		      session,
 		      events = []
