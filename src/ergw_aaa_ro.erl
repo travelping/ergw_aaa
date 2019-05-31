@@ -27,11 +27,11 @@
 %% diameter callbacks
 -export([peer_up/3,
 	 peer_down/3,
-	 pick_peer/4, pick_peer/5,
-	 prepare_request/3, prepare_request/4,
-	 prepare_retransmit/3, prepare_retransmit/4,
+	 pick_peer/4, pick_peer/5, pick_peer/6,
+	 prepare_request/3, prepare_request/4, prepare_request/5,
+	 prepare_retransmit/3, prepare_retransmit/4, prepare_retransmit/5,
 	 handle_answer/4, handle_answer/5,
-	 handle_error/4,
+	 handle_error/4, handle_error/5,
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -146,8 +146,36 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{function := Function}) ->
-    diameter:call(Function, ?APP, Request, []).
+call(Request, #{rate_limit_jobs_queue_name := RateLimitQueue} = Config) ->
+    try
+        jobs:run(RateLimitQueue, fun() -> 
+            call(Request, maps:remove(rate_limit_jobs_queue_name, Config)) 
+        end)
+    catch
+        exit:timeout:_ -> {error, rate_limit}
+    end;
+
+call(Request, #{max_retries := MaxRetries} = Config) when MaxRetries > 0 ->
+    call_with_retry(Request, Config, MaxRetries, diameter_session:sequence(), []);
+
+call(Request, #{function := Function} = Config) ->
+    Timeout = maps:get(tx_timeout, Config, 5000),
+    diameter:call(Function, ?APP, Request, [{timeout, Timeout}]).
+
+call_with_retry(_Request, _Config, 0, _E2EId, _PeersTried) ->
+    {error, timeout};
+
+call_with_retry(Request, #{function := Function} = Config, RetriesLeft, E2EId, PeersTried) ->
+    Timeout = maps:get(tx_timeout, Config, 5000),
+    case diameter:call(
+        Function, ?APP, Request, 
+        [{timeout, Timeout}, {extra, [{retry, E2EId, PeersTried}]}]
+    ) of
+        {error, timeout, TimeoutPeer} ->
+            call_with_retry(Request, Config, RetriesLeft-1, E2EId, [TimeoutPeer | PeersTried]);
+        OtherResult ->
+            OtherResult
+    end.
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -162,6 +190,8 @@ peer_down(_SvcName, {PeerRef, _} = _Peer, State) ->
     lager:debug("peer_down: ~p~n", [_Peer]),
     State.
 
+pick_peer([], [], _SvcName, _State) ->
+    false;
 pick_peer([], RemoteCandidates, _SvcName, _State) ->
     N = rand:uniform(length(RemoteCandidates)),
     {ok, lists:nth(N, RemoteCandidates)};
@@ -169,8 +199,14 @@ pick_peer(LocalCandidates, _, _SvcName, _State) ->
     N = rand:uniform(length(LocalCandidates)),
     {ok, lists:nth(N, LocalCandidates)}.
 
+pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, {retry, _E2EId, PeersTried}) ->
+    pick_peer(LocalCandidates -- PeersTried, RemoteCandidates -- PeersTried, SvcName, State);
+
 pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
     pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
+
+pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From, {retry, _E2EId, PeersTried}) ->
+    pick_peer(LocalCandidates -- PeersTried, RemoteCandidates -- PeersTried, SvcName, State).
 
 prepare_request(#diameter_packet{msg = ['CCR' = T | Avps]}, _, {_PeerRef, Caps})
   when is_map(Avps) ->
@@ -188,14 +224,43 @@ prepare_request(Packet, _SvcName, {PeerRef, _}) ->
     lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
     {send, Packet}.
 
+prepare_request(#diameter_packet{header = Header, msg = ['CCR' | Avps]} = Packet, _SvcName, {_PeerRef, Caps}, {retry, E2EId, PeersTried}) when is_map(Avps) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _},
+		   origin_state_id = {OSid, _}} = Caps,
+
+    RetryCCRHdr = Header#diameter_header{
+        is_retransmitted = PeersTried /= [],
+        is_proxiable = true,
+        cmd_code = 272,
+        application_id = 4,
+        end_to_end_id = E2EId
+    },
+
+    Msg = ['CCR' | Avps#{'Origin-Host' => OH,
+		     'Origin-Realm' => OR,
+		     'Origin-State-Id' => OSid}],
+    lager:debug("prepare_request Msg: ~p", [Msg]),
+    {send, Packet#diameter_packet{header = RetryCCRHdr, msg = Msg}};
+
+
 prepare_request(Packet, SvcName, Peer, _From) ->
     prepare_request(Packet, SvcName, Peer).
+
+prepare_request(Packet, SvcName, Peer, _From, {retry, E2EId, PeersTried}) ->
+    prepare_request(Packet, SvcName, Peer, {retry, E2EId, PeersTried}).
 
 prepare_retransmit(Packet, SvcName, Peer) ->
     prepare_request(Packet, SvcName, Peer).
 
+prepare_retransmit(Packet, SvcName, Peer, {retry, E2EId, PeersTried}) ->
+    prepare_request(Packet, SvcName, Peer, {retry, E2EId, PeersTried});
+
 prepare_retransmit(Packet, SvcName, Peer, _From) ->
     prepare_request(Packet, SvcName, Peer).
+
+prepare_retransmit(Packet, SvcName, Peer, _From, {retry, E2EId, PeersTried}) ->
+    prepare_request(Packet, SvcName, Peer, {retry, E2EId, PeersTried}).
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
     Msg.
@@ -210,6 +275,13 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
 
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
+
+handle_error(timeout, _Request, _SvcName, Peer, _RetryInfo) ->
+    {error, timeout, Peer};
+
+handle_error(Reason, _Request, _SvcName, _Peer, _RetryInfo) ->
+    {error, Reason}.
+
 
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->
@@ -236,6 +308,14 @@ validate_option(answers, Value) when is_map(Value) ->
 validate_option(answer_if_down, Value) when is_atom(Value) ->
     Value;
 validate_option(answer_if_timeout, Value) when is_atom(Value) ->
+    Value;
+validate_option(rate_limit_jobs_queue_name, Value) when is_atom(Value) ->
+    Value;
+validate_option(answer_if_rate_limit, Value) when is_atom(Value) ->
+    Value;
+validate_option(tx_timeout, Value) when is_integer(Value) ->
+    Value;
+validate_option(max_retries, Value) when is_integer(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
