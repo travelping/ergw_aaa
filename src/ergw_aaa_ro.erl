@@ -152,7 +152,7 @@ call(Request, #{rate_limit_jobs_queue_name := RateLimitQueue} = Config) ->
             call(Request, maps:remove(rate_limit_jobs_queue_name, Config)) 
         end)
     catch
-        exit:timeout:_ -> {error, rate_limit}
+        error:timeout -> {error, rate_limit}
     end;
 
 call(Request, #{max_retries := MaxRetries} = Config) when MaxRetries > 0 ->
