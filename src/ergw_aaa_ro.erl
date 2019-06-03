@@ -147,16 +147,14 @@ invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
 call(Request, #{rate_limit_jobs_queue_name := RateLimitQueue} = Config) ->
-    try
-        jobs:run(RateLimitQueue, fun() -> 
-            call(Request, maps:remove(rate_limit_jobs_queue_name, Config)) 
-        end)
+    try jobs:run(RateLimitQueue, 
+        fun() -> call(Request, maps:remove(rate_limit_jobs_queue_name, Config)) end)
     catch
         error:timeout -> {error, rate_limit}
     end;
 
 call(Request, #{max_retries := MaxRetries} = Config) when MaxRetries > 0 ->
-    call_with_retry(Request, Config, MaxRetries, diameter_session:sequence(), []);
+    call_with_retry(Request, Config, MaxRetries+1, diameter_session:sequence(), []);
 
 call(Request, #{function := Function} = Config) ->
     Timeout = maps:get(tx_timeout, Config, 5000),
@@ -224,7 +222,8 @@ prepare_request(Packet, _SvcName, {PeerRef, _}) ->
     lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
     {send, Packet}.
 
-prepare_request(#diameter_packet{header = Header, msg = ['CCR' | Avps]} = Packet, _SvcName, {_PeerRef, Caps}, {retry, E2EId, PeersTried}) when is_map(Avps) ->
+prepare_request(#diameter_packet{header = Header, msg = ['CCR' | Avps]} = Packet, _SvcName, 
+    {_PeerRef, Caps}, {retry, E2EId, PeersTried}) when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _},
 		   origin_state_id = {OSid, _}} = Caps,
@@ -240,7 +239,7 @@ prepare_request(#diameter_packet{header = Header, msg = ['CCR' | Avps]} = Packet
     Msg = ['CCR' | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
 		     'Origin-State-Id' => OSid}],
-    lager:debug("prepare_request Msg: ~p", [Msg]),
+    lager:debug("prepare_request retransmit Msg: ~p", [Msg]),
     {send, Packet#diameter_packet{header = RetryCCRHdr, msg = Msg}};
 
 
