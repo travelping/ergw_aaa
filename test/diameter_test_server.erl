@@ -18,7 +18,7 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
--export([start/0, stop/0, abort_session_request/4]).
+-export([start/0, start/2, stop/0, abort_session_request/4]).
 
 %% diameter callbacks
 -export([peer_up/4,
@@ -53,6 +53,21 @@
 %%===================================================================
 
 start() ->
+	DefaultTransports = [
+		[
+			{transport_module, diameter_tcp}, 
+			{transport_config, [
+				{reuseaddr, true}, 
+				{ip, {127,0,0,1}}, 
+				{port, 3868}]
+			}
+		]
+	],
+	start(#{}, DefaultTransports).
+
+
+
+start(CallbackOverrides, Transports) ->
     application:ensure_all_started(diameter),
     SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
 	       {'Origin-Realm', "test-srv.example.com"},
@@ -72,25 +87,21 @@ start() ->
 	       {restrict_connections, false},
 	       {string_decode, false},
 	       {decode_format, map},
-	       {application, [{alias, nasreq},
+		   	{application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
-			      {module, [?MODULE, nasreq]}]},
+			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
 	       {application, [{alias, diameter_gx},
 			      {dictionary, ?DIAMETER_DICT_GX},
-			      {module, [?MODULE, gx]}]},
+			      {module, callback_overrides(diameter_gx, CallbackOverrides, [gx])}]},
 	       {application, [{alias, diameter_gy},
 			      {dictionary, ?DIAMETER_DICT_RO},
-			      {module, [?MODULE, gy]}]},
+			      {module, callback_overrides(diameter_gy, CallbackOverrides, [gy])}]},
 	       {application, [{alias, diameter_rf},
 			      {dictionary, ?DIAMETER_DICT_RF},
-			      {module, [?MODULE, rf]}]}],
+			      {module, callback_overrides(diameter_rf, CallbackOverrides, [rf])}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
-    Opts = [{transport_module, diameter_tcp},
-	    {transport_config, [{reuseaddr, true},
-				{ip, {127,0,0,1}},
-				{port, 3868}]}],
-    {ok, _} = diameter:add_transport(?MODULE, {listen, Opts}),
+    [{ok, _} = diameter:add_transport(?MODULE, {listen, Transport}) || Transport <- Transports],
     ok.
 
 stop() ->
@@ -406,3 +417,34 @@ get_avp([K | T], Msg)
     end;
 get_avp(_, Msg) ->
     Msg.
+
+%%% Override can be an atom (module) or {M,F,A} tuple, where the extra argument will be
+%%% appended to the argument list. For now I just need handle request override, feel free
+%%% to add what you need here.
+callback_overrides(App, CallbackOverrides, ExtraArgs) ->
+	CBR = #diameter_callback{default = ?MODULE, extra = ExtraArgs},
+	case maps:get(App, CallbackOverrides, []) of
+		[] -> CBR;
+		AppOverrides -> 
+			lists:foldl(
+				fun({handle_request, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{handle_request = Override};
+				   ({handle_answer, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{handle_answer = Override};
+				   ({handle_error, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{handle_error = Override};
+				   ({pick_peer,Override}, AccCBR) ->
+					AccCBR#diameter_callback{pick_peer = Override};
+				   ({peer_up, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{peer_up = Override};
+				   ({peer_down, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{peer_down = Override};
+				   ({prepare_request, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{prepare_request = Override};
+				   ({prepare_retransmit, Override}, AccCBR) -> 
+					AccCBR#diameter_callback{prepare_retransmit = Override}
+				end,
+				CBR,
+				AppOverrides
+			)
+	end.
