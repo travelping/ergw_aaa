@@ -105,21 +105,21 @@ init_per_suite(Config0) ->
 
     meck_init(Config),
 
-	init_test_info_ets(),
+    init_test_info_ets(),
 
-	TestTransports = [[{transport_module, diameter_tcp},
-		{capabilities, [{'Origin-Host', Host}]},
-		{transport_config,
-		[{reuseaddr, true}, {ip, {127, 0, 0, 1}},
-			{port, Port}]}]
-		|| {Port, Host}
-			<- ?TEST_SERVER_TRANSPORTS],
+    TestTransports =
+	[[{transport_module, diameter_tcp},
+	  {capabilities, [{'Origin-Host', Host}]},
+	  {transport_config,
+	   [{reuseaddr, true}, {ip, {127, 0, 0, 1}},
+	    {port, Port}]}]
+	 || {Port, Host} <- ?TEST_SERVER_TRANSPORTS],
 
     diameter_test_server:start(?TEST_SERVER_CALLBACK_OVERRIDE, TestTransports),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
 
-	jobs:add_queue(?CCR_T_RATE_LIMIT_QUEUE_NAME, ?CCR_T_RATE_LIMIT_QUEUE_CONFIG),
+    jobs:add_queue(?CCR_T_RATE_LIMIT_QUEUE_NAME, ?CCR_T_RATE_LIMIT_QUEUE_CONFIG),
 
     case wait_for_diameter(?SERVICE, 10) of
 	ok ->
@@ -130,7 +130,7 @@ init_per_suite(Config0) ->
     end.
 
 end_per_suite(Config) ->
-	stop_test_info_ets(),
+    stop_test_info_ets(),
     meck_unload(Config),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
@@ -142,7 +142,7 @@ init_per_testcase(Config) ->
     Config.
 
 end_per_testcase(_Config) ->
-	clean_test_info(),
+    clean_test_info(),
     ok.
 
 %%%===================================================================
@@ -189,17 +189,17 @@ init_session(Session, _Config) ->
 	  %%
 	  %% 'QoS-Information' =>
 	  %%     #{
-	  %% 	'QoS-Class-Identifier' => 8,
-	  %% 	'Max-Requested-Bandwidth-DL' => 0,
-	  %% 	'Max-Requested-Bandwidth-UL' => 0,
-	  %% 	'Guaranteed-Bitrate-DL' => 0,
-	  %% 	'Guaranteed-Bitrate-UL' => 0,
-	  %% 	'Allocation-Retention-Priority' =>
-	  %% 	    #{'Priority-Level' => 10,
-	  %% 	      'Pre-emption-Capability' => 1,
-	  %% 	      'Pre-emption-Vulnerability' => 0},
-	  %% 	'APN-Aggregate-Max-Bitrate-DL' => 84000000,
-	  %% 	'APN-Aggregate-Max-Bitrate-UL' => 8640000
+	  %%	'QoS-Class-Identifier' => 8,
+	  %%	'Max-Requested-Bandwidth-DL' => 0,
+	  %%	'Max-Requested-Bandwidth-UL' => 0,
+	  %%	'Guaranteed-Bitrate-DL' => 0,
+	  %%	'Guaranteed-Bitrate-UL' => 0,
+	  %%	'Allocation-Retention-Priority' =>
+	  %%	    #{'Priority-Level' => 10,
+	  %%	      'Pre-emption-Capability' => 1,
+	  %%	      'Pre-emption-Vulnerability' => 0},
+	  %%	'APN-Aggregate-Max-Bitrate-DL' => 84000000,
+	  %%	'APN-Aggregate-Max-Bitrate-UL' => 8640000
 	  %%      }
 	 },
     maps:merge(Defaults, Session).
@@ -379,96 +379,117 @@ tarif_time_change(Config) ->
     ok.
 
 ccr_retry(Config) ->
-	set_test_info(ccr_i_retries, []),
-	set_test_info(diameter_test_request_action, fun([#diameter_packet{header = Header}, {PeerRef, _}]) -> 
-		#diameter_header{is_retransmitted = Retransmit, 
-			end_to_end_id = E2EId, hop_by_hop_id = H2HId} = Header,
+    DTRA =
+	fun([#diameter_packet{header = Header}, {PeerRef, _}]) ->
+		#diameter_header{is_retransmitted = Retransmit,
+				 end_to_end_id = E2EId,
+				 hop_by_hop_id = H2HId} = Header,
 		PrevRequests = get_test_info(ccr_i_retries),
 		ReqData = {PeerRef, Retransmit, E2EId, H2HId},
 		set_test_info(ccr_i_retries, [ReqData | PrevRequests]),
-		% assuming config of 2 retries and 1s TX timeout in the suite config for CCR-I
+		%% assuming config of 2 retries and 1s TX timeout in the suite config for CCR-I
 		case PrevRequests of
-			[] -> timer:sleep(2000);
-			[_] -> timer:sleep(2000);
-			[_, _] -> ok
-		end 
-	end),
-	Session = init_session(#{}, Config),
-	GyOpts = #{credits => #{1000 => empty}},
-	Stats0 = get_stats(?SERVICE),
-	{ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-	{ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-	RequestsInfo = get_test_info(ccr_i_retries),
-	% last 2 requests have retry flag set, the 1st not
-	?equal([true, true, false], [RetryFlag || {_, RetryFlag, _, _} <- RequestsInfo]),
-	% all requests have the same end to end id
-	?equal(1, length(lists:usort([E2EId || {_, _, E2EId, _} <- RequestsInfo]))),
-	% each requests has different hop by hop id
-	?equal(3, length(lists:usort([H2HId || {_, _, _, H2HId} <- RequestsInfo]))),
-	% each requests came on different peer
-	?equal(3, length(lists:usort([PeerRef || {PeerRef, _, _, _} <- RequestsInfo]))),
-	Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
-	% diameter discards the for the timeout, so will be counting only 1 
-	?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
-	%% make sure nothing crashed
-	meck_validate(Config),
-	clean_test_info(),
-	ok.
+		    [] -> timer:sleep(2000);
+		    [_] -> timer:sleep(2000);
+		    [_, _] -> ok
+		end
+	end,
+    set_test_info(ccr_i_retries, []),
+    set_test_info(diameter_test_request_action, DTRA),
+
+    Session = init_session(#{}, Config),
+    GyOpts = #{credits => #{1000 => empty}},
+    Stats0 = get_stats(?SERVICE),
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+    RequestsInfo = get_test_info(ccr_i_retries),
+
+    %% last 2 requests have retry flag set, the 1st not
+    ?equal([true, true, false], [RetryFlag || {_, RetryFlag, _, _} <- RequestsInfo]),
+
+    %% all requests have the same end to end id
+    ?equal(1, length(lists:usort([E2EId || {_, _, E2EId, _} <- RequestsInfo]))),
+
+    %% each requests has different hop by hop id
+    ?equal(3, length(lists:usort([H2HId || {_, _, _, H2HId} <- RequestsInfo]))),
+
+    %% each requests came on different peer
+    ?equal(3, length(lists:usort([PeerRef || {PeerRef, _, _, _} <- RequestsInfo]))),
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    %% diameter discards the for the timeout, so will be counting only 1
+    ?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    clean_test_info(),
+    ok.
 
 ccr_t_rate_limit(Config) ->
-	% this test is somewhat trickier : we need to generate sessions with a rate independent from
-	% separate processes to avoid dependency on rate limiter settings. Also it should work on
-	% dev and CI machines with different performance
+    %% this test is somewhat trickier : we need to generate sessions with a rate independent
+    %% from separate processes to avoid dependency on rate limiter settings. Also it should
+    %% work on dev and CI machines with different performance
 
-	% spawning 50 sessions, with the jobs config above (2 s max time and 10 req/s) this should
-	% send around 20 requests (give and take some computing noise)
-	[spawn_link(fun basic_session/0) || _ <- lists:seq(1,50)],
-	% wait a little to make sure all CCR-I messages are done
-	timer:sleep(500),
-	% collect stats for CCR-Ts
-	ReceivedRate = stat_check(diameter_test_server, 1000, {{4, 272, 1},recv}, 3),
-	% collect the CCR-T results
-	ResCnt = ets:new(resultcount, [ordered_set]),
-	[ets:update_counter(ResCnt, Result, 1, {Result, 0}) || {{_, _}, Result} <- list_test_info()],
-	ResList = ets:tab2list(ResCnt),
-	Ok = proplists:get_value(ok, ResList, 0),
-	RateLimited = proplists:get_value(rate_limit, ResList, 0),
-	% no received rate sample is greatet than 10 req/s as defined in the rate limit config
-	?equal([], lists:filter(fun(Recv_s) -> Recv_s > 10 end, ReceivedRate)),
-	% same amount of requests returned ok (i.e. not rate limited), as received on the other side
-	?equal(Ok, lists:sum(ReceivedRate)),
-	% all 500 requests were either rate limited or ok (no other error)
-	?equal(50, Ok + RateLimited),
-	meck_validate(Config),
-	clean_test_info(),
-	ok.
+    %% spawning 50 sessions, with the jobs config above (2 s max time and 10 req/s) this should
+    %% send around 20 requests (give and take some computing noise)
+    [spawn_link(fun basic_session/0) || _ <- lists:seq(1,50)],
+
+    %% wait a little to make sure all CCR-I messages are done
+    timer:sleep(500),
+
+    %% collect stats for CCR-Ts
+    ReceivedRate = stat_check(diameter_test_server, 1000, {{4, 272, 1},recv}, 3),
+
+    %% collect the CCR-T results
+    ResCnt = ets:new(resultcount, [ordered_set]),
+    [ets:update_counter(ResCnt, Result, 1, {Result, 0}) || {{_, _}, Result} <- list_test_info()],
+    ResList = ets:tab2list(ResCnt),
+    Ok = proplists:get_value(ok, ResList, 0),
+    RateLimited = proplists:get_value(rate_limit, ResList, 0),
+
+    %% no received rate sample is greatet than 10 req/s as defined in the rate limit config
+    ?equal([], lists:filter(fun(Recv_s) -> Recv_s > 10 end, ReceivedRate)),
+
+    %% same amount of requests returned ok (i.e. not rate limited), as received on the other side
+    ?equal(Ok, lists:sum(ReceivedRate)),
+
+    %% all 500 requests were either rate limited or ok (no other error)
+    ?equal(50, Ok + RateLimited),
+
+    meck_validate(Config),
+    clean_test_info(),
+    ok.
 
 %%%===================================================================
 %%% Rate limit test helper to generate the requests in a separate
 %%%===================================================================
 basic_session() ->
-	basic_session(1000).
+    basic_session(1000).
 basic_session(CCR_I_T_Delay) ->
-	Session = init_session(#{}, []),
-	{ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-	GyOpts = #{credits => #{1000 => empty}},
-	{ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+    Session = init_session(#{}, []),
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    GyOpts = #{credits => #{1000 => empty}},
+    {ok, _Session1, _Events1} =
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
 
-	timer:sleep(CCR_I_T_Delay),
+    timer:sleep(CCR_I_T_Delay),
 
-	UsedCredits = [{1000, #{'CC-Input-Octets'  => [0],
-		    'CC-Output-Octets' => [0],
-		    'CC-Time'          => [60],
-		    'CC-Total-Octets'  => [0],
-		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
-	}],
-    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT', used_credits => UsedCredits},
-	Result = case ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false) of
-		{ok, _, _} -> ok;
-		{{error, rate_limit},_ ,_} -> rate_limit;
-		{Err, _, _} -> Err
-	end,
-	set_test_info({session, SId}, Result).
+    UsedCredits =
+	[{1000, #{'CC-Input-Octets'  => [0],
+		  'CC-Output-Octets' => [0],
+		  'CC-Time'          => [60],
+		  'CC-Total-Octets'  => [0],
+		  'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
+	 }],
+    GyTerm = #{'Termination-Cause' =>
+		   ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       used_credits => UsedCredits},
+    Result = case ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false) of
+		 {ok, _, _} -> ok;
+		 {{error, rate_limit},_ ,_} -> rate_limit;
+		 {Err, _, _} -> Err
+	     end,
+    set_test_info({session, SId}, Result).
 
 
 %%%===================================================================
@@ -476,11 +497,11 @@ basic_session(CCR_I_T_Delay) ->
 %%%===================================================================
 
 test_server_request(Packet, Svc, Peer, Extra) ->
-	case get_test_info(diameter_test_request_action) of
-		Fun when is_function(Fun) -> Fun([Packet, Peer]);
-		_ -> ok
-	end,
-	diameter_test_server:handle_request(Packet, Svc, Peer, Extra).
+    case get_test_info(diameter_test_request_action) of
+	Fun when is_function(Fun) -> Fun([Packet, Peer]);
+	_ -> ok
+    end,
+    diameter_test_server:handle_request(Packet, Svc, Peer, Extra).
 
 %%%===================================================================
 %%% Generic helpers
@@ -488,47 +509,48 @@ test_server_request(Packet, Svc, Peer, Extra) ->
 
 
 init_test_info_ets() ->
-	spawn(fun() ->
-		ets:new(?MODULE, [named_table, public, {write_concurrency, true}]),
-		receive
-			stop -> ok
-		end
-	end).
+    spawn(fun() ->
+		  ets:new(?MODULE, [named_table, public, {write_concurrency, true}]),
+		  receive
+		      stop -> ok
+		  end
+	  end).
 
 stop_test_info_ets() ->
-	ets:info(?MODULE, owner) ! stop.
+    ets:info(?MODULE, owner) ! stop.
 
 set_test_info(Name, Value) ->
-	ets:insert(?MODULE, {Name, Value}).
+    ets:insert(?MODULE, {Name, Value}).
 
 get_test_info(Name) ->
-	case ets:lookup(?MODULE, Name) of
-		[] -> undefined;
-		[{_, Value}] -> Value
-	end.
+    case ets:lookup(?MODULE, Name) of
+	[] -> undefined;
+	[{_, Value}] -> Value
+    end.
 
 delete_test_info(Name) ->
-	case ets:lookup(?MODULE, Name) of
-		[] -> undefined;
-		[{_, Value}] -> 
-			ets:delete(?MODULE, Name),
-			Value
-	end.
+    case ets:lookup(?MODULE, Name) of
+	[] -> undefined;
+	[{_, Value}] ->
+	    ets:delete(?MODULE, Name),
+	    Value
+    end.
 
 clean_test_info() ->
-	ets:delete_all_objects(?MODULE).
+    ets:delete_all_objects(?MODULE).
 
 list_test_info() ->
-	ets:tab2list(?MODULE).
+    ets:tab2list(?MODULE).
 
 stat_check(Svc, Period, Key, Count) ->
-	Value = proplists:get_value(Key, get_stats(Svc), 0),
-	stat_check(Svc, Period, Key, Count, [Value]).
+    Value = proplists:get_value(Key, get_stats(Svc), 0),
+    stat_check(Svc, Period, Key, Count, [Value]).
 stat_check(_Svc, _Period, _Key, 0, Result) ->
-	[First | Data] = lists:reverse(Result),
-	{ResList, _} = lists:mapfoldl(fun(Value, PrevValue) -> {Value - PrevValue, Value} end, First, Data),
-	ResList;
+    [First | Data] = lists:reverse(Result),
+    {ResList, _} =
+	lists:mapfoldl(fun(Value, PrevValue) -> {Value - PrevValue, Value} end, First, Data),
+    ResList;
 stat_check(Svc, Period, Key, Count, Acc) ->
-	timer:sleep(Period),
-	Value = proplists:get_value(Key, get_stats(Svc), 0),
-	stat_check(Svc, Period, Key, Count-1, [Value | Acc]).
+    timer:sleep(Period),
+    Value = proplists:get_value(Key, get_stats(Svc), 0),
+    stat_check(Svc, Period, Key, Count-1, [Value | Acc]).

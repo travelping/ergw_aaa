@@ -59,26 +59,26 @@ wait_for_diameter(SvcName, Cnt) ->
 %%     no.
 
 get_stats(SvcName) ->
-        sum_stats([proplists:get_value(statistics, Transport) 
-				   || Transport <- diameter:service_info(SvcName, transport)],
-				   []).
+    Stats =
+	[proplists:get_value(statistics, Transport)
+	 || Transport <- diameter:service_info(SvcName, transport)],
+    sum_stats(Stats, []).
 
 sum_stats([], Summary) ->
 	Summary;
 sum_stats([TransportStat | Rest], Summary) ->
-	NewSummary = lists:foldl(
-		fun({Key, Value}, Acc) ->
-			case lists:keytake(Key, 1, Acc) of
-				{value, {Key, AccVal}, Acc1} ->
-					[{Key, AccVal + Value} | Acc1];
-				_ ->
-					[{Key, Value} | Acc]
-			end
-		end,
-		TransportStat,
-		Summary
-	),
-	sum_stats(Rest, NewSummary).
+    NewSummary =
+	lists:foldl(
+	  fun({Key, Value}, Acc) ->
+		  case lists:keytake(Key, 1, Acc) of
+		      {value, {Key, AccVal}, Acc1} ->
+			  [{Key, AccVal + Value} | Acc1];
+		      _ ->
+			  [{Key, Value} | Acc]
+		  end
+	  end,
+	  TransportStat, Summary),
+    sum_stats(Rest, NewSummary).
 
 diff_stats(S1, S2) ->
     {Stats, Rest} =

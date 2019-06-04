@@ -53,17 +53,16 @@
 %%===================================================================
 
 start() ->
-	DefaultTransports = [
-		[
-			{transport_module, diameter_tcp}, 
-			{transport_config, [
-				{reuseaddr, true}, 
-				{ip, {127,0,0,1}}, 
-				{port, 3868}]
-			}
-		]
-	],
-	start(#{}, DefaultTransports).
+    DefaultTransports =
+	[[
+	  {transport_module, diameter_tcp},
+	  {transport_config, [
+			      {reuseaddr, true},
+			      {ip, {127,0,0,1}},
+			      {port, 3868}]
+	  }
+	 ]],
+    start(#{}, DefaultTransports).
 
 
 
@@ -87,7 +86,7 @@ start(CallbackOverrides, Transports) ->
 	       {restrict_connections, false},
 	       {string_decode, false},
 	       {decode_format, map},
-		   	{application, [{alias, nasreq},
+	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
 			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
 	       {application, [{alias, diameter_gx},
@@ -422,29 +421,29 @@ get_avp(_, Msg) ->
 %%% appended to the argument list. For now I just need handle request override, feel free
 %%% to add what you need here.
 callback_overrides(App, CallbackOverrides, ExtraArgs) ->
-	CBR = #diameter_callback{default = ?MODULE, extra = ExtraArgs},
-	case maps:get(App, CallbackOverrides, []) of
-		[] -> CBR;
-		AppOverrides -> 
-			lists:foldl(
-				fun({handle_request, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{handle_request = Override};
-				   ({handle_answer, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{handle_answer = Override};
-				   ({handle_error, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{handle_error = Override};
-				   ({pick_peer,Override}, AccCBR) ->
-					AccCBR#diameter_callback{pick_peer = Override};
-				   ({peer_up, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{peer_up = Override};
-				   ({peer_down, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{peer_down = Override};
-				   ({prepare_request, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{prepare_request = Override};
-				   ({prepare_retransmit, Override}, AccCBR) -> 
-					AccCBR#diameter_callback{prepare_retransmit = Override}
-				end,
-				CBR,
-				AppOverrides
-			)
-	end.
+    CBR = #diameter_callback{default = ?MODULE, extra = ExtraArgs},
+    case maps:get(App, CallbackOverrides, []) of
+	[] -> CBR;
+	AppOverrides ->
+	    lists:foldl(
+	      fun({handle_request, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{handle_request = Override};
+		 ({handle_answer, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{handle_answer = Override};
+		 ({handle_error, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{handle_error = Override};
+		 ({pick_peer,Override}, AccCBR) ->
+		      AccCBR#diameter_callback{pick_peer = Override};
+		 ({peer_up, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{peer_up = Override};
+		 ({peer_down, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{peer_down = Override};
+		 ({prepare_request, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{prepare_request = Override};
+		 ({prepare_retransmit, Override}, AccCBR) ->
+		      AccCBR#diameter_callback{prepare_retransmit = Override}
+	      end,
+	      CBR,
+	      AppOverrides
+	     )
+    end.
