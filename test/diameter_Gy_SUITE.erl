@@ -84,7 +84,7 @@
 			   {stop, []},
 			   {{gy, 'CCR-Initial'},   [{'Ro', [{tx_timeout, 1000}, {max_retries, 2}]}]},
 			   {{gy, 'CCR-Update'},    ['Ro']},
-			   {{gy, 'CCR-Terminate'}, [{'Ro', [{rate_limit_jobs_queue_name, ?CCR_T_RATE_LIMIT_QUEUE_NAME}]}]}
+			   {{gy, 'CCR-Terminate'}, [{'Ro', [{rate_limit_queue, ?CCR_T_RATE_LIMIT_QUEUE_NAME}]}]}
 			  ]}
 	    ]}
 	  ]}

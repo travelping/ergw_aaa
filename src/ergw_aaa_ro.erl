@@ -146,9 +146,9 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{rate_limit_jobs_queue_name := RateLimitQueue} = Config) ->
+call(Request, #{rate_limit_queue := RateLimitQueue} = Config) ->
     try jobs:run(RateLimitQueue, 
-        fun() -> call(Request, maps:remove(rate_limit_jobs_queue_name, Config)) end)
+        fun() -> call(Request, maps:remove(rate_limit_queue, Config)) end)
     catch
         error:timeout -> {error, rate_limit}
     end;
@@ -230,9 +230,6 @@ prepare_request(#diameter_packet{header = Header, msg = ['CCR' | Avps]} = Packet
 
     RetryCCRHdr = Header#diameter_header{
         is_retransmitted = PeersTried /= [],
-        is_proxiable = true,
-        cmd_code = 272,
-        application_id = 4,
         end_to_end_id = E2EId
     },
 
@@ -308,7 +305,7 @@ validate_option(answer_if_down, Value) when is_atom(Value) ->
     Value;
 validate_option(answer_if_timeout, Value) when is_atom(Value) ->
     Value;
-validate_option(rate_limit_jobs_queue_name, Value) when is_atom(Value) ->
+validate_option(rate_limit_queue, Value) when is_atom(Value) ->
     Value;
 validate_option(answer_if_rate_limit, Value) when is_atom(Value) ->
     Value;
