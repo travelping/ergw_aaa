@@ -150,7 +150,7 @@ call(Request, #{rate_limit_queue := RateLimitQueue} = Config) ->
     try jobs:run(RateLimitQueue,
 		 fun() -> call(Request, maps:remove(rate_limit_queue, Config)) end)
     catch
-	error:timeout -> {error, rate_limit}
+	error:timeout -> maps:get(rate_limit_return, Config, {error, rate_limit})
     end;
 
 call(Request, #{max_retries := MaxRetries} = Config) when MaxRetries > 0 ->
@@ -306,8 +306,10 @@ validate_option(answer_if_timeout, Value) when is_atom(Value) ->
     Value;
 validate_option(rate_limit_queue, Value) when is_atom(Value) ->
     Value;
-validate_option(answer_if_rate_limit, Value) when is_atom(Value) ->
-    Value;
+validate_option(rate_limit_return, ok) -> 
+    ok;
+validate_option(rate_limit_return, {error, Value}) when is_atom(Value) -> 
+    {error, Value};
 validate_option(tx_timeout, Value) when is_integer(Value) ->
     Value;
 validate_option(max_retries, Value) when is_integer(Value) ->
