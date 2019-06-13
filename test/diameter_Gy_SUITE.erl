@@ -453,7 +453,7 @@ ccr_t_rate_limit(Config) ->
     %% same amount of requests returned ok (i.e. not rate limited), as received on the other side
     ?equal(Ok, lists:sum(ReceivedRate)),
 
-    %% all 500 requests were either rate limited or ok (no other error)
+    %% all 50 requests were either rate limited or ok (no other error)
     ?equal(50, Ok + RateLimited),
 
     meck_validate(Config),
