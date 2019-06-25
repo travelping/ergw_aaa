@@ -83,7 +83,7 @@ Example of possible config.
     [{'Default',     [{handler, 'ergw_aaa_static'}]},
      {'RADIUS-Auth', [{handler, 'ergw_aaa_radius'},
 	                  {server, {{127,1,0,1}, 1812, <<"secret">>}}]},
-     {'RADIUS-Acct', [{handler, 'ergw_aaa_radius'}]},
+     {'RADIUS-Acct', [{handler, 'ergw_aaa_radius'},
 	                  {server, {{127,2,0,1}, 1813, <<"secret">>}}]},
      {'Rf',          [{handler, 'ergw_aaa_rf'}]},
      {'Gx',          [{handler, 'ergw_aaa_gx'}]}
