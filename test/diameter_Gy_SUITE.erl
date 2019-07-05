@@ -303,7 +303,7 @@ abort_session_request(Config) ->
 
     receive
 	#aaa_request{procedure = {_, 'ASR'}} = Request ->
-	    ergw_aaa_session:response(Request, ok, #{})
+	    ergw_aaa_session:response(Request, ok, #{}, #{})
     after 1000 ->
 	    ct:fail("no ASR")
     end,
