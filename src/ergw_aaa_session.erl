@@ -22,7 +22,7 @@
 	 interim/2, interim/3,
 	 stop/2, stop/3,
 	 terminate/1, get/1, get/2, set/2, set/3, unset/2, sync/1,
-	 request/4, response/3]).
+	 request/4, response/4]).
 
 %% Session Object API
 -export([attr_get/2, attr_get/3, attr_set/3,
@@ -105,9 +105,12 @@ invoke(Session, SessionOpts, Procedure, Opts, false) ->
 request(Session, Handler, Procedure, Avps) ->
     gen_statem:call(Session, {request, Handler, Procedure, Avps}).
 
-response(#aaa_request{from = {Pid, _}} = Request, Result, Avps)
+response(#aaa_request{from = {Pid, _}} = Request, Result, Avps, SessionOpts)
   when is_pid(Pid), is_map(Avps) ->
-    gen_statem:cast(Pid, {'$response', Request, Result, Avps}).
+    gen_statem:cast(Pid, {'$response', Request, Result, Avps, SessionOpts});
+response(#aaa_request{from = Fun} = Request, Result, Avps, SessionOpts)
+  when is_function(Fun, 4), is_map(Avps) ->
+    Fun(Request, Result, Avps, SessionOpts).
 
 authenticate(Session, SessionOpts)
   when is_map(SessionOpts) ->
@@ -235,10 +238,13 @@ handle_event(state_timeout, #aaa_request{}, #state{pending = {call, From}} = Sta
     Reply = {error, #{}},
     {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
 
-handle_event(cast, {'$response', _Request, Result, Avps},
-	     #state{pending = {call, From}} = State, Data) ->
-    Reply = {Result, Avps},
-    {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
+handle_event(cast, {'$response', #aaa_request{handler = Handler},
+		    Result, Avps0, SessionOpts},
+	     #state{pending = {call, From}} = State, #data{session = Session0} = Data) ->
+    Session = session_merge(Session0, SessionOpts),
+    Avps = Handler:from_session(Session, Avps0),
+    Reply = [{reply, From, {Result, Avps}}],
+    {next_state, State#state{pending = undefined}, Data#data{session = Session}, Reply};
 
 handle_event(info, {'$invoke', Pid, Session, Events}, #state{pending = Pid} = State,
 	     #data{owner = Owner} = Data)
@@ -292,6 +298,7 @@ handle_event({call, _} = Call, {request, Handler, Procedure, Avps}, State,
 
     Request = #aaa_request{
 		 from = {self(), make_ref()},
+		 handler = Handler,
 		 procedure = Procedure,
 		 session = Session,
 		 events = Events},

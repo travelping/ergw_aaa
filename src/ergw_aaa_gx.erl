@@ -22,7 +22,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/5]).
--export([to_session/3]).
+-export([to_session/3, from_session/2]).
 
 %% diameter callbacks
 -export([peer_up/3,
@@ -282,13 +282,14 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
 		   origin_realm = {OR,_},
 		   origin_state_id = {OSid, _}} = Caps,
 
-    ReplyAvps1 =
-	ReplyAvps0#{'Origin-Host' => OH,
+    ReplyAvps1 = filter_reply_avps(Command, ReplyAvps0),
+    ReplyAvps2 =
+	ReplyAvps1#{'Origin-Host' => OH,
 		    'Origin-Realm' => OR,
 		    'Origin-State-Id' => OSid,
 		    'Session-Id' => SessionId},
     ReplyCode = diameter_reply_code(Command),
-    ReplyAvps = diameter_reply_avps(Result, ReplyAvps1),
+    ReplyAvps = diameter_reply_avps(Result, ReplyAvps2),
     lager:debug("~p reply Avps: ~p", [Command, ReplyAvps]),
     {reply, [ReplyCode | ReplyAvps]}.
 
@@ -311,6 +312,22 @@ diameter_reply_avps({error, unknown_session}, Reply) ->
 
 diameter_reply_avps(_, Reply) ->
     Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_COMPLY'}.
+
+filter_reply_avps('RAR', Avps) ->
+    Permited =
+	['OC-OLR', 'IP-CAN-Type', 'RAT-Type',
+	 'AN-Trusted', 'AN-GW-Address',
+	 '3GPP-SGSN-MCC-MNC', '3GPP-SGSN-Address', '3GPP-SGSN-IPv6-Address',
+	 'RAI', '3GPP-User-Location-Info', 'User-Location-Info-Time',
+	 'NetLoc-Access-Support', 'User-CSG-Information',
+	 '3GPP-MS-TimeZone', 'Default-QoS-Information',
+	 'Charging-Rule-Report'],
+    maps:with(Permited, Avps);
+filter_reply_avps('ASR', Avps) ->
+    Permited = ['User-Name'],
+    maps:with(Permited, Avps);
+filter_reply_avps(_, Avps) ->
+    Avps.
 
 %%%===================================================================
 

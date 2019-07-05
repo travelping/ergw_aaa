@@ -15,6 +15,7 @@
 
 -record(aaa_request, {
 		      from		:: {pid(), reference()},
+		      handler		:: atom(),
 		      procedure,
 		      session,
 		      events = []
