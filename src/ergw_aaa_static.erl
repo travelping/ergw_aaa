@@ -18,6 +18,8 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 
+-define(OptKeys, [answer, answers]).
+
 %%===================================================================
 %% API
 %%===================================================================
@@ -40,7 +42,8 @@ validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
 invoke(_Service, Procedure, Session, Events, #{answers := Answers, answer := Answer}) ->
     handle_response(Procedure, maps:get(Answer, Answers, #{}), Session, Events);
 invoke(_Service, _Procedure, Session, Events, Opts) ->
-    {ok, maps:merge(Session, Opts), Events}.
+    SOpts = maps:without(?OptKeys, Opts),
+    {ok, maps:merge(Session, SOpts), Events}.
 
 %%%===================================================================
 %%% Options Validation
