@@ -111,6 +111,8 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_UPDATE_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
 	    handle_cca(call(Request, Opts), Session, Events, Opts);
+    ocs_hold ->
+        handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
 	peer_down ->
 	    handle_cca({error, no_connection}, Session0, Events, Opts);
 	_ ->
@@ -128,6 +130,8 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
 	    handle_cca(call(Request, Opts), Session, Events, Opts);
+    ocs_hold ->
+        handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
 	peer_down ->
 	    handle_cca({error, no_connection}, Session0, Events, Opts);
 	_ ->
@@ -326,22 +330,19 @@ handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
     {{fail, Code}, Session, Events};
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
-    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
     DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
-    NewSession = ergw_aaa_session:set_svc_opt(
+    PeerDownSession = ergw_aaa_session:set_svc_opt(
 		   ?MODULE, DiamSession#{'State' => peer_down}, Session),
+    {Avps, NewSession} = apply_answer_config(Answer, Answers, PeerDownSession),
     handle_cca(['CCA' | Avps], NewSession, Events, Opts);
-handle_cca({error, no_connection}, Session, Events,
+handle_cca({error, timeout}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts) ->
-    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
-    handle_cca(['CCA' | Avps], Session, Events, Opts);
+    {Avps, NewSession} = apply_answer_config(Answer, Answers, Session),
+    handle_cca(['CCA' | Avps], NewSession, Events, Opts);
 handle_cca({error, rate_limit}, Session, Events,
 	   #{answer_if_rate_limit := Answer, answers := Answers} = Opts) ->
-    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
-    handle_cca(['CCA' | Avps], Session, Events, Opts);
+    {Avps, NewSession} = apply_answer_config(Answer, Answers, Session),
+    handle_cca(['CCA' | Avps], NewSession, Events, Opts);
 handle_cca({error, _} = Result, Session, Events, _Opts) ->
     lager:error("CCA Result: ~p", [Result]),
     {Result, Session, [stop | Events]}.
@@ -648,6 +649,29 @@ from_session(Session, Avps0) ->
     maps:fold(fun from_session/3, Avps, Session).
 
 %% ------------------------------------------------------------------
+
+apply_answer_config(Answer, Answers, Session) ->
+    apply_answer_config(Answer, Answers, Session, #{'Result-Code' =>
+					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}).
+apply_answer_config(Answer, Answers, Session, DefaultAnswerApvs) ->
+    case maps:get(Answer, Answers, DefaultAnswerApvs) of
+        {ocs_hold, GCUs} ->
+            GCUs1 = lists:map(fun
+                (#{'Granted-Service-Unit' := 
+                    [#{'CC-Time-Min' := [MinTime], 'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
+                    GSU1 = GSU#{'CC-Time' => [MinTime + rand:uniform(MaxTime - MinTime)]},
+                    GCU#{'Granted-Service-Unit' => 
+                         [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
+                (GCU) ->
+                    GCU
+            end, GCUs),
+            DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
+            NewSession = ergw_aaa_session:set_svc_opt(
+                ?MODULE, DiamSession#{'State' => ocs_hold}, Session),
+            {#{'Result-Code' => 2001, 'Multiple-Services-Credit-Control' => GCUs1}, NewSession};
+        AVPs when is_map(AVPs) -> 
+            {AVPs, Session}
+    end.
 
 to_session('Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
     {Session#{K => V}, [{update_credits, V} | Events]};
