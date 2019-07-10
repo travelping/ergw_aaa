@@ -22,6 +22,12 @@
 
 -define(HUT, ergw_aaa_ro).
 -define(SERVICE, 'diam-test').
+-define(SET_TC_INFO(Name, Value), set_test_info(?FUNCTION_NAME, Name, Value)).
+-define(GET_TC_INFO(Name), get_test_info(?FUNCTION_NAME, Name)).
+-define(GET_TC_INFO(Name, Default), get_test_info(?FUNCTION_NAME, Name)).
+-define(LIST_TC_INFO(), list_test_info(?FUNCTION_NAME)).
+-define(DELETE_TC_INFO(Name), delete_test_info(?FUNCTION_NAME, Name)).
+-define(CLEAR_TC_INFO(), clear_test_info(?FUNCTION_NAME)).
 
 -define('Origin-Host', <<"127.0.0.1">>).
 -define('Origin-Realm', <<"example.com">>).
@@ -71,7 +77,19 @@
 	  [{'Default',
 	    [{handler, 'ergw_aaa_static'}]},
 	   {'Ro',
-	    [{handler, 'ergw_aaa_ro'}]}
+	    [{handler, 'ergw_aaa_ro'},
+		 {answers, #{
+			 	'OCS-Hold' => {ocs_hold, 
+                       [#{'Envelope-Reporting' => [0],
+                          'Granted-Service-Unit' =>
+                             [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
+                          'Rating-Group' => [3000],
+                          'Result-Code' => [2001],
+                          'Time-Quota-Threshold' => [60]}
+						]
+                  }
+         }}
+		]}
 	  ]},
 
 	 {apps,
@@ -82,8 +100,8 @@
 			   {start, []},
 			   {interim, []},
 			   {stop, []},
-			   {{gy, 'CCR-Initial'},   [{'Ro', [{tx_timeout, 1000}, {max_retries, 2}]}]},
-			   {{gy, 'CCR-Update'},    ['Ro']},
+			   {{gy, 'CCR-Initial'},   [{'Ro', [{tx_timeout, 1000}, {max_retries, 2}, {answer_if_timeout, 'OCS-Hold'}]}]},
+			   {{gy, 'CCR-Update'},    [{'Ro', [{tx_timeout, 1000}, {answer_if_timeout, 'OCS-Hold'}]}]},
 			   {{gy, 'CCR-Terminate'}, [{'Ro', [{rate_limit_queue, ?CCR_T_RATE_LIMIT_QUEUE_NAME}]}]}
 			  ]}
 	    ]}
@@ -95,7 +113,9 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, abort_session_request, tarif_time_change, ccr_retry, ccr_t_rate_limit].
+    [simple_session, abort_session_request, tarif_time_change, 
+     ocs_hold_initial_timeout, ocs_hold_update_timeout,
+	 ccr_retry, ccr_t_rate_limit].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -130,7 +150,6 @@ init_per_suite(Config0) ->
     end.
 
 end_per_suite(Config) ->
-    stop_test_info_ets(),
     meck_unload(Config),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
@@ -142,7 +161,6 @@ init_per_testcase(Config) ->
     Config.
 
 end_per_testcase(_Config) ->
-    clean_test_info(),
     ok.
 
 %%%===================================================================
@@ -380,13 +398,13 @@ tarif_time_change(Config) ->
 
 ccr_retry(Config) ->
     DTRA =
-	fun([#diameter_packet{header = Header}, {PeerRef, _}]) ->
+	fun(#diameter_packet{header = Header}, _SVC, {PeerRef, _}, _Extra) ->
 		#diameter_header{is_retransmitted = Retransmit,
 				 end_to_end_id = E2EId,
 				 hop_by_hop_id = H2HId} = Header,
-		PrevRequests = get_test_info(ccr_i_retries),
+		PrevRequests = ?GET_TC_INFO(ccr_i_retries),
 		ReqData = {PeerRef, Retransmit, E2EId, H2HId},
-		set_test_info(ccr_i_retries, [ReqData | PrevRequests]),
+		?SET_TC_INFO(ccr_i_retries, [ReqData | PrevRequests]),
 		%% assuming config of 2 retries and 1s TX timeout in the suite config for CCR-I
 		case PrevRequests of
 		    [] -> timer:sleep(2000);
@@ -394,15 +412,17 @@ ccr_retry(Config) ->
 		    [_, _] -> ok
 		end
 	end,
-    set_test_info(ccr_i_retries, []),
-    set_test_info(diameter_test_request_action, DTRA),
+
+	?SET_TC_INFO(ccr_i_retries, []),
 
     Session = init_session(#{}, Config),
     GyOpts = #{credits => #{1000 => empty}},
     Stats0 = get_stats(?SERVICE),
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+	{ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    set_diameter_session_handler(DiameterSId, DTRA),
     {ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-    RequestsInfo = get_test_info(ccr_i_retries),
+    RequestsInfo = ?GET_TC_INFO(ccr_i_retries),
 
     %% last 2 requests have retry flag set, the 1st not
     ?equal([true, true, false], [RetryFlag || {_, RetryFlag, _, _} <- RequestsInfo]),
@@ -422,7 +442,7 @@ ccr_retry(Config) ->
 
     %% make sure nothing crashed
     meck_validate(Config),
-    clean_test_info(),
+    ?CLEAR_TC_INFO(),
     ok.
 
 ccr_t_rate_limit(Config) ->
@@ -442,7 +462,7 @@ ccr_t_rate_limit(Config) ->
 
     %% collect the CCR-T results
     ResCnt = ets:new(resultcount, [ordered_set]),
-    [ets:update_counter(ResCnt, Result, 1, {Result, 0}) || {{_, _}, Result} <- list_test_info()],
+    [ets:update_counter(ResCnt, Result, 1, {Result, 0}) || {{_, _}, Result} <- ?LIST_TC_INFO()],
     ResList = ets:tab2list(ResCnt),
     Ok = proplists:get_value(ok, ResList, 0),
     RateLimited = proplists:get_value(rate_limit, ResList, 0),
@@ -457,12 +477,102 @@ ccr_t_rate_limit(Config) ->
     ?equal(50, Ok + RateLimited),
 
     meck_validate(Config),
-    clean_test_info(),
+    ?CLEAR_TC_INFO(),
     ok.
 
-%%%===================================================================
-%%% Rate limit test helper to generate the requests in a separate
-%%%===================================================================
+ocs_hold_initial_timeout(Config) ->
+	% Time out all requests on the test server to trigger ocs_hold on CCR-I
+    DTRA = fun(_Request, _Svc, _Peers, _Extra) -> timer:sleep(2000) end,
+    Session = init_session(#{}, Config),
+    GyOpts = #{credits => #{1000 => empty}},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+	{ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    set_diameter_session_handler(DiameterSId, DTRA),
+
+    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	[{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events,
+	?equal(true, Time > 1800 andalso Time =< 1900),
+
+	% Invoke Update and check if it stops the session without triggering a CCR-U
+    Stats0 = get_stats(?SERVICE),
+	UsedCredits =
+		#{1000 => #{'CC-Input-Octets'  => [0],
+		    'CC-Output-Octets' => [0],
+		    'CC-Time'          => [60],
+		    'CC-Total-Octets'  => [0],
+		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
+	 	},
+    GyTerm = #{used_credits => maps:to_list(UsedCredits)},
+	{{error, ocs_hold_end}, _Session2, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [], false),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    % Make sure we didn't send anything
+    ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats1)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ?CLEAR_TC_INFO(),
+    ok.
+
+ocs_hold_update_timeout(Config) ->
+	% Respond to CCR-I and time out CCR-U to trigger OCS Hold there
+    DTRA = fun
+		(#diameter_packet{msg = ['CCR' | #{'CC-Request-Type' := 2}]}, _Svc, _Peer, _Extra) -> 
+			timer:sleep(2000),
+			ok;
+		(_Packet, _Svc, _Peer, _Extra) -> ok
+	end,
+
+    Session = init_session(#{}, Config),
+    GyOpts = #{credits => #{1000 => empty}},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+	{ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    set_diameter_session_handler(DiameterSId, DTRA),
+
+	% Send CCR-I
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	
+	% Check if the data is coming from the test server
+	?match([{update_credits, [#{'Volume-Quota-Threshold' := [1048576]}]}], Events),
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code', 2001}}, Stats1)),
+
+	% Invoke Update and check that the data is returned from OCS Hold config
+	UsedCredits =
+		#{1000 => #{'CC-Input-Octets'  => [0],
+		    'CC-Output-Octets' => [0],
+		    'CC-Time'          => [60],
+		    'CC-Total-Octets'  => [0],
+		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
+	 	},
+    GyUpdate = #{used_credits => maps:to_list(UsedCredits)},
+	{ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
+	[{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events2,
+	?equal(true, Time > 1800 andalso Time =< 1900),
+
+	% Invoke Terminate and check if the session is terminated, while not sending CCR-T
+    Stats2 = get_stats(?SERVICE),
+
+    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       used_credits => UsedCredits},
+    {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+
+	Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
+
+    % Make sure we didn't send anything
+    ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ?CLEAR_TC_INFO(),
+    ok.
+
+%%%======================================================================
+%%% Rate limit test helper to generate the requests in separate processes
+%%%======================================================================
 basic_session() ->
     basic_session(1000).
 basic_session(CCR_I_T_Delay) ->
@@ -489,19 +599,24 @@ basic_session(CCR_I_T_Delay) ->
 		 {{error, rate_limit},_ ,_} -> rate_limit;
 		 {Err, _, _} -> Err
 	     end,
-    set_test_info({session, SId}, Result).
+    set_test_info(ccr_t_rate_limit, {session, SId}, Result).
 
 
 %%%===================================================================
 %%% Test server request handler override
 %%%===================================================================
 
-test_server_request(Packet, Svc, Peer, Extra) ->
-    case get_test_info(diameter_test_request_action) of
-	Fun when is_function(Fun) -> Fun([Packet, Peer]);
+test_server_request(#diameter_packet{msg = [_ | #{'Session-Id' := Sid}]} = Packet, Svc, Peer, Extra) ->
+    Resp = case get_diameter_session_handler(Sid) of
+	Fun when is_function(Fun) -> Fun(Packet, Svc, Peer, Extra);
 	_ -> ok
     end,
-    diameter_test_server:handle_request(Packet, Svc, Peer, Extra).
+	case Resp of
+		ok -> 
+			diameter_test_server:handle_request(Packet, Svc, Peer, Extra);
+		_ ->
+			Resp
+	end.
 
 %%%===================================================================
 %%% Generic helpers
@@ -519,28 +634,41 @@ init_test_info_ets() ->
 stop_test_info_ets() ->
     ets:info(?MODULE, owner) ! stop.
 
-set_test_info(Name, Value) ->
-    ets:insert(?MODULE, {Name, Value}).
+set_test_info(TC, Name, Value) ->
+    ets:insert(?MODULE, {{TC,Name}, Value}).
 
-get_test_info(Name) ->
-    case ets:lookup(?MODULE, Name) of
+get_test_info(TC, Name) ->
+    case ets:lookup(?MODULE, {TC, Name}) of
 	[] -> undefined;
 	[{_, Value}] -> Value
     end.
 
-delete_test_info(Name) ->
-    case ets:lookup(?MODULE, Name) of
+delete_test_info(TC, Name) ->
+    case ets:lookup(?MODULE, {TC, Name}) of
 	[] -> undefined;
 	[{_, Value}] ->
-	    ets:delete(?MODULE, Name),
+	    ets:delete(?MODULE, {TC, Name}),
 	    Value
     end.
 
-clean_test_info() ->
-    ets:delete_all_objects(?MODULE).
+clear_test_info(TC) ->
+	ets:match_delete(?MODULE, {{TC, '_'}, '_'}).
 
-list_test_info() ->
-    ets:tab2list(?MODULE).
+list_test_info(TC) ->
+    [list_to_tuple(Res) || Res <- ets:match(?MODULE, {{TC, '$1'}, '$2'})].
+
+set_diameter_session_handler(SId, Fun) ->
+	ets:insert(?MODULE, {{diameter_session_handler, SId}, Fun}).
+
+get_diameter_session_handler(SId) ->
+    case ets:lookup(?MODULE, {diameter_session_handler, SId}) of
+	[] -> undefined;
+	[{_, Fun}] -> Fun
+    end.
+
+
+delete_diameter_session_handler(SId) ->
+	ets:delete(?MODULE, {diameter_session_handler, SId}).
 
 stat_check(Svc, Period, Key, Count) ->
     Value = proplists:get_value(Key, get_stats(Svc), 0),
