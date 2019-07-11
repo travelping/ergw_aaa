@@ -83,6 +83,8 @@ Example ergw_aaa application configuration with OCS hold for CCR-I and CCR-U for
 
 Backward compatibility
 ----------------------
-The existing possibility to define AVP map as error return, is kept for backward compatibility. 
+The existing possibility to define AVP map as error answer, is kept for backward compatibility. 
 
-In the current implementation when a request has failed with OCS connection down (no_connection), then the state of the session was put to peer_down state and subsequent requests are not sent to the OCS. If OCS Hold is NOT configured then this behaviour is kept.
+In the current implementation when a request has failed with OCS connection down (no_connection), then the state of the session was put to peer_down, and subsequent requests are not sent to the OCS. If OCS Hold is NOT configured then this behaviour is kept.
+
+The new {ocs_hold, [MSCC, ...]} answer configuration is **NOT compatible** with earlier ergw_aaa application versions. It should be adjusted accordingly when application rollback is considered.
