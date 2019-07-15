@@ -93,8 +93,10 @@ invoke(_Service, authenticate, Session, Events, #{now := Now} = Opts) ->
     case Verdict of
 	success ->
 	    {ok, SessionOpts#{'Authentication-Result' => Verdict}, Events1};
+	challenge ->
+	    {Verdict, SessionOpts#{'Authentication-Result' => pending}, Events1};
 	_ ->
-	    {denied, SessionOpts#{'Authentication-Result' => Verdict}, Events1}
+	    {Verdict, SessionOpts#{'Authentication-Result' => Verdict}, Events1}
     end;
 
 invoke(_Service, authorize, #{'Authentication-Result' := success} = Session, Events, _) ->
@@ -616,6 +618,7 @@ process_gen_attrs({#attribute{id = ?Class}, Class}, Session) ->
 %% State
 process_gen_attrs({#attribute{id = ?State}, State}, Session) ->
     radius_session_opt('RADIUS-State', State, Session);
+
 
 %% User-Name
 process_gen_attrs({#attribute{id = ?User_Name}, UserName}, Session) ->

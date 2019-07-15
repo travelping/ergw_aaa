@@ -85,15 +85,6 @@ validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
 invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
-invoke(_Service, authenticate, Session, Events, _Opts) ->
-    {ok, Session, Events};
-
-invoke(_Service, authorize, #{'Authentication-Result' := success} = Session, Events, _Opts) ->
-    {ok, Session, Events};
-
-invoke(_Service, authorize, Session, Events, _Opts) ->
-    {denied, Session, Events};
-
 invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
     DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
     case maps:get('State', DiamSession, stopped) of
