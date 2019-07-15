@@ -88,13 +88,13 @@ invoke(_Service, authenticate, Session, Events, #{now := Now} = Opts) ->
 	     msg_hmac = true,
 	     eap_msg = maps:get('EAP-Data', Session, <<>>)},
 
-    {Verdict, SessionOpts} =
+    {Verdict, SessionOpts, Events1} =
 	radius_response(send_request(Req, Session, Opts), Opts, Session, Events),
     case Verdict of
 	success ->
-	    {ok, SessionOpts#{'Authentication-Result' => Verdict}};
+	    {ok, SessionOpts#{'Authentication-Result' => Verdict}, Events1};
 	_ ->
-	    {denied, SessionOpts#{'Authentication-Result' => Verdict}}
+	    {denied, SessionOpts#{'Authentication-Result' => Verdict}, Events1}
     end;
 
 invoke(_Service, authorize, #{'Authentication-Result' := success} = Session, Events, _) ->
