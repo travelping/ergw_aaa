@@ -78,18 +78,18 @@
 	    [{handler, 'ergw_aaa_static'}]},
 	   {'Ro',
 	    [{handler, 'ergw_aaa_ro'},
-		 {answers, #{
-			 	'OCS-Hold' => {ocs_hold, 
-                       [#{'Envelope-Reporting' => [0],
-                          'Granted-Service-Unit' =>
-                             [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
-                          'Rating-Group' => [3000],
-                          'Result-Code' => [2001],
-                          'Time-Quota-Threshold' => [60]}
-						]
-                  }
-         }}
-		]}
+		 {answers,
+		  #{'OCS-Hold' => {ocs_hold,
+				   [#{'Envelope-Reporting' => [0],
+				      'Granted-Service-Unit' =>
+					  [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
+				      'Rating-Group' => [3000],
+				      'Result-Code' => [2001],
+				      'Time-Quota-Threshold' => [60]}
+				   ]
+				  }
+		   }}
+	    ]}
 	  ]},
 
 	 {apps,
@@ -113,9 +113,9 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, abort_session_request, tarif_time_change, 
+    [simple_session, abort_session_request, tarif_time_change,
      ocs_hold_initial_timeout, ocs_hold_update_timeout,
-	 ccr_retry, ccr_t_rate_limit].
+     ccr_retry, ccr_t_rate_limit].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -202,23 +202,23 @@ init_session(Session, _Config) ->
 	  '3GPP-Allocation-Retention-Priority' => 2,
 	  '3GPP-Charging-Characteristics' =>  <<8,0>>
 
-	  %%
-	  %% some OCSs don't like this attribute on Gy, disable it for now
-	  %%
-	  %% 'QoS-Information' =>
-	  %%     #{
-	  %%	'QoS-Class-Identifier' => 8,
-	  %%	'Max-Requested-Bandwidth-DL' => 0,
-	  %%	'Max-Requested-Bandwidth-UL' => 0,
-	  %%	'Guaranteed-Bitrate-DL' => 0,
-	  %%	'Guaranteed-Bitrate-UL' => 0,
-	  %%	'Allocation-Retention-Priority' =>
-	  %%	    #{'Priority-Level' => 10,
-	  %%	      'Pre-emption-Capability' => 1,
-	  %%	      'Pre-emption-Vulnerability' => 0},
-	  %%	'APN-Aggregate-Max-Bitrate-DL' => 84000000,
-	  %%	'APN-Aggregate-Max-Bitrate-UL' => 8640000
-	  %%      }
+	      %%
+	      %% some OCSs don't like this attribute on Gy, disable it for now
+	      %%
+	      %% 'QoS-Information' =>
+	      %%     #{
+	      %%	'QoS-Class-Identifier' => 8,
+	      %%	'Max-Requested-Bandwidth-DL' => 0,
+	      %%	'Max-Requested-Bandwidth-UL' => 0,
+	      %%	'Guaranteed-Bitrate-DL' => 0,
+	      %%	'Guaranteed-Bitrate-UL' => 0,
+	      %%	'Allocation-Retention-Priority' =>
+	      %%	    #{'Priority-Level' => 10,
+	      %%	      'Pre-emption-Capability' => 1,
+	      %%	      'Pre-emption-Vulnerability' => 0},
+	      %%	'APN-Aggregate-Max-Bitrate-DL' => 84000000,
+	      %%	'APN-Aggregate-Max-Bitrate-UL' => 8640000
+	      %%      }
 	 },
     maps:merge(Defaults, Session).
 
@@ -413,13 +413,13 @@ ccr_retry(Config) ->
 		end
 	end,
 
-	?SET_TC_INFO(ccr_i_retries, []),
+    ?SET_TC_INFO(ccr_i_retries, []),
 
     Session = init_session(#{}, Config),
     GyOpts = #{credits => #{1000 => empty}},
     Stats0 = get_stats(?SERVICE),
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-	{ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
     {ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
     RequestsInfo = ?GET_TC_INFO(ccr_i_retries),
@@ -481,33 +481,33 @@ ccr_t_rate_limit(Config) ->
     ok.
 
 ocs_hold_initial_timeout(Config) ->
-	% Time out all requests on the test server to trigger ocs_hold on CCR-I
+    %% Time out all requests on the test server to trigger ocs_hold on CCR-I
     DTRA = fun(_Request, _Svc, _Peers, _Extra) -> timer:sleep(2000) end,
     Session = init_session(#{}, Config),
     GyOpts = #{credits => #{1000 => empty}},
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-	{ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
 
     {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-	[{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events,
-	?equal(true, Time > 1800 andalso Time =< 1900),
+    [{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events,
+    ?equal(true, Time > 1800 andalso Time =< 1900),
 
-	% Invoke Update and check if it stops the session without triggering a CCR-U
+    %% Invoke Update and check if it stops the session without triggering a CCR-U
     Stats0 = get_stats(?SERVICE),
-	UsedCredits =
-		#{1000 => #{'CC-Input-Octets'  => [0],
+    UsedCredits =
+	#{1000 => #{'CC-Input-Octets'  => [0],
 		    'CC-Output-Octets' => [0],
 		    'CC-Time'          => [60],
 		    'CC-Total-Octets'  => [0],
 		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
-	 	},
+	 },
     GyTerm = #{used_credits => maps:to_list(UsedCredits)},
-	{{error, ocs_hold_end}, _Session2, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [], false),
+    {{error, ocs_hold_end}, _Session2, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [], false),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
 
-    % Make sure we didn't send anything
+    %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats1)),
 
     %% make sure nothing crashed
@@ -516,53 +516,54 @@ ocs_hold_initial_timeout(Config) ->
     ok.
 
 ocs_hold_update_timeout(Config) ->
-	% Respond to CCR-I and time out CCR-U to trigger OCS Hold there
-    DTRA = fun
-		(#diameter_packet{msg = ['CCR' | #{'CC-Request-Type' := 2}]}, _Svc, _Peer, _Extra) -> 
-			timer:sleep(2000),
-			ok;
-		(_Packet, _Svc, _Peer, _Extra) -> ok
+    %% Respond to CCR-I and time out CCR-U to trigger OCS Hold there
+    DTRA =
+	fun (#diameter_packet{msg = ['CCR' | #{'CC-Request-Type' := 2}]},
+	     _Svc, _Peer, _Extra) ->
+		timer:sleep(2000),
+		ok;
+	    (_Packet, _Svc, _Peer, _Extra) -> ok
 	end,
 
     Session = init_session(#{}, Config),
     GyOpts = #{credits => #{1000 => empty}},
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-	{ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
 
-	% Send CCR-I
+    %% Send CCR-I
     Stats0 = get_stats(?SERVICE),
 
     {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-	
-	% Check if the data is coming from the test server
-	?match([{update_credits, [#{'Volume-Quota-Threshold' := [1048576]}]}], Events),
+
+    %% Check if the data is coming from the test server
+    ?match([{update_credits, [#{'Volume-Quota-Threshold' := [1048576]}]}], Events),
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code', 2001}}, Stats1)),
 
-	% Invoke Update and check that the data is returned from OCS Hold config
-	UsedCredits =
-		#{1000 => #{'CC-Input-Octets'  => [0],
+    %% Invoke Update and check that the data is returned from OCS Hold config
+    UsedCredits =
+	#{1000 => #{'CC-Input-Octets'  => [0],
 		    'CC-Output-Octets' => [0],
 		    'CC-Time'          => [60],
 		    'CC-Total-Octets'  => [0],
 		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
-	 	},
+	 },
     GyUpdate = #{used_credits => maps:to_list(UsedCredits)},
-	{ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
-	[{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events2,
-	?equal(true, Time > 1800 andalso Time =< 1900),
+    {ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
+    [{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events2,
+    ?equal(true, Time > 1800 andalso Time =< 1900),
 
-	% Invoke Terminate and check if the session is terminated, while not sending CCR-T
+    %% Invoke Terminate and check if the session is terminated, while not sending CCR-T
     Stats2 = get_stats(?SERVICE),
 
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
     {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
 
-	Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
+    Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
 
-    % Make sure we didn't send anything
+    %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
 
     %% make sure nothing crashed
@@ -607,16 +608,19 @@ basic_session(CCR_I_T_Delay) ->
 %%%===================================================================
 
 test_server_request(#diameter_packet{msg = [_ | #{'Session-Id' := Sid}]} = Packet, Svc, Peer, Extra) ->
-    Resp = case get_diameter_session_handler(Sid) of
-	Fun when is_function(Fun) -> Fun(Packet, Svc, Peer, Extra);
-	_ -> ok
-    end,
-	case Resp of
-		ok -> 
-			diameter_test_server:handle_request(Packet, Svc, Peer, Extra);
-		_ ->
-			Resp
-	end.
+    Resp =
+	case get_diameter_session_handler(Sid) of
+	    Fun when is_function(Fun) ->
+		Fun(Packet, Svc, Peer, Extra);
+	    _ ->
+		ok
+	end,
+    case Resp of
+	ok ->
+	    diameter_test_server:handle_request(Packet, Svc, Peer, Extra);
+	_ ->
+	    Resp
+    end.
 
 %%%===================================================================
 %%% Generic helpers
@@ -652,13 +656,13 @@ delete_test_info(TC, Name) ->
     end.
 
 clear_test_info(TC) ->
-	ets:match_delete(?MODULE, {{TC, '_'}, '_'}).
+    ets:match_delete(?MODULE, {{TC, '_'}, '_'}).
 
 list_test_info(TC) ->
     [list_to_tuple(Res) || Res <- ets:match(?MODULE, {{TC, '$1'}, '$2'})].
 
 set_diameter_session_handler(SId, Fun) ->
-	ets:insert(?MODULE, {{diameter_session_handler, SId}, Fun}).
+    ets:insert(?MODULE, {{diameter_session_handler, SId}, Fun}).
 
 get_diameter_session_handler(SId) ->
     case ets:lookup(?MODULE, {diameter_session_handler, SId}) of
@@ -668,7 +672,7 @@ get_diameter_session_handler(SId) ->
 
 
 delete_diameter_session_handler(SId) ->
-	ets:delete(?MODULE, {diameter_session_handler, SId}).
+    ets:delete(?MODULE, {diameter_session_handler, SId}).
 
 stat_check(Svc, Period, Key, Count) ->
     Value = proplists:get_value(Key, get_stats(Svc), 0),
