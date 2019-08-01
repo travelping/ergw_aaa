@@ -4,17 +4,17 @@
   {vsn, "1"},
   {registered, []},
   {applications, [
-                  kernel,
-                  stdlib,
+		  kernel,
+		  stdlib,
 		  crypto,
-                  sasl,
+		  sasl,
 		  lager,
 		  setup,
 		  regine,
 		  eradius,
           jobs,
 		  diameter
-                 ]},
+		 ]},
   {mod, { ergw_aaa_app, []}},
   {env, [
 	 {ipctld_port, 7744},

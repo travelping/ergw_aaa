@@ -111,8 +111,8 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_UPDATE_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
 	    handle_cca(call(Request, Opts), Session, Events, Opts);
-    ocs_hold ->
-        handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
+	ocs_hold ->
+	    handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
 	peer_down ->
 	    handle_cca({error, no_connection}, Session0, Events, Opts);
 	_ ->
@@ -130,8 +130,8 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
 	    handle_cca(call(Request, Opts), Session, Events, Opts);
-    ocs_hold ->
-        handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
+	ocs_hold ->
+	    handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
 	peer_down ->
 	    handle_cca({error, no_connection}, Session0, Events, Opts);
 	_ ->
@@ -149,7 +149,7 @@ call(Request, #{rate_limit_queue := RateLimitQueue} = Config) ->
     end;
 
 call(Request, #{max_retries := MaxRetries} = Config) when MaxRetries > 0 ->
-    call_with_retry(Request, Config, MaxRetries+1, diameter_session:sequence(), []);
+    call_with_retry(Request, Config, MaxRetries + 1, diameter_session:sequence(), []);
 
 call(Request, #{function := Function} = Config) ->
     Timeout = maps:get(tx_timeout, Config, 5000),
@@ -301,7 +301,7 @@ validate_option(answer_if_timeout, Value) when is_atom(Value) ->
     Value;
 validate_option(rate_limit_queue, Value) when is_atom(Value) ->
     Value;
-validate_option(answer_if_rate_limit, Value) when is_atom(Value) -> 
+validate_option(answer_if_rate_limit, Value) when is_atom(Value) ->
     Value;
 validate_option(tx_timeout, Value) when is_integer(Value) ->
     Value;
@@ -651,26 +651,30 @@ from_session(Session, Avps0) ->
 %% ------------------------------------------------------------------
 
 apply_answer_config(Answer, Answers, Session) ->
-    apply_answer_config(Answer, Answers, Session, #{'Result-Code' =>
-					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}).
+    apply_answer_config(Answer, Answers, Session,
+			#{'Result-Code' =>
+			      ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}).
 apply_answer_config(Answer, Answers, Session, DefaultAnswerApvs) ->
     case maps:get(Answer, Answers, DefaultAnswerApvs) of
-        {ocs_hold, GCUs} ->
-            GCUs1 = lists:map(fun
-                (#{'Granted-Service-Unit' := 
-                    [#{'CC-Time-Min' := [MinTime], 'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
-                    GSU1 = GSU#{'CC-Time' => [MinTime + rand:uniform(MaxTime - MinTime)]},
-                    GCU#{'Granted-Service-Unit' => 
-                         [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
-                (GCU) ->
-                    GCU
-            end, GCUs),
-            DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
-            NewSession = ergw_aaa_session:set_svc_opt(
-                ?MODULE, DiamSession#{'State' => ocs_hold}, Session),
-            {#{'Result-Code' => 2001, 'Multiple-Services-Credit-Control' => GCUs1}, NewSession};
-        AVPs when is_map(AVPs) -> 
-            {AVPs, Session}
+	{ocs_hold, GCUs} ->
+	    GCUs1 = lists:map(
+		      fun (#{'Granted-Service-Unit' :=
+				 [#{'CC-Time-Min' := [MinTime],
+				    'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
+			      GSU1 = GSU#{'CC-Time' =>
+					      [MinTime + rand:uniform(MaxTime - MinTime)]},
+			      GCU#{'Granted-Service-Unit' =>
+				       [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
+			  (GCU) ->
+			      GCU
+		      end, GCUs),
+	    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
+	    NewSession = ergw_aaa_session:set_svc_opt(
+			   ?MODULE, DiamSession#{'State' => ocs_hold}, Session),
+	    {#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+	       'Multiple-Services-Credit-Control' => GCUs1}, NewSession};
+	AVPs when is_map(AVPs) ->
+	    {AVPs, Session}
     end.
 
 to_session('Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
