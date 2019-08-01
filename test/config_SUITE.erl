@@ -172,6 +172,12 @@ config(_Config)  ->
     ?ok_set([product_name], <<"PRODUCT">>),
     ?error_set([product_name], 1),
 
+    ?ok_set([rate_limits, default], [{outstanding_requests, 50}, {rate, 50}]),
+    ?ok_set([rate_limits, default], [{outstanding_requests, 50}]),
+    ?ok_set([rate_limits, default], [{rate, 50}]),
+    ?error_set([rate_limits, default], [{outstanding_requests, atom}, {rate, 50}]),
+    ?error_set([rate_limits, default], [{outstanding_requests, 50}, {rate, atom}]),
+
     ?error_set([handlers], invalid),
     ?error_set([handlers, invalid_handler], []),
     ?error_set([services], invalid),
