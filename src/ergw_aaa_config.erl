@@ -17,6 +17,9 @@
 -export([validate_config/1]).
 -endif.
 
+-define(DefaultRateLimit, [{outstanding_requests, 50},
+			   {rate, 50}
+			  ]).
 -define(DefaultOptions, [{product_name, "erGW-AAA"},
 			 {functions, []}
 			]).
@@ -128,7 +131,9 @@ validate_config(Config0) ->
     Config1 = validate_keyed_opt(functions, fun validate_function/2, Config0, []),
     Config2 = validate_keyed_opt(handlers, fun validate_handler/2, Config1, []),
     Config3 = validate_keyed_opt(services, validate_service(_, _, Config2), Config2, []),
-    Config = validate_keyed_opt(apps, validate_app(_, _, Config3), Config3, []),
+    Config4 = validate_keyed_opt(apps, validate_app(_, _, Config3), Config3, []),
+    Config = validate_keyed_opt(rate_limits, fun validate_rate_limit/2, Config4,
+				[{default, ?DefaultRateLimit}]),
     validate_options(fun validate_option/2, Config, ?DefaultOptions, map).
 
 validate_option(product_name, Value)
@@ -215,3 +220,16 @@ validate_app_procs_svc(App, Procedure, Service, Opts, Config)
     end;
 validate_app_procs_svc(App, Procedure, Service, Opts, _Config) ->
     throw({error, {options, {App, Procedure, Service, Opts}}}).
+
+validate_rate_limit(RateLimit, Opts) ->
+    validate_options(validate_rate_limit_option(RateLimit, _, _),
+		     Opts, ?DefaultRateLimit, map).
+
+validate_rate_limit_option(_RateLimit, outstanding_requests, Reqs)
+  when is_integer(Reqs) ->
+    Reqs;
+validate_rate_limit_option(_RateLimit, rate, Rate)
+  when is_integer(Rate) ->
+    Rate;
+validate_rate_limit_option(RateLimit, Opt, Value) ->
+    throw({error, {options, {RateLimit, Opt, Value}}}).

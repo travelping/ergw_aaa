@@ -65,7 +65,9 @@
 -define(DIAMETER_SERVICE_OPTS, []).
 
 -define(CONFIG,
-	[{functions, [?DIAMETER_FUNCTION]},
+	[{rate_limits,
+	  [{default, [{outstanding_requests, 10}, {rate, 10}]}]},
+	 {functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
 	   {ergw_aaa_ro, ?DIAMETER_RO_CONFIG}

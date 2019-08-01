@@ -278,7 +278,22 @@ update_bucket(#peer{last_ts = Last, interval = Interval,
      }.
 
 get_peer(Host, Peers) ->
-    Peer = maps:get(Host, Peers, #peer{}),
+    Peer =
+	case maps:is_key(Host, Peers) of
+	    true ->
+		maps:get(Host, Peers);
+	    _ ->
+		RateLimits = application:get_env(ergw_aaa, rate_limits, #{}),
+		#{outstanding_requests := Capacity, rate := Rate} =
+		    if is_map_key(Host, RateLimits) ->
+			    maps:get(Host, RateLimits);
+		       is_map_key(default, RateLimits) ->
+			    maps:get(default, RateLimits);
+		       true ->
+			    #{outstanding_requests => 50, rate => 50}
+		    end,
+		#peer{capacity = Capacity, rate = Rate}
+	end,
     update_bucket(Peer).
 
 %% relative_connection_load/3
