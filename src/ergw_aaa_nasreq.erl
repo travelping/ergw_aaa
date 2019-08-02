@@ -27,6 +27,7 @@
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include("include/ergw_aaa_session.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
@@ -78,11 +79,9 @@ invoke(_Service, init, Session, Events, _Opts) ->
 %%     {ok, Session, Events};
 
 invoke(_Service, start, Session0, Events, Opts) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	stopped ->
-	    Session1 = ergw_aaa_session:set_svc_opt(
-			 ?MODULE, DiamSession#{'State' => 'started'}, Session0),
+	    Session1 = ?set_svc_opt('State', started, Session0),
 	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
@@ -93,8 +92,7 @@ invoke(_Service, start, Session0, Events, Opts) ->
     end;
 
 invoke(_Service, interim, Session0, Events, Opts) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	started ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
@@ -106,11 +104,9 @@ invoke(_Service, interim, Session0, Events, Opts) ->
 
 invoke(_Service, stop, Session0, Events, Opts) ->
     lager:debug("Session Stop: ~p", [Session0]),
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	started ->
-	    Session1 = ergw_aaa_session:set_svc_opt(
-			 ?MODULE, DiamSession#{'State' => 'stopped'}, Session0),
+	    Session1 = ?set_svc_opt('State', stopped, Session0),
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    Request = create_ACR(RecType, Session, Opts),
