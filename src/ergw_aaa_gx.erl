@@ -37,6 +37,7 @@
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include("include/ergw_aaa_session.hrl").
 -include("include/diameter_3gpp_ts29_212.hrl").
 -include("include/ergw_aaa_gx.hrl").
 
@@ -86,11 +87,9 @@ invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
 invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	stopped ->
-	    Session1 = ergw_aaa_session:set_svc_opt(
-			 ?MODULE, DiamSession#{'State' => 'started'}, Session0),
+	    Session1 = ?set_svc_opt('State', started, Session0),
 	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_INITIAL_REQUEST',
@@ -101,8 +100,7 @@ invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
     end;
 
 invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	started ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_UPDATE_REQUEST',
@@ -114,11 +112,9 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 
 invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
     lager:debug("Session Stop: ~p", [Session0]),
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	started ->
-	    Session1 = ergw_aaa_session:set_svc_opt(
-			 ?MODULE, DiamSession#{'State' => 'stopped'}, Session0),
+	    Session1 = ?set_svc_opt('State', stopped, Session0),
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
@@ -256,9 +252,7 @@ handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
-    NewSession = ergw_aaa_session:set_svc_opt(
-		   ?MODULE, DiamSession#{'State' => peer_down}, Session),
+    NewSession = ?set_svc_opt('State', peer_down, Session),
     handle_cca(['CCA' | Avps], NewSession, Events, Opts);
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts) ->

@@ -39,6 +39,7 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/diameter_3gpp_ts32_299_rf.hrl").
+-include("include/ergw_aaa_session.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
@@ -88,11 +89,9 @@ invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
 invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	stopped ->
-	    Session1 = ergw_aaa_session:set_svc_opt(
-			 ?MODULE, DiamSession#{'State' => 'started'}, Session0),
+	    Session1 = ?set_svc_opt('State', started, Session0),
 	    Keys = ['service_data', 'InPackets', 'OutPackets',
 		    'InOctets', 'OutOctets', 'Acct-Session-Time'],
 	    Session2 = maps:without(Keys, Session1),
@@ -105,8 +104,7 @@ invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
     end;
 
 invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    State = maps:get('State', DiamSession, stopped),
+    State = ?get_svc_opt('State', Session0, stopped),
     GyEvent = maps:get(gy_event, Opts, interim),
     case {State, GyEvent} of
 	{started, cdr_closure} ->
@@ -121,11 +119,9 @@ invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
 
 invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
     lager:debug("Session Stop: ~p", [Session0]),
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
-    case maps:get('State', DiamSession, stopped) of
+    case ?get_svc_opt('State', Session0, stopped) of
 	started ->
-	    Session1 = ergw_aaa_session:set_svc_opt(
-			 ?MODULE, DiamSession#{'State' => 'stopped'}, Session0),
+	    Session1 = ?set_svc_opt('State', stopped, Session0),
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    Session2 = close_service_data_containers(Session1),
 	    {Request, Session} = create_ACR(RecType, Session2, Opts),
@@ -238,9 +234,8 @@ handle_aca({error, _} = Result, Session, Events) ->
     {Result, Session, Events}.
 
 inc_number(Key, Session) ->
-    ModuleOpts = ergw_aaa_session:get_svc_opt(?MODULE, Session),
-    Number = maps:get(Key, ModuleOpts, -1) + 1,
-    {Number, ergw_aaa_session:set_svc_opt(?MODULE, ModuleOpts#{Key => Number}, Session)}.
+    Number = ?get_svc_opt(Key, Session, -1) + 1,
+    {Number, ?set_svc_opt(Key, Number, Session)}.
 
 %% to_session/3
 to_session(Procedure, SessEvs, Avps) ->

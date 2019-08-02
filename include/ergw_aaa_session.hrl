@@ -20,3 +20,8 @@
 		      session,
 		      events = []
 		     }).
+
+-define(get_svc_opt(Key, Session, Default),
+	ergw_aaa_session:get_svc_opt(?MODULE, Key, Session, Default)).
+-define(set_svc_opt(Key, Value, Session),
+	ergw_aaa_session:set_svc_opt(?MODULE, Key, Value, Session)).

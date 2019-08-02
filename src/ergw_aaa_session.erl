@@ -30,7 +30,8 @@
 	 merge/2, to_session/1,
 	 native_to_seconds/1]).
 
--export([get_svc_opt/2, set_svc_opt/3]).
+-export([get_svc_opt/2, get_svc_opt/4,
+	 set_svc_opt/3, set_svc_opt/4]).
 
 -include("include/ergw_aaa_session.hrl").
 
@@ -170,8 +171,16 @@ sync(Session) ->
 get_svc_opt(Service, Session) ->
     maps:get(Service, Session, #{}).
 
+get_svc_opt(Service, Key, Session, Default) ->
+    M = maps:get(Service, Session, #{}),
+    maps:get(Key, M, Default).
+
 set_svc_opt(Service, Opts, Session) ->
     maps:put(Service, Opts, Session).
+
+set_svc_opt(Service, Key, Value, Session) ->
+    Opts = get_svc_opt(Service, Session),
+    maps:put(Service, Opts#{Key => Value}, Session).
 
 %%===================================================================
 %% gen_statem callbacks
