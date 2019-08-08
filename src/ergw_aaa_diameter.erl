@@ -29,7 +29,8 @@
 				 ]).
 -define(DefaultTransportOptions, [{connect_to, undefined}, 
 				  {unordered, true},
- 				  {reuseaddr, true}
+				  {reuseaddr, true},
+				  {nodelay, true}
 				 ]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
@@ -133,6 +134,8 @@ validate_transport(sndbuf, Value) when is_integer(Value), Value >= 16*1024 ->
 validate_transport(reuseaddr, Value) when is_boolean(Value) ->
     Value;
 validate_transport(unordered, Value) when is_boolean(Value) ->
+    Value;
+validate_transport(nodelay, Value) when is_boolean(Value) ->
     Value;
 validate_transport(Opt, Value) ->
     validate_transport_error(Opt, Value).
