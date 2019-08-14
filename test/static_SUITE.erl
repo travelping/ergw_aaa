@@ -244,8 +244,16 @@ gy_session(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-    ?match([{update_credits,[_]}], Events1),
-    ?match(#{'Multiple-Services-Credit-Control' := [__]}, Session1),
+    ?match([{update_credits,
+	     [#{'Envelope-Reporting' := [0],
+		'Granted-Service-Unit' :=
+		    [#{'CC-Time' := [3600],
+		       'CC-Total-Octets' := [102400]}],
+		'Rating-Group' := [3000],
+		'Result-Code' := [2001],
+		'Time-Quota-Threshold' := [60],
+		'Volume-Quota-Threshold' := [10240]}]}], Events1),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
     UsedCredits =
 	#{3000 => #{'CC-Input-Octets'  => [1092],
@@ -259,7 +267,7 @@ gy_session(Config) ->
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
     ?match([], Events2),
-    ?match(#{'Multiple-Services-Credit-Control' := [_]}, Session2),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
     %% make sure nothing crashed
     meck_validate(Config),

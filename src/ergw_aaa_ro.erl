@@ -681,8 +681,21 @@ to_session(Procedure, SessEvs, Avps) ->
     maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
 
 %% to_session/4
-to_session(_, 'Multiple-Services-Credit-Control' = K, V, {Session, Events}) ->
-    {Session#{K => V}, [{update_credits, V} | Events]};
+to_session(_, 'Multiple-Services-Credit-Control', Value, {Session, Events}) ->
+    MSCCmap = lists:foldl(
+		fun(#{'Rating-Group' := [RG]} = G, M) -> M#{RG => G} end, #{}, Value),
+    MSCC = maps:fold(
+	     fun(RatingGroup, _, CC) ->
+		     case maps:get(RatingGroup, MSCCmap, remove) of
+			 remove ->
+			     [#{'Rating-Group' => [RatingGroup],
+				'Result-Code' =>
+				    [?'DIAMETER_RO_RESULT-CODE_END_USER_SERVICE_DENIED']} | CC];
+			 V ->
+			     [V | CC]
+		     end
+	     end, [], maps:get(credits, Session, #{})),
+    {Session, [{update_credits, MSCC} | Events]};
 to_session({_, 'RAR'}, 'Rating-Group', V, {Session, Events}) ->
     {Session, [Events | {report_rating_group, V}]};
 to_session(_, _, _, SessEv) ->

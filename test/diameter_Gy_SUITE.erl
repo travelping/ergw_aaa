@@ -83,7 +83,7 @@
 				   [#{'Envelope-Reporting' => [0],
 				      'Granted-Service-Unit' =>
 					  [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
-				      'Rating-Group' => [3000],
+				      'Rating-Group' => [1000],
 				      'Result-Code' => [2001],
 				      'Time-Quota-Threshold' => [60]}
 				   ]
@@ -244,7 +244,7 @@ simple_session(Config) ->
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
     ?match([{update_credits,[_,_,_]}], Events1),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session1),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
     UsedCredits =
 	#{3000 => #{'CC-Input-Octets'  => [1092],
@@ -268,7 +268,7 @@ simple_session(Config) ->
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
     ?match([{update_credits,[_,_,_]}], Events2),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session2),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
@@ -296,7 +296,7 @@ abort_session_request(Config) ->
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
     ?match([{update_credits,[_,_,_]}], Events1),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session1),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
     SessionId = maps:get('Diameter-Session-Id', Session1),
     ?equal(ok, diameter_test_server:abort_session_request(gy, SessionId, ?'Origin-Host', ?'Origin-Realm')),
@@ -330,7 +330,7 @@ abort_session_request(Config) ->
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
     ?match([{update_credits,[_,_,_]}], Events2),
-    ?match(#{'Multiple-Services-Credit-Control' := [_,_,_]}, Session2),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
@@ -360,7 +360,7 @@ tarif_time_change(Config) ->
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
     ?match([{update_credits,[_]}], Events1),
-    ?match(#{'Multiple-Services-Credit-Control' := [_]}, Session1),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
     UsedCredits =
 	[{1000, #{'CC-Input-Octets'  => [0],
@@ -387,7 +387,7 @@ tarif_time_change(Config) ->
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
     ?match([{update_credits,[_]}], Events2),
-    ?match(#{'Multiple-Services-Credit-Control' := [_]}, Session2),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(3, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
@@ -490,8 +490,9 @@ ocs_hold_initial_timeout(Config) ->
     set_diameter_session_handler(DiameterSId, DTRA),
 
     {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
-    [{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events,
-    ?equal(true, Time > 1800 andalso Time =< 1900),
+    ?match([{update_credits,
+	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
+	   ] when Time > 1800 andalso Time =< 1900, Events),
 
     %% Invoke Update and check if it stops the session without triggering a CCR-U
     Stats0 = get_stats(?SERVICE),
@@ -551,8 +552,9 @@ ocs_hold_update_timeout(Config) ->
 	 },
     GyUpdate = #{used_credits => maps:to_list(UsedCredits)},
     {ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
-    [{update_credits, [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}] = Events2,
-    ?equal(true, Time > 1800 andalso Time =< 1900),
+    ?match([{update_credits,
+	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
+	   ] when Time > 1800 andalso Time =< 1900, Events2),
 
     %% Invoke Terminate and check if the session is terminated, while not sending CCR-T
     Stats2 = get_stats(?SERVICE),
