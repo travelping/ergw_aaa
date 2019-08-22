@@ -165,7 +165,7 @@ transport_module(_) -> unknown.
 
 transport_config(tcp, Type, Raddr, Port, Opts) ->
     [Type, {raddr, Raddr}, {rport, Port}
-     | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf], Opts))];
+     | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, nodelay], Opts))];
 transport_config(sctp, Type, Raddr, Port, Opts) ->
     [Type, {raddr, Raddr}, {rport, Port}
      | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, unordered], Opts))].
