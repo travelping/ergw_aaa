@@ -292,7 +292,7 @@ optional(Key, Value, Avps)
 %%%===================================================================
 
 close_service_data_containers(#{service_data := SDC0} = Session0) ->
-    DiamSession0 = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    DiamSession0 = ?get_svc_all_opt(Session0),
     {SDC, DiamSession1} =
 	lists:mapfoldr(
 	  fun(SD, SessIn) ->
@@ -376,7 +376,7 @@ accounting(Base, 'OutOctets', Value, Avps) ->
 %%   [ Traffic-Steering-Policy-Identifier-UL ]
 
 service_data(Session0, Avps0) ->
-    DiamSession = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    DiamSession = ?get_svc_all_opt(Session0),
     Avps =
 	case DiamSession of
 	    #{'Service-Data-Container' := SDC}
