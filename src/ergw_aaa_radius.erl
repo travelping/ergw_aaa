@@ -18,6 +18,7 @@
 -import(ergw_aaa_session, [attr_append/3, merge/2]).
 
 -include("ergw_aaa_internal.hrl").
+-include("include/ergw_aaa_session.hrl").
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
@@ -67,8 +68,8 @@ session_auth_options(_, _Session, Attrs) ->
 invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
-invoke(_Service, authenticate, Session, Events, #{now := Now} = Opts) ->
-    RadiusSession = maps:get(?MODULE, Session, #{}),
+invoke(_Service, authenticate = Procedure, Session, Events, #{now := Now} = Opts) ->
+    RadiusSession = ?get_svc_all_opt(Session),
 
     UserName0 = maps:get('Username', Session, <<>>),
     UserName = maps:get('Username', RadiusSession, UserName0),
@@ -106,7 +107,7 @@ invoke(_Service, authorize, Session, Events, _) ->
     {denied, Session, Events};
 
 invoke(_Service, start, Session0, Events, Opts) ->
-    RadiusSession0 = ergw_aaa_session:get_svc_opt(?MODULE, Session0),
+    RadiusSession0 = ?get_svc_all_opt(Session0),
     case maps:get('State', RadiusSession0, stopped) of
 	stopped ->
 	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
@@ -118,7 +119,7 @@ invoke(_Service, start, Session0, Events, Opts) ->
     end;
 
 invoke(_Service, interim, Session, Events, Opts) ->
-    RadiusSession = ergw_aaa_session:get_svc_opt(?MODULE, Session),
+    RadiusSession = ?get_svc_all_opt(Session),
     case maps:get('State', RadiusSession, stopped) of
 	started ->
 	    accounting(?RStatus_Type_Update, [], Session, Events, RadiusSession, Opts);
@@ -127,7 +128,7 @@ invoke(_Service, interim, Session, Events, Opts) ->
     end;
 
 invoke(_Service, stop, Session, Events, Opts) ->
-    RadiusSession0 = ergw_aaa_session:get_svc_opt(?MODULE, Session),
+    RadiusSession0 = ?get_svc_all_opt(Session),
     case maps:get('State', RadiusSession0, stopped) of
 	started ->
 	    RadiusSession = RadiusSession0#{'State' => 'stopped'},
@@ -153,7 +154,7 @@ accounting(Type, Attrs0, Session0, Events, RadiusSession, #{now := Now} = Opts) 
     Req = #radius_request{cmd = accreq, attrs = Attrs, msg_hmac = false},
     send_request(Req, Session0, Opts),
 
-    Session = ergw_aaa_session:set_svc_opt(?MODULE, RadiusSession, Session0),
+    Session = ?set_svc_all_opt(RadiusSession, Session0),
     {ok, Session, Events}.
 
 %%%===================================================================

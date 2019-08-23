@@ -224,9 +224,8 @@ handle_aca({error, _} = Result, Session, Events) ->
     {Result, Session, Events}.
 
 inc_number(Session) ->
-    ModuleOpts = maps:get(?MODULE, Session, #{}),
-    Number = maps:get('Accounting-Record-Number', ModuleOpts, -1),
-    Session#{?MODULE => ModuleOpts#{'Accounting-Record-Number' => Number + 1}}.
+    Number = ?get_svc_opt('Accounting-Record-Number', Session, -1) + 1,
+    ?set_svc_opt('Accounting-Record-Number', Number, Session).
 
 format_address({A, B, C, D}) -> <<A, B, C, D>>;
 format_address({A, B, C, D, E, F, G, H}) ->
