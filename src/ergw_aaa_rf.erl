@@ -45,7 +45,7 @@
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
 
--define(APP, 'Rf').
+-define(APP, 'rf').
 -define(DIAMETER_DICT_RF, diameter_3gpp_ts32_299_rf).
 -define(DIAMETER_APP_ID_RF, ?DIAMETER_DICT_RF:id()).
 
@@ -224,7 +224,7 @@ validate_option_error(Opt, Value) ->
 
 handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
 	   Session0, Events0) ->
-    {Session, Events} = to_session({rf, 'ACA'}, {Session0, Events0}, Avps),
+    {Session, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
@@ -243,10 +243,8 @@ to_session(Procedure, SessEvs, Avps) ->
 
 %% to_session/4
 to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events}) ->
-    Monit = {'IP-CAN', periodic, Interim},
-    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
-    {maps:update_with(monitoring, maps:put(?MODULE, Monit, _), #{?MODULE => Monit}, Session),
-     ergw_aaa_session:ev_set(Trigger, Events)};
+    Trigger = ergw_aaa_session:trigger(?APP, 'Offline', periodic, Interim),
+    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
 to_session(_, _, _, SessEv) ->
     SessEv.
 
@@ -558,6 +556,9 @@ from_session('Accounting-Stop', Value, Avps) ->
 from_session(Key, Value, Avps)
   when Key =:= 'InOctets'; Key =:= 'OutOctets' ->
     accounting([?SI_PSI, 'Traffic-Data-Volumes'], Key, Value, Avps);
+
+from_session('Acct-Interim-Interval' = Key, Value, Avps) ->
+    optional(Key, Value, Avps);
 
 %% Only Session level monitoring for now
 from_session(monitors, Monitors, Avps) ->

@@ -179,8 +179,8 @@ acct_interim_interval(Config) ->
 	     'Service-Type' := 'Framed-User',
 	     'Framed-Protocol' := 'PPP'
 	    }, SessionOpts),
-    ?match([{set,{{ergw_aaa_nasreq,'IP-CAN',time},
-		  {time,'IP-CAN',1000,[recurring]}}}], Ev),
+    ?match([{set, {{ergw_aaa_nasreq, 'IP-CAN', periodic},
+		   {periodic, 'IP-CAN', 1, _}}}], Ev),
 
     %% make sure nothing crashed
     meck_validate(Config),
