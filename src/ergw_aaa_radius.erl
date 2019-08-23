@@ -14,6 +14,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/5]).
+-export([to_session/3]).
 
 -import(ergw_aaa_session, [attr_append/3, merge/2]).
 
@@ -90,7 +91,7 @@ invoke(_Service, authenticate = Procedure, Session, Events, #{now := Now} = Opts
 	     eap_msg = maps:get('EAP-Data', Session, <<>>)},
 
     {Verdict, SessionOpts, Events1} =
-	radius_response(send_request(Req, Session, Opts), Opts, Session, Events),
+	radius_response(Procedure, send_request(Req, Session, Opts), Opts, Session, Events),
     case Verdict of
 	success ->
 	    {ok, SessionOpts#{'Authentication-Result' => Verdict}, Events1};
@@ -196,6 +197,31 @@ validate_option(Opt, Value) ->
 %% Internal Helpers
 %%===================================================================
 
+%% to_session/3
+to_session(Procedure, SessEvs, Avps) ->
+    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
+
+%% to_session/4
+to_session(_, 'Acct-Interim-Interval', Interim, {Session, Events}) ->
+    Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
+    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
+
+to_session(_, Key, Value, {Session, Events})
+when Key =:= 'Session-Timeout';
+     Key =:= 'Idle-Timeout' ->
+    {Session#{Key => Value * 1000}, Events};
+
+to_session(_, 'State', Value, {Session, Events}) ->
+    {?set_svc_opt('RADIUS-State', Value, Session), Events};
+to_session(_, Key, Value, {Session, Events})
+  when Key =:= 'Class';
+       Key =:= 'Username' ->
+    {?set_svc_opt(Key, Value, Session), Events};
+to_session(_, _, _, SessEv) ->
+    SessEv.
+
+%%%===================================================================
+
 -ifdef(OTP_RELEASE).
 %% OTP 21 or higher
 system_time_to_universal_time(Time, TimeUnit) ->
@@ -221,9 +247,18 @@ gethostbyname(Name) ->
 	    Other
     end.
 
+%% radius_session_options/2
 radius_session_options(RadiusSession, Attrs) ->
-    maps:fold(fun session_options/3, Attrs, RadiusSession).
+    maps:fold(fun radius_session_options/3, Attrs, RadiusSession).
 
+radius_session_options('Class', Class, Attrs) ->
+    [{?Class, Class}|Attrs];
+radius_session_options('RADIUS-State', State, Attrs) ->
+    [{?State, State}|Attrs];
+radius_session_options(_Key, _Value, Attrs) ->
+    Attrs.
+
+%% session_options/2
 session_options(Session, Attrs) ->
     maps:fold(fun session_options/3, Attrs, Session).
 
@@ -248,10 +283,6 @@ session_options('Session-Id', Value, Attrs) ->
 session_options('Multi-Session-Id', Value, Attrs) ->
     Id = io_lib:format("~40.16.0B", [Value]),
     [{?Acct_Multi_Session_Id, Id}|Attrs];
-session_options('Class', Class, Attrs) ->
-    [{?Class, Class}|Attrs];
-session_options('RADIUS-State', State, Attrs) ->
-    [{?State, State}|Attrs];
 session_options('Calling-Station-Id', Value, Attrs) ->
     [{?Calling_Station_Id, Value}|Attrs];
 session_options('Called-Station-Id', Value, Attrs) ->
@@ -549,18 +580,19 @@ framed_protocol('GPRS-PDP-Context')  -> 7;
 framed_protocol('TP-CAPWAP')         -> 16#48f90001;
 framed_protocol(_)                   -> 1.
 
-radius_response({ok, Response, RequestAuthenticator}, #{server := {_, _, Secret}},
+radius_response(Procedure, {ok, Response, RequestAuthenticator}, #{server := {_, _, Secret}},
 		Session, Events) ->
-    radius_reply(
+    radius_reply(Procedure,
       eradius_lib:decode_request(Response, Secret, RequestAuthenticator), Session, Events);
-radius_response(Response, _, Session, Events) ->
+radius_response(_Procedure, Response, _, Session, Events) ->
     lager:error("RADIUS failed with ~p", [Response]),
     {fail, Session, Events}.
 
-radius_reply(#radius_request{cmd = accept} = Reply, Session0, Events0) ->
+radius_reply(Procedure, #radius_request{cmd = accept} = Reply, Session0, Events0) ->
     lager:debug("RADIUS Reply: ~p", [Reply]),
     try
-	{Session1, Events} = process_radius_attrs(Reply, Session0, Events0),
+	SOpts = process_radius_attrs(Reply),
+	{Session1, Events} = to_session(Procedure, {Session0, Events0}, SOpts),
 	Session2 = Session1#{'Acct-Authentic' => 'RADIUS'},
 	Session = handle_eap_msg(Reply, Session2),
 	{ok, Session, Events}
@@ -569,10 +601,11 @@ radius_reply(#radius_request{cmd = accept} = Reply, Session0, Events0) ->
 	    {fail, Session0, Events0}
     end;
 
-radius_reply(#radius_request{cmd = challenge} = Reply, Session0, Events0) ->
+radius_reply(Procedure, #radius_request{cmd = challenge} = Reply, Session0, Events0) ->
     lager:debug("RADIUS Challenge: ~p", [lager:pr(Reply, ?MODULE)]),
     try
-	{Session1, Events} = process_radius_attrs(Reply, Session0, Events0),
+	SOpts = process_radius_attrs(Reply),
+	{Session1, Events} = to_session(Procedure, {Session0, Events0}, SOpts),
 	Session = handle_eap_msg(Reply, Session1),
 	{ok, Session, Events}
     catch
@@ -580,12 +613,12 @@ radius_reply(#radius_request{cmd = challenge} = Reply, Session0, Events0) ->
 	    {fail, Session0, Events0}
     end;
 
-radius_reply(#radius_request{cmd = reject} = Reply, Session0, Events) ->
+radius_reply(_Procedure, #radius_request{cmd = reject} = Reply, Session0, Events) ->
     lager:debug("RADIUS failed with ~p", [Reply]),
     Session = handle_eap_msg(Reply, Session0),
     {fail, Session, Events};
 
-radius_reply(Reply, Session, Events) ->
+radius_reply(_Procedure, Reply, Session, Events) ->
     lager:debug("RADIUS failed with ~p", [Reply]),
     {fail, Session, Events}.
 
@@ -596,175 +629,91 @@ handle_eap_msg(_, Session) ->
     Session.
 
 %% iterate over the RADIUS attributes
-process_radius_attrs(#radius_request{attrs = Attrs}, Session, Events) ->
-    lists:foldr(fun process_gen_attrs/2, {Session, Events}, Attrs).
+process_radius_attrs(#radius_request{attrs = Attrs}) ->
+    lists:foldr(fun to_session_opts/2, #{}, Attrs).
 
-%% verdict(Verdict, {_, Opts, State}) ->
-%%     {Verdict, Opts, State}.
-%% session_opt(Fun, {Verdict, Opts, State}) ->
-%%     {Verdict, Fun(Opts), State}.
-session_opt(Key, Opt, {Session, Events}) ->
-    {maps:put(Key, Opt, Session), Events}.
-session_opt_append(Key, Opt, {Session, Events}) ->
-    {attr_append(Key, Opt, Session), Events}.
+session_opt_append(Key, Opt, SOpts) ->
+    attr_append(Key, Opt, SOpts).
 
-radius_session_opt(Key, Opt, {Session, Events}) ->
-    RadiusSession = maps:get(?MODULE, Session, #{}),
-    {maps:put(?MODULE, maps:put(Key, Opt, RadiusSession), Session), Events}.
-
-%% Class
-process_gen_attrs({#attribute{id = ?Class}, Class}, Session) ->
-    radius_session_opt('Class', Class, Session);
-
-%% State
-process_gen_attrs({#attribute{id = ?State}, State}, Session) ->
-    radius_session_opt('RADIUS-State', State, Session);
-
-
-%% User-Name
-process_gen_attrs({#attribute{id = ?User_Name}, UserName}, Session) ->
-    radius_session_opt('Username', UserName, Session);
-
-process_gen_attrs({#attribute{id = ?Acct_Interim_Interval}, Interim}, {Session, Events}) ->
-    Monit = {'IP-CAN', periodic, Interim},
-    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
-    {maps:update_with(monitoring, maps:put(?MODULE, Monit, _), #{?MODULE => Monit}, Session),
-     ergw_aaa_session:ev_set(Trigger, Events)};
-
-%% Session-Timeout
-process_gen_attrs({#attribute{id = ?Session_Timeout}, TimeOut}, Session) ->
-    session_opt('Session-Timeout', TimeOut * 1000, Session);
-
-%% Idle-Timeout
-process_gen_attrs({#attribute{id = ?Idle_Timeout}, TimeOut}, Session) ->
-    session_opt('Idle-Timeout', TimeOut * 1000, Session);
+to_session_opts({#attribute{name = [ $T, $P, $- | Name]} = Attr, Value}, SOpts) ->
+    to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
+to_session_opts({#attribute{name = Name} = Attr, Value}, SOpts) ->
+    to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
+to_session_opts({Attr, Value}, SOpts) ->
+    lager:debug("unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
+    SOpts.
 
 %% Service-Type = Framed-User
-process_gen_attrs({#attribute{id = ?Service_Type}, 2}, Session) ->
-    Session;
-process_gen_attrs({#attribute{id = ?Service_Type, name = Name}, Value}, _Session) ->
-    lager:debug("unexpected Value in AVP: ~s: ~p", [Name, Value]),
+to_session_opts(_Attr, 'Service-Type', 2, SOpts) ->
+    SOpts#{'Service-Type' => 'Framed-User'};
+
+to_session_opts(_Attr, 'Service-Type', Value, _SOpts) ->
+    lager:debug("unexpected Value in Service-Type: ~p", [Value]),
     throw(?AAA_ERR(?FATAL));
 
 %% Framed-Protocol = PPP
-process_gen_attrs({#attribute{id = ?Framed_Protocol}, 1}, Session) ->
-    Session;
+to_session_opts(_Attr, 'Framed-Protocol', 1, SOpts) ->
+    SOpts#{'Framed-Protocol' => 'PPP'};
 %% Framed-Protocol = GPRS-PDP-Context
-process_gen_attrs({#attribute{id = ?Framed_Protocol}, 7}, Session) ->
-    session_opt('Framed-Protocol', 'GPRS-PDP-Context', Session);
-process_gen_attrs({#attribute{id = ?Framed_Protocol, name = Name}, Value}, _Session) ->
-    lager:debug("unexpected Value in AVP: ~s: ~p", [Name, Value]),
+to_session_opts(_Attr, 'Framed-Protocol', 7, SOpts) ->
+    SOpts#{'Framed-Protocol' => 'GPRS-PDP-Context'};
+to_session_opts(_Attr, 'Framed-Protocol', Value, _SOpts) ->
+    lager:debug("unexpected Value in Framed-Protocol: ~p", [Value]),
     throw(?AAA_ERR(?FATAL));
 
-%% Framed-IP-Address = xx.xx.xx.xx
-process_gen_attrs({#attribute{id = ?Framed_IP_Address}, IP}, Session) ->
-    session_opt('Framed-IP-Address', IP, Session);
-
-%% Framed-Interface-Id
-process_gen_attrs({#attribute{id = ?Framed_Interface_Id}, Id}, Session) ->
-    session_opt('Framed-Interface-Id', Id, Session);
-
 %% Alc-Primary-Dns
-process_gen_attrs({#attribute{id = ?Alc_Primary_Dns}, DNS}, Session) ->
-    session_opt_append('DNS', DNS, Session);
+to_session_opts(_Attr, 'Alc-Primary-DNS', DNS, SOpts) ->
+    session_opt_append('DNS', DNS, SOpts);
 %% Alc-Secondary-Dns
-process_gen_attrs({#attribute{id = ?Alc_Secondary_Dns}, DNS}, Session) ->
-    session_opt_append('DNS', DNS, Session);
-
-%% 3GPP TS 29.061 Attributes
-
-%% TODO: 3GPP-Ipv6-DNSServers
-
-%% Microsoft MPPE Keys
-
-%% MS-MPPE-Send-Key
-process_gen_attrs({#attribute{id = ?MS_MPPE_Send_Key}, Value}, Session) ->
-    session_opt('MS-MPPE-Send-Key', Value, Session);
-
-%% MS-MPPE-Recv-Key
-process_gen_attrs({#attribute{id = ?MS_MPPE_Recv_Key}, Value}, Session) ->
-    session_opt('MS-MPPE-Recv-Key', Value, Session);
-
-%% MS-Primary-DNS-Server
-process_gen_attrs({#attribute{id = ?MS_Primary_DNS_Server}, Value}, Session) ->
-    session_opt('MS-Primary-DNS-Server', Value, Session);
-
-%% MS-Secondary-DNS-Server
-process_gen_attrs({#attribute{id = ?MS_Secondary_DNS_Server}, Value}, Session) ->
-    session_opt('MS-Secondary-DNS-Server', Value, Session);
-
-%% MS-Primary-NBNS-Server
-process_gen_attrs({#attribute{id = ?MS_Primary_NBNS_Server}, Value}, Session) ->
-    session_opt('MS-Primary-NBNS-Server', Value, Session);
-
-%% MS-Secondary-NBNS-Server
-process_gen_attrs({#attribute{id = ?MS_Secondary_NBNS_Server}, Value}, Session) ->
-    session_opt('MS-Secondary-NBNS-Server', Value, Session);
+to_session_opts(_Attr, 'Alc-Secondary-DNS', DNS, SOpts) ->
+    session_opt_append('DNS', DNS, SOpts);
 
 %% Travelping Extensions
 
 %% TP-Access-Rule
-process_gen_attrs({#attribute{id = ?TP_Access_Rule}, Value}, Session) ->
+to_session_opts(_Attr, 'Access-Rule', Value, SOpts) ->
     Rule = list_to_tuple([binary_to_list(V) || V <- binary:split(Value, <<":">>, [global])]),
-    session_opt_append('Access-Rules', Rule, Session);
+    session_opt_append('Access-Rules', Rule, SOpts);
 
-%% TP-Access-Group
-process_gen_attrs({#attribute{id = ?TP_Access_Group}, Value}, Session) ->
-    session_opt('Access-Group', binary_to_list(Value), Session);
-
-%% TP-NAT-Pool-Id
-process_gen_attrs({#attribute{id = ?TP_NAT_Pool_Id}, Value}, Session) ->
-    session_opt('NAT-Pool-Id', Value, Session);
-
-%% TP-NAT-IP-Address
-process_gen_attrs({#attribute{id = ?TP_NAT_IP_Address}, Value}, Session) ->
-    session_opt('NAT-IP-Address', Value, Session);
-
-%% TP-NAT-Port-Start
-process_gen_attrs({#attribute{id = ?TP_NAT_Port_Start}, Value}, Session) ->
-    session_opt('NAT-Port-Start', Value, Session);
-
-%% TP-NAT-Port-End
-process_gen_attrs({#attribute{id = ?TP_NAT_Port_End}, Value}, Session) ->
-    session_opt('NAT-Port-End', Value, Session);
-
-%% TP-Max-Input-Octets
-process_gen_attrs({#attribute{id = ?TP_Max_Input_Octets}, Value}, Acc) ->
-    session_opt('Max-Input-Octets', Value, Acc);
-
-%% TP-Max-Output-Octets
-process_gen_attrs({#attribute{id = ?TP_Max_Output_Octets}, Value}, Session) ->
-    session_opt('Max-Output-Octets', Value, Session);
-
-%% TP-Max-Total-Octets
-process_gen_attrs({#attribute{id = ?TP_Max_Total_Octets}, Value}, Acc) ->
-    session_opt('Max-Total-Octets', Value, Acc);
-
-%% TP-TLS-Pre-Shared-Key
-process_gen_attrs({#attribute{id = ?TP_TLS_Pre_Shared_Key}, PSK}, Session) ->
-    session_opt('TLS-Pre-Shared-Key', PSK, Session);
-
-%% CAPWAP LocationProfile attributes
-process_gen_attrs({#attribute{id = ?TP_CAPWAP_SSID}, SSID}, Session) ->
-    session_opt('CAPWAP-SSID', SSID, Session);
-
-process_gen_attrs({#attribute{id = ?TP_CAPWAP_Max_WIFI_Clients}, MaxClients}, Session) ->
-    session_opt('CAPWAP-Max-WIFI-Clients', MaxClients, Session);
-
-process_gen_attrs({#attribute{id = ?TP_CAPWAP_Power_Save_Idle_Timeout}, WG}, Session) ->
-    session_opt('CAPWAP-Power-Save-Idle-Timeout', WG, Session);
-
-process_gen_attrs({#attribute{id = ?TP_CAPWAP_Power_Save_Busy_Timeout}, WG}, Session) ->
-    session_opt('CAPWAP-Power-Save-Busy-Timeout', WG, Session);
-
-%% Handling undefined cases
-process_gen_attrs({#attribute{name = Name}, Value} , Session) ->
-    lager:debug("unhandled reply AVP: ~s: ~p", [Name, Value]),
-    Session;
-
-process_gen_attrs({Attr, Value}, Session) ->
+to_session_opts(_Attr, Key, Value, SOpts)
+  when
+      %% Generic Attributes
+      Key =:= 'Class';
+      Key =:= 'State';
+      Key =:= 'Username';
+      Key =:= 'Acct-Interim-Interval';
+      Key =:= 'Session-Timeout';
+      Key =:= 'Idle-Timeout';
+      Key =:= 'Framed-IP-Address';
+      Key =:= 'Framed-Interface-Id';
+      %% 3GPP TS 29.061 Attributes
+      %% TODO: 3GPP-Ipv6-DNSServers
+      %% Microsoft MPPE Keys
+      Key =:= 'MS-MPPE-Send-Key';
+      Key =:= 'MS-MPPE-Recv-Key';
+      Key =:= 'MS-Primary-DNS-Server';
+      Key =:= 'MS-Secondary-DNS-Server';
+      Key =:= 'MS-Primary-NBNS-Server';
+      Key =:= 'MS-Secondary-NBNS-Server';
+      %% Travelping Extensions
+      Key =:= 'Access-Group';
+      Key =:= 'NAT-Pool-Id';
+      Key =:= 'NAT-IP-Address';
+      Key =:= 'NAT-Port-Start';
+      Key =:= 'NAT-Port-End';
+      Key =:= 'Max-Input-Octets';
+      Key =:= 'Max-Output-Octets';
+      Key =:= 'Max-Total-Octets';
+      Key =:= 'TLS-Pre-Shared-Key';
+      %% CAPWAP LocationProfile attributes
+      Key =:= 'CAPWAP-SSID';
+      Key =:= 'CAPWAP-Max-WIFI-Clients';
+      Key =:= 'CAPWAP-Power-Save-Idle-Timeout';
+      Key =:= 'CAPWAP-Power-Save-Busy-Timeout' ->
+    SOpts#{Key => Value};
+to_session_opts(Attr, {'EXIT', {badarg, _}}, Value, SOpts) ->
     lager:debug("unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
-    Session.
+    SOpts.
 
 remove_accounting_attrs(Attrs) ->
     FilterOpts = radius_accounting_opts(),

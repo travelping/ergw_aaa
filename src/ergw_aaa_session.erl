@@ -74,10 +74,8 @@ ev_set({K, Ev}, A) ->
 trigger(SubSys, Level, Type, Value) ->
     trigger(SubSys, Level, Type, Value, []).
 
-trigger(SubSys, Level, time, Value, Opts) ->
-    {{SubSys, Level, time}, {time, Level, Value, Opts}};
-trigger(SubSys, Level, periodic, Value, Opts) ->
-    {{SubSys, Level, time}, {time, Level, Value, Opts}}.
+trigger(SubSys, Level, Type, Value, Opts) ->
+    {{SubSys, Level, Type}, {Type, Level, Value, Opts}}.
 
 event(Session, Event, EvOpts, SessionOpts) when is_map(SessionOpts) ->
     gen_statem:call(Session, {Event, EvOpts, SessionOpts}, ?AAA_TIMEOUT).

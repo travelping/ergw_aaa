@@ -7,6 +7,8 @@
 
 -module(ergw_aaa_nasreq).
 
+-compile({parse_transform, cut}).
+
 -behaviour(ergw_aaa).
 
 %% AAA API
@@ -208,15 +210,8 @@ validate_option_error(Opt, Value) ->
 
 handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
 	   Session0, Events0) ->
-    case Avps of
-	#{'Acct-Interim-Interval' := [Interim]} ->
-	    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN',
-						   time, Interim * 1000, [recurring]),
-	    Events = ergw_aaa_session:ev_set(Trigger, Events0),
-	    {ok, Session0, Events};
-	_ ->
-	    {ok, Session0, Events0}
-	end;
+    {Session, Events} = to_session({nasreq, 'ACA'}, {Session0, Events0}, Avps),
+    {ok, Session, Events};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events};
@@ -226,6 +221,17 @@ handle_aca({error, _} = Result, Session, Events) ->
 inc_number(Session) ->
     Number = ?get_svc_opt('Accounting-Record-Number', Session, -1) + 1,
     ?set_svc_opt('Accounting-Record-Number', Number, Session).
+
+%% to_session/3
+to_session(Procedure, SessEvs, Avps) ->
+    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
+
+%% to_session/4
+to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events}) ->
+    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
+    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
+to_session(_, _, _, SessEv) ->
+    SessEv.
 
 format_address({A, B, C, D}) -> <<A, B, C, D>>;
 format_address({A, B, C, D, E, F, G, H}) ->
