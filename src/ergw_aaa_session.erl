@@ -16,13 +16,13 @@
 	 terminate/2, code_change/3]).
 
 %% Session Process API
--export([start_link/2, invoke/4, invoke/5,
+-export([start_link/2, invoke/4,
 	 authenticate/2, authorize/2,
 	 start/2, start/3,
 	 interim/2, interim/3,
 	 stop/2, stop/3,
 	 terminate/1, get/1, get/2, set/2, set/3, unset/2, sync/1,
-	 request/4, response/4]).
+	 request/4, response/4, handle_answer/2]).
 
 %% Session Object API
 -export([attr_get/2, attr_get/3, attr_set/3,
@@ -42,7 +42,6 @@
 	       session
 	      }).
 -record(state, {
-		pending :: 'undefined' | pid()
 	       }).
 
 -define(AAA_TIMEOUT, (30 * 1000)).      %% 30sec for all AAA gen_statem:call timeouts
@@ -89,20 +88,20 @@ start_link(Owner, SessionData) ->
 	    {spawn_opt,[{fullsweep_after, 0}]}],
     gen_statem:start_link(?MODULE, [Owner, SessionData], Opts).
 
-invoke(Session, SessionOpts, Procedure, Opts)
-  when is_list(Opts) ->
-    invoke(Session, SessionOpts, Procedure, normalize_opts(Opts));
-invoke(Session, SessionOpts, Procedure, Opts)
-  when is_map(Opts) ->
-    invoke(Session, SessionOpts, Procedure, Opts, maps:get(async, Opts, false)).
+invoke_compat_async(Session, SessionOpts, Procedure) ->
+    case invoke(Session, SessionOpts, Procedure, #{async => true}) of
+	Result when is_tuple(Result) ->
+	    element(1, Result);
+	Other ->
+	    Other
+    end.
 
-invoke(Session, SessionOpts, Procedure, Opts, true) ->
-    gen_statem:cast(Session, {invoke, SessionOpts, Procedure, normalize_opts(Opts)});
-invoke(Session, SessionOpts, Procedure, Opts, false) ->
+invoke(Session, SessionOpts, Procedure, Opts)
+  when is_list(Opts); is_map(Opts) ->
     gen_statem:call(Session, {invoke, SessionOpts, Procedure, normalize_opts(Opts)}, ?AAA_TIMEOUT).
 
 request(Session, Handler, Procedure, Avps) ->
-    gen_statem:call(Session, {request, Handler, Procedure, Avps}).
+     gen_statem:call(Session, {request, Handler, Procedure, Avps}).
 
 response(#aaa_request{from = {Pid, _}} = Request, Result, Avps, SessionOpts)
   when is_pid(Pid), is_map(Avps) ->
@@ -111,9 +110,12 @@ response(#aaa_request{from = Fun} = Request, Result, Avps, SessionOpts)
   when is_function(Fun, 4), is_map(Avps) ->
     Fun(Request, Result, Avps, SessionOpts).
 
+handle_answer(Session, Answer) ->
+    gen_statem:cast(Session, {answer, Answer}).
+
 authenticate(Session, SessionOpts)
   when is_map(SessionOpts) ->
-    case invoke(Session, SessionOpts, authenticate, [inc_session_id], false) of
+    case invoke(Session, SessionOpts, authenticate, [inc_session_id]) of
 	{ok, _, _} ->
 	    success;
 	{Other, _, _} ->
@@ -123,22 +125,22 @@ authenticate(Session, SessionOpts)
     end.
 
 authorize(Session, SessionOpts) when is_map(SessionOpts) ->
-    invoke(Session, SessionOpts, authorize, [], false).
+    invoke(Session, SessionOpts, authorize, []).
 
 start(Session, SessionOpts) when is_map(SessionOpts) ->
-    invoke(Session, SessionOpts, start, [], true).
+    invoke_compat_async(Session, SessionOpts, start).
 
 start(Session, SessionOpts, Opts) when is_map(SessionOpts) ->
     invoke(Session, SessionOpts, start, Opts).
 
 interim(Session, SessionOpts) when is_map(SessionOpts) ->
-    invoke(Session, SessionOpts, interim, [], true).
+    invoke_compat_async(Session, SessionOpts, interim).
 
 interim(Session, SessionOpts, Opts) when is_map(SessionOpts) ->
     invoke(Session, SessionOpts, interim, Opts).
 
 stop(Session, SessionOpts) when is_map(SessionOpts) ->
-    invoke(Session, SessionOpts, stop, [], true).
+    invoke_compat_async(Session, SessionOpts, stop).
 
 stop(Session, SessionOpts, Opts) when is_map(SessionOpts) ->
     invoke(Session, SessionOpts, stop, Opts).
@@ -215,7 +217,7 @@ init([Owner, SessionOpts]) ->
 	       application   = App,
 	       session       = DefaultSessionOpts
 	      },
-    State = #state{pending = undefined},
+    State = #state{},
     {Reply, Session, _Events} = exec(init, SessionOpts, #{}, Data),
     {Reply, State, Data#data{session = Session}}.
 
@@ -234,83 +236,42 @@ handle_event({call, From}, {set, Values}, _State, Data) ->
 handle_event({call, From}, {unset, Options}, _State, Data = #data{session = Session}) ->
     {keep_state, Data#data{session = maps:without(Options, Session)}, [{reply, From, ok}]};
 
-handle_event(info, {'EXIT', Pid, _Reason}, #state{pending = Pid} = State, Data) ->
-    {next_state, State#state{pending = undefined}, Data};
-
-handle_event(info, {'EXIT', _From, _Reason}, _State, _Data) ->
-    %% ignore EXIT from eradius client
-    keep_state_and_data;
-
-handle_event(state_timeout, #aaa_request{}, #state{pending = {call, From}} = State, Data) ->
-    Reply = {error, #{}},
-    {next_state, State#state{pending = undefined}, Data, [{reply, From, Reply}]};
-
-handle_event(cast, {'$response', #aaa_request{handler = Handler},
-		    Result, Avps0, SessionOpts},
-	     #state{pending = {call, From}} = State, #data{session = Session0} = Data) ->
-    Session = session_merge(Session0, SessionOpts),
-    Avps = Handler:from_session(Session, Avps0),
-    Reply = [{reply, From, {Result, Avps}}],
-    {next_state, State#state{pending = undefined}, Data#data{session = Session}, Reply};
-
-handle_event(info, {'$invoke', Pid, Session, Events}, #state{pending = Pid} = State,
-	     #data{owner = Owner} = Data)
-  when is_pid(Pid) ->
-    Owner ! {update_session, Session, Events},
-    {next_state, State#state{pending = undefined}, Data#data{session = Session}};
-
-handle_event(_Type, _Event, #state{pending = Pending}, _Data)
-  when is_pid(Pending) ->
-    {keep_state_and_data, postpone};
-handle_event(_Type, _Event, #state{pending = {call, _}}, _Data) ->
-    {keep_state_and_data, postpone};
-
-handle_event({call, From}, sync, _State, _Data) ->
-    {keep_state_and_data, [{reply, From, ok}]};
-
-handle_event(cast, terminate, _State, _Data) ->
-    lager:info("Handling terminate request: ~p", [_Data]),
-    {stop, normal};
-
-handle_event(info, {'DOWN', _Ref, process, Owner, Info},
-	     _State, #data{owner = Owner} = Data) ->
-    lager:error("Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
-    handle_owner_exit(Data),
-    {stop, normal};
-
 handle_event(info, {'EXIT', Owner, Reason},
 	     _State, #data{owner = Owner} = Data) ->
     lager:error("Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
     handle_owner_exit(Data),
     {stop, normal};
 
-handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts}, _State, Data) ->
-    {Result, NewSession, Events} = exec(Procedure, SessionOpts, Opts, Data),
-    Reply = {Result, NewSession, Events},
-    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
+handle_event(info, {'EXIT', _From, _Reason}, _State, _Data) ->
+    %% ignore EXIT from eradius client
+    keep_state_and_data;
 
-handle_event(cast, {invoke, SessionOpts, Procedure, Opts}, State, Data) ->
-    Self = self(),
-    Pid = proc_lib:spawn_link(
-	    fun() ->
-		    {_, Session, Events} = exec(Procedure, SessionOpts, Opts, Data),
-		    Self ! {'$invoke', self(), Session, Events}
-	    end),
-    {next_state, State#state{pending = Pid}, Data};
+handle_event(state_timeout, #aaa_request{caller = From}, _State, _Data) ->
+    Reply = {error, #{}},
+    {keep_state_and_data, [{reply, From, Reply}]};
 
-handle_event({call, _} = Call, {request, Handler, Procedure, Avps}, State,
-	     #data{owner = Owner, session = Session0} = Data) ->
+handle_event(cast, {'$response', #aaa_request{caller = From, handler = Handler},
+		    Result, Avps0, SessionOpts},
+	     State, #data{session = Session0} = Data) ->
+    Session = session_merge(Session0, SessionOpts),
+    Avps = Handler:from_session(Session, Avps0),
+    Reply = [{reply, From, {Result, Avps}}],
+    {next_state, State, Data#data{session = Session}, Reply};
+
+handle_event({call, From}, {request, Handler, Procedure, Avps}, _State,
+	     #data{owner = Owner, session = Session0}) ->
 
     {Session, Events} = Handler:to_session(Procedure, {Session0, []}, Avps),
 
     Request = #aaa_request{
 		 from = {self(), make_ref()},
+		 caller = From,
 		 handler = Handler,
 		 procedure = Procedure,
 		 session = Session,
 		 events = Events},
     Owner ! Request,
-    {next_state, State#state{pending = Call}, Data, [{state_timeout, 10 * 1000, Request}]};
+    {keep_state_and_data, [{state_timeout, 10 * 1000, Request}]};
 
 handle_event({call, From}, {{Handler, _Level, time}, EvOpts, SessionOpts}, _State,
 	     #data{session = Session0} = Data) ->
@@ -321,6 +282,41 @@ handle_event({call, From}, {{Handler, _Level, time}, EvOpts, SessionOpts}, _Stat
     {Result, NewSession, Events} = Handler:invoke(Service, Procedure, Session, [], EvOpts),
     Reply = {Result, NewSession, Events},
     {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
+
+handle_event(cast, {answer, {_, NewSession, Events}}, _State, #data{owner = Owner})
+  when Events /= [] ->
+    Owner ! {update_session, NewSession, Events},
+    keep_state_and_data;
+handle_event(cast, {answer, _}, _State, _Data) ->
+    keep_state_and_data;
+
+handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts},
+	     _State, #data{owner = Owner} = Data) ->
+    Async = maps:get(async, Opts, false),
+    case exec(Procedure, SessionOpts, Opts, Data) of
+	{_, NewSession, _} = Reply when Async =:= false ->
+	    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
+	{Result, NewSession, Events} when Async =:= true ->
+	    if Events /= [] -> Owner ! {update_session, NewSession, Events};
+	       true         -> ok
+	    end,
+	    Reply = {Result, NewSession},
+	    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
+	{_, NewSession} = Reply ->
+	    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
+	Reply ->
+	    {keep_state_and_data, [{reply, From, Reply}]}
+    end;
+
+handle_event(cast, terminate, _State, _Data) ->
+    lager:info("Handling terminate request: ~p", [_Data]),
+    {stop, normal};
+
+handle_event(info, {'DOWN', _Ref, process, Owner, Info},
+	     _State, #data{owner = Owner} = Data) ->
+    lager:error("Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
+    handle_owner_exit(Data),
+    {stop, normal};
 
 handle_event(Type, Event, _State, _Data) ->
     lager:warning("unhandled event ~p:~p", [Type, Event]),
@@ -402,8 +398,9 @@ normalize_opts(Opts) when is_map(Opts) ->
 %% provider helpers
 %%===================================================================
 
-exec(Procedure, SessionOpts, Opts0, #data{session = SessionIn} = Data) ->
-    Opts = maps:put(now, maps:get(now, Opts0, erlang:monotonic_time()), Opts0),
+exec(Procedure, SessionOpts, Opts0, #data{owner = Owner, session = SessionIn} = Data) ->
+    Opts = Opts0#{now => maps:get(now, Opts0, erlang:monotonic_time()),
+		  owner => Owner},
     Session0 = session_merge(SessionIn, SessionOpts),
     Session1 = maps:fold(fun handle_session_opts/3, Session0, Opts),
     Session2 = update_accounting_state(Procedure, Session1, Opts),

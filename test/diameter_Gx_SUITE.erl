@@ -198,13 +198,13 @@ simple_session(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, _Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
     ?match([{pcc, install, [_|_]}], Events1),
 
     GxTerm =
 	#{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     {ok, _Session2, _Events2} =
-	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -229,7 +229,7 @@ abort_session_request(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
     ?match([{pcc, install, [_|_]}], Events1),
 
     SessionId = maps:get('Diameter-Session-Id', Session1),
@@ -244,7 +244,7 @@ abort_session_request(Config) ->
 
     GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     {ok, _Session2, _Events2} =
-	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
@@ -273,7 +273,7 @@ handle_failure(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     ?match({{fail, 3001}, _, _},
-	   ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false)),
+	   ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [])),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -298,7 +298,7 @@ re_auth_request(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
     ?match([{pcc, install, [_|_]}], Events1),
 
     RAROpts =
@@ -321,7 +321,7 @@ re_auth_request(Config) ->
 
     GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     {ok, _Session2, _Events2} =
-	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),

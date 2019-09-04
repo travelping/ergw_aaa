@@ -23,7 +23,7 @@
 	 prepare_request/3, prepare_request/4,
 	 prepare_retransmit/3, prepare_retransmit/4,
 	 handle_answer/4, handle_answer/5,
-	 handle_error/4,
+	 handle_error/4, handle_error/5,
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -88,7 +88,7 @@ invoke(_Service, start, Session0, Events, Opts) ->
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
 	    Request = create_ACR(RecType, Session, Opts),
-	    handle_aca(call(Request, Opts), Session, Events);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -99,7 +99,7 @@ invoke(_Service, interim, Session0, Events, Opts) ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
 	    Request = create_ACR(RecType, Session, Opts),
-	    handle_aca(call(Request, Opts), Session, Events);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -112,7 +112,7 @@ invoke(_Service, stop, Session0, Events, Opts) ->
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    Request = create_ACR(RecType, Session, Opts),
-	    handle_aca(call(Request, Opts), Session, Events);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -120,8 +120,13 @@ invoke(_Service, stop, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{function := Function}) ->
-    diameter:call(Function, nasreq, Request, []).
+call(Request, Session, Events, #{function := Function, async := true}) ->
+    Result = diameter:call(Function, nasreq, Request, [detach, {extra, [self()]}]),
+    {Result, Session, Events};
+
+call(Request, Session, Events, #{function := Function}) ->
+    Result = diameter:call(Function, nasreq, Request, []),
+    handle_aca(Result, Session, Events).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -174,14 +179,18 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
 
 handle_answer(#diameter_packet{msg = ['ACA' | Avps] = Msg}, _Request, _SvcName, _Peer, From)
   when is_map(Avps), is_pid(From) ->
-    From ! Msg,
-    Msg;
+    ergw_aaa_session:handle_answer(From, handle_aca(Msg, #{}, [])),
+    ok;
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
     Msg.
 
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
+
+handle_error(Reason, _Request, _SvcName, _Peer, From) ->
+    ergw_aaa_session:handle_answer(From, handle_aca({error, Reason}, #{}, [])),
+    ok.
 
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).

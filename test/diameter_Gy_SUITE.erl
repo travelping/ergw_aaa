@@ -242,7 +242,7 @@ simple_session(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,[_,_,_]}], Events1),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
@@ -266,7 +266,7 @@ simple_session(Config) ->
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
     ?match([{update_credits,[_,_,_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
@@ -294,7 +294,7 @@ abort_session_request(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,[_,_,_]}], Events1),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
@@ -328,7 +328,7 @@ abort_session_request(Config) ->
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
     ?match([{update_credits,[_,_,_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
@@ -358,7 +358,7 @@ tarif_time_change(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,[_]}], Events1),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
@@ -380,12 +380,12 @@ tarif_time_change(Config) ->
 	],
     GyUpdate = #{used_credits => UsedCredits},
     {ok, _, _} =
-	ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
+	ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, []),
 
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
     {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
     ?match([{update_credits,[_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
@@ -421,7 +421,7 @@ ccr_retry(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
-    {ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+    {ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     RequestsInfo = ?GET_TC_INFO(ccr_i_retries),
 
     %% last 2 requests have retry flag set, the 1st not
@@ -489,7 +489,7 @@ ocs_hold_initial_timeout(Config) ->
     {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
 
-    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,
 	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
 	   ] when Time > 1800 andalso Time =< 1900, Events),
@@ -504,7 +504,7 @@ ocs_hold_initial_timeout(Config) ->
 		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
 	 },
     GyTerm = #{used_credits => maps:to_list(UsedCredits)},
-    {{error, ocs_hold_end}, _Session2, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [], false),
+    {{error, ocs_hold_end}, _Session2, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, []),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -535,7 +535,7 @@ ocs_hold_update_timeout(Config) ->
     %% Send CCR-I
     Stats0 = get_stats(?SERVICE),
 
-    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
 
     %% Check if the data is coming from the test server
     ?match([{update_credits, [#{'Volume-Quota-Threshold' := [1048576]}]}], Events),
@@ -551,7 +551,7 @@ ocs_hold_update_timeout(Config) ->
 		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
 	 },
     GyUpdate = #{used_credits => maps:to_list(UsedCredits)},
-    {ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, [], false),
+    {ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, []),
     ?match([{update_credits,
 	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
 	   ] when Time > 1800 andalso Time =< 1900, Events2),
@@ -561,7 +561,7 @@ ocs_hold_update_timeout(Config) ->
 
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
-    {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+    {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
 
     Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
 
@@ -583,7 +583,7 @@ basic_session(CCR_I_T_Delay) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     GyOpts = #{credits => #{1000 => empty}},
     {ok, _Session1, _Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
 
     timer:sleep(CCR_I_T_Delay),
 
@@ -597,7 +597,7 @@ basic_session(CCR_I_T_Delay) ->
     GyTerm = #{'Termination-Cause' =>
 		   ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
-    Result = case ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false) of
+    Result = case ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []) of
 		 {ok, _, _} -> ok;
 		 {{error, rate_limit},_ ,_} -> rate_limit;
 		 {Err, _, _} -> Err

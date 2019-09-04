@@ -27,11 +27,11 @@
 %% diameter callbacks
 -export([peer_up/3,
 	 peer_down/3,
-	 pick_peer/4, pick_peer/5,
-	 prepare_request/3, prepare_request/4,
-	 prepare_retransmit/3, prepare_retransmit/4,
-	 handle_answer/4, handle_answer/5,
-	 handle_error/4,
+	 pick_peer/4, pick_peer/6,
+	 prepare_request/3, prepare_request/5,
+	 prepare_retransmit/3, prepare_retransmit/5,
+	 handle_answer/4, handle_answer/6,
+	 handle_error/4, handle_error/6,
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -94,7 +94,7 @@ invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_INITIAL_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    handle_cca(call(Request, Opts), Session, Events, Opts);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -105,7 +105,7 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_UPDATE_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    handle_cca(call(Request, Opts), Session, Events, Opts);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -118,7 +118,7 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    handle_cca(call(Request, Opts), Session, Events, Opts);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -126,8 +126,13 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{function := Function}) ->
-    diameter:call(Function, ?APP, Request, []).
+call(Request, Session, Events, #{function := Function, async := true} = Opts) ->
+    Result = diameter:call(Function, ?APP, Request, [detach, {extra, [self(), Opts]}]),
+    {Result, Session, Events};
+
+call(Request, Session, Events, #{function := Function} = Opts) ->
+    Result = diameter:call(Function, ?APP, Request, []),
+    handle_cca(Result, Session, Events, Opts).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -149,7 +154,7 @@ pick_peer(LocalCandidates, _, _SvcName, _State) ->
     N = rand:uniform(length(LocalCandidates)),
     {ok, lists:nth(N, LocalCandidates)}.
 
-pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
+pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From, _Opts) ->
     pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
 
 prepare_request(#diameter_packet{msg = ['CCR' = T | Avps]}, _, {PeerRef, Caps})
@@ -180,28 +185,33 @@ prepare_request(Packet, _SvcName, {PeerRef, _}) ->
     lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
     {send, Packet}.
 
-prepare_request(Packet, SvcName, Peer, _From) ->
+prepare_request(Packet, SvcName, Peer, _From, _Opts) ->
     prepare_request(Packet, SvcName, Peer).
 
 prepare_retransmit(Packet, SvcName, Peer) ->
     prepare_request(Packet, SvcName, Peer).
 
-prepare_retransmit(Packet, SvcName, Peer, _From) ->
+prepare_retransmit(Packet, SvcName, Peer, _From, _Opts) ->
     prepare_request(Packet, SvcName, Peer).
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
     Msg.
 
-handle_answer(#diameter_packet{msg = ['CCA' | Avps] = Msg}, _Request, _SvcName, _Peer, From)
+handle_answer(#diameter_packet{msg = ['CCA' | Avps] = Msg},
+	      _Request, _SvcName, _Peer, From, Opts)
   when is_map(Avps), is_pid(From) ->
-    From ! Msg,
-    Msg;
+    ergw_aaa_session:handle_answer(From, handle_cca(Msg, #{}, [], Opts)),
+    ok;
 
-handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
+handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From, _Opts) ->
     Msg.
 
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
+
+handle_error(Reason, _Request, _SvcName, _Peer, From, Opts) ->
+    ergw_aaa_session:handle_answer(From, handle_cca({error, Reason}, #{}, [], Opts)),
+    ok.
 
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->

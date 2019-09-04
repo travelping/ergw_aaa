@@ -211,14 +211,14 @@ gx_session(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
     ?match([{pcc, install, [#{}]}], Events1),
     ?equal(false, maps:is_key('Result-Code', Session1)),
 
     GxUpd = #{'Event-Trigger' => ?'DIAMETER_GX_EVENT-TRIGGER_SGSN_CHANGE',
 	      'Bearer-Operation' => ?'DIAMETER_GX_BEARER-OPERATION_MODIFICATION'},
     {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GxUpd, {gx, 'CCR-Update'}, [], false),
+	ergw_aaa_session:invoke(SId, GxUpd, {gx, 'CCR-Update'}, []),
     ?match([{pcc, remove, [#{}]}], Events2),
     ?equal(false, maps:is_key('Result-Code', Session2)),
 
@@ -226,7 +226,7 @@ gx_session(Config) ->
 	       'Event-Trigger' => ?'DIAMETER_GX_EVENT-TRIGGER_UE_IP_ADDRESS_RELEASE',
 	       'Bearer-Operation' => ?'DIAMETER_GX_BEARER-OPERATION_TERMINATION'},
     {Result3, Session3, Events3} =
-	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
     ?equal({fail, 5003}, Result3),
     ?match([stop], Events3),
     ?equal(false, maps:is_key('Result-Code', Session3)),
@@ -243,7 +243,7 @@ gy_session(Config) ->
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, Session1, Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [], false),
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,
 	     [#{'Envelope-Reporting' := [0],
 		'Granted-Service-Unit' :=
@@ -265,7 +265,7 @@ gy_session(Config) ->
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2, Events2} =
-	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, [], false),
+	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
     ?match([], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
