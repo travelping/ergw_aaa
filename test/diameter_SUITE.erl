@@ -125,7 +125,7 @@ compat(Config) ->
     ?equal(ok, ergw_aaa_session:start(Session, #{})),
     ?equal(ok, ergw_aaa_session:interim(Session, #{})),
     ?equal(ok, ergw_aaa_session:stop(Session, #{})),
-    ergw_aaa_session:sync(Session),
+    ct:sleep(100),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 

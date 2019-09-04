@@ -32,7 +32,7 @@
 	 prepare_request/3, prepare_request/4,
 	 prepare_retransmit/3, prepare_retransmit/4,
 	 handle_answer/4, handle_answer/5,
-	 handle_error/4,
+	 handle_error/4, handle_error/5,
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -98,7 +98,7 @@ invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
 	    {Request, Session} = create_ACR(RecType, Session2, Opts),
 	    lager:debug("Session Start: ~p", [Session]),
-	    handle_aca(call(Request, Opts), Session, Events);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -111,7 +111,7 @@ invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
 	    Session1 = close_service_data_containers(Session0),
 	    {Request, Session} = create_ACR(RecType, Session1, Opts),
-	    handle_aca(call(Request, Opts), Session, Events);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    Session = close_service_data_containers(Session0),
 	    {ok, Session, Events}
@@ -125,7 +125,7 @@ invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    Session2 = close_service_data_containers(Session1),
 	    {Request, Session} = create_ACR(RecType, Session2, Opts),
-	    handle_aca(call(Request, Opts), Session, Events);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -133,8 +133,13 @@ invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, #{function := Function}) ->
-    diameter:call(Function, ?APP, Request, []).
+call(Request, Session, Events, #{function := Function, async := true}) ->
+    Result = diameter:call(Function, ?APP, Request, [detach, {extra, [self()]}]),
+    {Result, Session, Events};
+
+call(Request, Session, Events, #{function := Function}) ->
+    Result = diameter:call(Function, ?APP, Request, []),
+    handle_aca(Result, Session, Events).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -174,13 +179,13 @@ prepare_request(Packet, _SvcName, {PeerRef, _}) ->
     lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
     {send, Packet}.
 
-prepare_request(Packet, SvcName, Peer, _Extra) ->
+prepare_request(Packet, SvcName, Peer, _From) ->
     prepare_request(Packet, SvcName, Peer).
 
 prepare_retransmit(Packet, SvcName, Peer) ->
     prepare_request(Packet, SvcName, Peer).
 
-prepare_retransmit(Packet, SvcName, Peer, _Extra) ->
+prepare_retransmit(Packet, SvcName, Peer, _From) ->
     prepare_retransmit(Packet, SvcName, Peer).
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
@@ -188,14 +193,18 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
 
 handle_answer(#diameter_packet{msg = ['ACA' | Avps] = Msg}, _Request, _SvcName, _Peer, From)
   when is_map(Avps), is_pid(From) ->
-    From ! Msg,
-    Msg;
+    ergw_aaa_session:handle_answer(From, handle_aca(Msg, #{}, [])),
+    ok;
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
     Msg.
 
 handle_error(Reason, _Request, _SvcName, _Peer) ->
     {error, Reason}.
+
+handle_error(Reason, _Request, _SvcName, _Peer, From) ->
+    ergw_aaa_session:handle_answer(From, handle_aca({error, Reason}, #{}, [])),
+    ok.
 
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
