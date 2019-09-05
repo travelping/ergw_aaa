@@ -304,6 +304,8 @@ check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
 	     '3GPP-Selection-Mode'    := [<<"0">>]
 	    }) ->
     ok;
+check_3gpp(#{'3GPP-IMSI' := [<<"noCheck">>]}) ->
+    ok;
 check_3gpp(Msg) ->
     case maps:get('3GPP-IMSI', Msg, []) of
 	[] -> error_m:return(no_imsi);
