@@ -56,11 +56,14 @@
 	[{functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
+	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG},
 	   {ergw_aaa_gx, ?DIAMETER_CONFIG}
 	  ]},
 	 {services,
 	  [{'Default',
 	    [{handler, 'ergw_aaa_static'}]},
+	   {'NASREQ',
+	    [{handler, 'ergw_aaa_nasreq'}]},
 	   {'Gx',
 	    [{handler, 'ergw_aaa_gx'}]}
 	  ]},
@@ -70,9 +73,9 @@
 	    [{session, ['Default']},
 	     {procedures, [{authenticate, []},
 			   {authorize, []},
-			   {start, []},
-			   {interim, []},
-			   {stop, []},
+			   {start, ['NASREQ']},
+			   {interim, ['NASREQ']},
+			   {stop, ['NASREQ']},
 			   {{gx, 'CCR-Initial'},   ['Gx']},
 			   {{gx, 'CCR-Update'},    ['Gx']},
 			   {{gx, 'CCR-Terminate'}, ['Gx']}
@@ -291,7 +294,7 @@ re_auth_request() ->
 re_auth_request(Config) ->
     Session = init_session(#{}, Config),
     GxOpts =
-	#{'3GPP-IMSI' => <<"IMSI">>},
+	#{'3GPP-IMSI' => <<"noCheck">>},
 
     Stats0 = get_stats(?SERVICE),
     StatsTestSrv0 = get_stats(diameter_test_server),
@@ -319,6 +322,22 @@ re_auth_request(Config) ->
 	    ct:fail("no ASR")
     end,
 
+    ?equal(ok, diameter_test_server:re_auth_request(gx, SessionId,
+						    ?'Origin-Host', ?'Origin-Realm',
+						    RAROpts)),
+    receive
+	#aaa_request{procedure = {_, 'RAR'}, events = Evs2} = Req2 ->
+	    ?match([{pcc, install, [#{'Charging-Rule-Name' := [<<"service01">>]}]}],
+		   Evs2),
+	    %% check that the session is not blocked for other DIAMETER Apps
+	    ?match({ok, _}, ergw_aaa_session:start(SId, #{}, #{async => true})),
+	    ?match({ok, _}, ergw_aaa_session:interim(SId, #{}, #{async => true})),
+	    ?match({ok, _}, ergw_aaa_session:stop(SId, #{}, #{async => true})),
+	    ergw_aaa_session:response(Req2, ok, #{}, #{})
+    after 1000 ->
+	    ct:fail("no ASR")
+    end,
+
     GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     {ok, _Session2, _Events2} =
 	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
@@ -330,11 +349,14 @@ re_auth_request(Config) ->
     ?equal(2, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% check that client has send RAA
-    ?equal(1, proplists:get_value({{16777238, 258, 0}, send, {'Result-Code',2001}}, Stats1)),
+    ?equal(2, proplists:get_value({{16777238, 258, 0}, send, {'Result-Code',2001}}, Stats1)),
 
     %% check that test server has recieved RAA
-    ?equal(1, proplists:get_value({{16777238, 258, 0}, recv, {'Result-Code',2001}},
+    ?equal(2, proplists:get_value({{16777238, 258, 0}, recv, {'Result-Code',2001}},
 				  StatsTestSrv)),
+
+    %% NASREQ ACA
+    ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
     meck_validate(Config),
