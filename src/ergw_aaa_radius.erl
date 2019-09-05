@@ -153,7 +153,13 @@ accounting(Type, Attrs0, Session0, Events, RadiusSession, #{now := Now} = Opts) 
 	      system_time_to_universal_time(Now + erlang:time_offset(), native)}
 	     | Attrs2],
     Req = #radius_request{cmd = accreq, attrs = Attrs, msg_hmac = false},
-    send_request(Req, Session0, Opts),
+    case Opts of
+	#{async := true} ->
+	    proc_lib:spawn(
+	      fun() -> send_request(Req, Session0, Opts) end);
+	_ ->
+	    send_request(Req, Session0, Opts)
+    end,
 
     Session = ?set_svc_all_opt(RadiusSession, Session0),
     {ok, Session, Events}.
