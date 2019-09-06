@@ -64,9 +64,6 @@
 	 {'Destination-Realm', <<"test-srv.example.com">>}]).
 -define(DIAMETER_SERVICE_OPTS, []).
 
--define(CCR_T_RATE_LIMIT_QUEUE_NAME, ccr_t_rate_limit).
--define(CCR_T_RATE_LIMIT_QUEUE_CONFIG, [{max_time, 2000}, {regulators, [{rate, [{limit, 10}]}]}]).
-
 -define(CONFIG,
 	[{functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
@@ -78,17 +75,17 @@
 	    [{handler, 'ergw_aaa_static'}]},
 	   {'Ro',
 	    [{handler, 'ergw_aaa_ro'},
-		 {answers,
-		  #{'OCS-Hold' => {ocs_hold,
-				   [#{'Envelope-Reporting' => [0],
-				      'Granted-Service-Unit' =>
-					  [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
-				      'Rating-Group' => [1000],
-				      'Result-Code' => [2001],
-				      'Time-Quota-Threshold' => [60]}
-				   ]
-				  }
-		   }}
+	     {answers,
+	      #{'OCS-Hold' => {ocs_hold,
+			       [#{'Envelope-Reporting' => [0],
+				  'Granted-Service-Unit' =>
+				      [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
+				  'Rating-Group' => [1000],
+				  'Result-Code' => [2001],
+				  'Time-Quota-Threshold' => [60]}
+			       ]
+			      }
+	       }}
 	    ]}
 	  ]},
 
@@ -100,9 +97,16 @@
 			   {start, []},
 			   {interim, []},
 			   {stop, []},
-			   {{gy, 'CCR-Initial'},   [{'Ro', [{tx_timeout, 1000}, {max_retries, 2}, {answer_if_timeout, 'OCS-Hold'}]}]},
-			   {{gy, 'CCR-Update'},    [{'Ro', [{tx_timeout, 1000}, {answer_if_timeout, 'OCS-Hold'}]}]},
-			   {{gy, 'CCR-Terminate'}, [{'Ro', [{rate_limit_queue, ?CCR_T_RATE_LIMIT_QUEUE_NAME}]}]}
+			   {{gy, 'CCR-Initial'},   [{'Ro', [{tx_timeout, 1000},
+							    {max_retries, 2},
+							    {answer_if_down, 'OCS-Hold'},
+							    {answer_if_timeout, 'OCS-Hold'}
+							   ]}]},
+			   {{gy, 'CCR-Update'},    [{'Ro', [{tx_timeout, 1000},
+							    {answer_if_down, 'OCS-Hold'},
+							    {answer_if_timeout, 'OCS-Hold'}
+							   ]}]},
+			   {{gy, 'CCR-Terminate'}, [{'Ro', []}]}
 			  ]}
 	    ]}
 	  ]}
@@ -138,8 +142,6 @@ init_per_suite(Config0) ->
     diameter_test_server:start(?TEST_SERVER_CALLBACK_OVERRIDE, TestTransports),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
-
-    jobs:add_queue(?CCR_T_RATE_LIMIT_QUEUE_NAME, ?CCR_T_RATE_LIMIT_QUEUE_CONFIG),
 
     case wait_for_diameter(?SERVICE, 10) of
 	ok ->
@@ -407,8 +409,8 @@ ccr_retry(Config) ->
 		?SET_TC_INFO(ccr_i_retries, [ReqData | PrevRequests]),
 		%% assuming config of 2 retries and 1s TX timeout in the suite config for CCR-I
 		case PrevRequests of
-		    [] -> timer:sleep(2000);
-		    [_] -> timer:sleep(2000);
+		    [] -> discard;
+		    [_] -> discard;
 		    [_, _] -> ok
 		end
 	end,
@@ -464,9 +466,11 @@ ccr_t_rate_limit(Config) ->
     ResCnt = ets:new(resultcount, [ordered_set]),
     [ets:update_counter(ResCnt, Result, 1, {Result, 0}) || {{_, _}, Result} <- ?LIST_TC_INFO()],
     ResList = ets:tab2list(ResCnt),
+    ct:pal("ResList: ~p", [ResList]),
     Ok = proplists:get_value(ok, ResList, 0),
     RateLimited = proplists:get_value(rate_limit, ResList, 0),
 
+    ct:pal("ReceivedRate: ~p", [ReceivedRate]),
     %% no received rate sample is greatet than 10 req/s as defined in the rate limit config
     ?equal([], lists:filter(fun(Recv_s) -> Recv_s > 10 end, ReceivedRate)),
 
@@ -482,7 +486,7 @@ ccr_t_rate_limit(Config) ->
 
 ocs_hold_initial_timeout(Config) ->
     %% Time out all requests on the test server to trigger ocs_hold on CCR-I
-    DTRA = fun(_Request, _Svc, _Peers, _Extra) -> timer:sleep(2000) end,
+    DTRA = fun(_Request, _Svc, _Peers, _Extra) -> discard end,
     Session = init_session(#{}, Config),
     GyOpts = #{credits => #{1000 => empty}},
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
@@ -577,31 +581,35 @@ ocs_hold_update_timeout(Config) ->
 %%% Rate limit test helper to generate the requests in separate processes
 %%%======================================================================
 basic_session() ->
-    basic_session(1000).
+    basic_session(1100).
 basic_session(CCR_I_T_Delay) ->
     Session = init_session(#{}, []),
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     GyOpts = #{credits => #{1000 => empty}},
-    {ok, _Session1, _Events1} =
-	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+    Result =
+	case ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []) of
+	    {ok, _, _} ->
+		timer:sleep(CCR_I_T_Delay),
 
-    timer:sleep(CCR_I_T_Delay),
-
-    UsedCredits =
-	[{1000, #{'CC-Input-Octets'  => [0],
-		  'CC-Output-Octets' => [0],
-		  'CC-Time'          => [60],
-		  'CC-Total-Octets'  => [0],
-		  'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
-	 }],
-    GyTerm = #{'Termination-Cause' =>
-		   ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
-	       used_credits => UsedCredits},
-    Result = case ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []) of
-		 {ok, _, _} -> ok;
-		 {{error, rate_limit},_ ,_} -> rate_limit;
-		 {Err, _, _} -> Err
-	     end,
+		UsedCredits =
+		    [{1000, #{'CC-Input-Octets'  => [0],
+			      'CC-Output-Octets' => [0],
+			      'CC-Time'          => [60],
+			      'CC-Total-Octets'  => [0],
+			      'Reporting-Reason' =>
+				  [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
+		     }],
+		GyTerm = #{'Termination-Cause' =>
+			       ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+			   used_credits => UsedCredits},
+		case ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []) of
+		    {ok, _, _} -> ok;
+		    {{error, rate_limit},_ ,_} -> rate_limit;
+		    {Err, _, _} -> {'CCR-I', Err}
+		end;
+	    {{error, rate_limit},_ ,_} -> rate_limit;
+	    {Err, _, _} -> {'CCR-T', Err}
+	end,
     set_test_info(ccr_t_rate_limit, {session, SId}, Result).
 
 

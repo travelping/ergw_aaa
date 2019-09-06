@@ -321,19 +321,19 @@ async(Config) ->
 	],
 
     RfUpd = #{service_data => SDC},
-    {ok, _} =
+    ?match({ok, _},
 	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
-				AsyncSOpts#{'gy_event' => container_closure}),
-    {ok, _} =
+				AsyncSOpts#{'gy_event' => container_closure})),
+    ?match({ok, _},
 	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
-				AsyncSOpts#{'gy_event' => container_closure}),
-    {ok, _} =
+				AsyncSOpts#{'gy_event' => container_closure})),
+    ?match({ok, _},
 	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
-				AsyncSOpts#{'gy_event' => cdr_closure}),
+				AsyncSOpts#{'gy_event' => cdr_closure})),
 
-    {ok, _} =
+    ?match({ok, _},
 	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
-				AsyncSOpts#{'gy_event' => container_closure}),
+				AsyncSOpts#{'gy_event' => container_closure})),
 
     RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       service_data => SDC},
