@@ -28,11 +28,11 @@
 %% diameter callbacks
 -export([peer_up/3,
 	 peer_down/3,
-	 pick_peer/4, pick_peer/5,
-	 prepare_request/3, prepare_request/4,
-	 prepare_retransmit/3, prepare_retransmit/4,
-	 handle_answer/4, handle_answer/5,
-	 handle_error/4, handle_error/5,
+	 pick_peer/5,
+	 prepare_request/4,
+	 prepare_retransmit/4,
+	 handle_answer/5,
+	 handle_error/5,
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -98,7 +98,7 @@ invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
 	    {Request, Session} = create_ACR(RecType, Session2, Opts),
 	    lager:debug("Session Start: ~p", [Session]),
-	    call(Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -111,7 +111,7 @@ invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
 	    Session1 = close_service_data_containers(Session0),
 	    {Request, Session} = create_ACR(RecType, Session1, Opts),
-	    call(Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 	_ ->
 	    Session = close_service_data_containers(Session0),
 	    {ok, Session, Events}
@@ -125,7 +125,7 @@ invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    Session2 = close_service_data_containers(Session1),
 	    {Request, Session} = create_ACR(RecType, Session2, Opts),
-	    call(Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -133,38 +133,30 @@ invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, Session, Events, #{function := Function, async := true}) ->
-    Result = diameter:call(Function, ?APP, Request, [detach, {extra, [self()]}]),
-    {Result, Session, Events};
-
-call(Request, Session, Events, #{function := Function}) ->
-    Result = diameter:call(Function, ?APP, Request, []),
-    handle_aca(Result, Session, Events).
-
 %%===================================================================
 %% DIAMETER handler callbacks
 %%===================================================================
 
+%% peer_up/3
 peer_up(_SvcName, _Peer, State) ->
     lager:debug("peer_up: ~p~n", [_Peer]),
     State.
 
-peer_down(_SvcName, {PeerRef, _} = _Peer, State) ->
-    ergw_aaa_diameter_srv:peer_down(?MODULE, PeerRef),
-    lager:debug("peer_down: ~p~n", [_Peer]),
+%% peer_down/3
+peer_down(SvcName, Peer, State) ->
+    ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
+    lager:debug("peer_down: ~p~n", [Peer]),
     State.
 
-pick_peer([], RemoteCandidates, _SvcName, _State) ->
-    N = rand:uniform(length(RemoteCandidates)),
-    {ok, lists:nth(N, RemoteCandidates)};
-pick_peer(LocalCandidates, _, _SvcName, _State) ->
-    N = rand:uniform(length(LocalCandidates)),
-    {ok, lists:nth(N, LocalCandidates)}.
+%% pick_peer/5
+pick_peer([], RemoteCandidates, SvcName, _State, CallOpts) ->
+    ergw_aaa_diameter_srv:pick_peer(RemoteCandidates, SvcName, CallOpts);
+pick_peer(LocalCandidates, _, SvcName, _State, CallOpts) ->
+    ergw_aaa_diameter_srv:pick_peer(LocalCandidates, SvcName, CallOpts).
 
-pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From) ->
-    pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
-
-prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_PeerRef, Caps})
+%% prepare_request/4
+prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]} = Pkt0, SvcName,
+		{_, Caps} = Peer, CallOpts)
   when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _},
@@ -172,40 +164,37 @@ prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]}, _, {_PeerRef, Caps})
     Msg = [T | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
 		     'Origin-State-Id' => OSid}],
-    lager:debug("prepare_request Msg: ~0p", [Msg]),
-    {send, Msg};
+    Pkt = ergw_aaa_diameter_srv:prepare_request(
+	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
+    ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
 
-prepare_request(Packet, _SvcName, {PeerRef, _}) ->
-    lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
-    {send, Packet}.
+prepare_request(Pkt0, SvcName, {_PeerRef, _} = Peer, CallOpts) ->
+    Pkt = ergw_aaa_diameter_srv:prepare_request(
+	       Pkt0, SvcName, Peer, CallOpts),
+    ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer).
 
-prepare_request(Packet, SvcName, Peer, _From) ->
-    prepare_request(Packet, SvcName, Peer).
+%% prepare_retransmit/4
+prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
+    prepare_request(Pkt, SvcName, Peer, CallOpts).
 
-prepare_retransmit(Packet, SvcName, Peer) ->
-    prepare_request(Packet, SvcName, Peer).
+%% handle_answer/5
+handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['ACR' | _], SvcName, Peer, CallOpts)
+  when is_map(Avps) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Msg, CallOpts);
 
-prepare_retransmit(Packet, SvcName, Peer, _From) ->
-    prepare_retransmit(Packet, SvcName, Peer).
-
-handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
+handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.
 
-handle_answer(#diameter_packet{msg = ['ACA' | Avps] = Msg}, _Request, _SvcName, _Peer, From)
-  when is_map(Avps), is_pid(From) ->
-    ergw_aaa_session:handle_answer(From, handle_aca(Msg, #{}, [])),
-    ok;
+%% handle_error/5
+handle_error(Reason, _Request, _SvcName, undefined, CallOpts) ->
+    ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Reason, CallOpts);
+handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    ergw_aaa_diameter_srv:retry(fun handle_aca/4, Reason, SvcName, Peer, CallOpts).
 
-handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From) ->
-    Msg.
-
-handle_error(Reason, _Request, _SvcName, _Peer) ->
-    {error, Reason}.
-
-handle_error(Reason, _Request, _SvcName, _Peer, From) ->
-    ergw_aaa_session:handle_answer(From, handle_aca({error, Reason}, #{}, [])),
-    ok.
-
+%% handle_request/3
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
 
@@ -231,14 +220,15 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
+%% handle_aca/4
 handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0) ->
+	   Session0, Events0, _Opts) ->
     {Session, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
-handle_aca([Answer | #{'Result-Code' := Code}], Session, Events)
+handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events};
-handle_aca({error, _} = Result, Session, Events) ->
+handle_aca({error, _} = Result, Session, Events, _Opts) ->
     lager:error("ACR failed with: ~p", [Result]),
     {Result, Session, Events}.
 

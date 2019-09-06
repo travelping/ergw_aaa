@@ -344,7 +344,7 @@ check_usu(Units) ->
 		  maps:update_with(TCU, _ + 1, 1, A);
 	     (_, A) -> A
 	  end, #{}, Units),
-    ct:pal("USU Map: ~p", [M]),
+    %% ct:pal("USU Map: ~p", [M]),
     case M of
 	_ when map_size(M) =:= 0 ->
 	    ok;

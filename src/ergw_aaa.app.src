@@ -12,7 +12,6 @@
 		  setup,
 		  regine,
 		  eradius,
-          jobs,
 		  diameter
 		 ]},
   {mod, { ergw_aaa_app, []}},

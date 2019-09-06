@@ -27,11 +27,11 @@
 %% diameter callbacks
 -export([peer_up/3,
 	 peer_down/3,
-	 pick_peer/4, pick_peer/6,
-	 prepare_request/3, prepare_request/5,
-	 prepare_retransmit/3, prepare_retransmit/5,
-	 handle_answer/4, handle_answer/6,
-	 handle_error/4, handle_error/6,
+	 pick_peer/5,
+	 prepare_request/4,
+	 prepare_retransmit/4,
+	 handle_answer/5,
+	 handle_error/5,
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
@@ -94,7 +94,7 @@ invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_INITIAL_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    call(Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -105,7 +105,7 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_UPDATE_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    call(Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -118,7 +118,7 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    call(Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -126,44 +126,36 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
 
-call(Request, Session, Events, #{function := Function, async := true} = Opts) ->
-    Result = diameter:call(Function, ?APP, Request, [detach, {extra, [self(), Opts]}]),
-    {Result, Session, Events};
-
-call(Request, Session, Events, #{function := Function} = Opts) ->
-    Result = diameter:call(Function, ?APP, Request, []),
-    handle_cca(Result, Session, Events, Opts).
-
 %%===================================================================
 %% DIAMETER handler callbacks
 %%===================================================================
 
+%% peer_up/3
 peer_up(_SvcName, _Peer, State) ->
     lager:debug("peer_up: ~p~n", [_Peer]),
     State.
 
-peer_down(_SvcName, {PeerRef, _} = _Peer, State) ->
-    ergw_aaa_diameter_srv:peer_down(?MODULE, PeerRef),
-    lager:debug("peer_down: ~p~n", [_Peer]),
+%% peer_down/3
+peer_down(SvcName, Peer, State) ->
+    ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
+    lager:debug("peer_down: ~p~n", [Peer]),
     State.
 
-pick_peer([], RemoteCandidates, _SvcName, _State) ->
-    N = rand:uniform(length(RemoteCandidates)),
-    {ok, lists:nth(N, RemoteCandidates)};
-pick_peer(LocalCandidates, _, _SvcName, _State) ->
-    N = rand:uniform(length(LocalCandidates)),
-    {ok, lists:nth(N, LocalCandidates)}.
+%% pick_peer/5
+pick_peer([], RemoteCandidates, SvcName, _State, CallOpts) ->
+    ergw_aaa_diameter_srv:pick_peer(RemoteCandidates, SvcName, CallOpts);
+pick_peer(LocalCandidates, _, SvcName, _State, CallOpts) ->
+    ergw_aaa_diameter_srv:pick_peer(LocalCandidates, SvcName, CallOpts).
 
-pick_peer(LocalCandidates, RemoteCandidates, SvcName, State, _From, _Opts) ->
-    pick_peer(LocalCandidates, RemoteCandidates, SvcName, State).
-
-prepare_request(#diameter_packet{msg = ['CCR' = T | Avps]}, _, {PeerRef, Caps})
+%% prepare_request/4
+prepare_request(#diameter_packet{msg = ['CCR' = T | Avps]} = Pkt0, SvcName,
+		{_, Caps} = Peer, CallOpts)
   when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _},
 		   origin_state_id = {OSid, _}} = Caps,
 
-    SF = case catch(ergw_aaa_diameter_srv:is_first_request(?MODULE, PeerRef)) of
+    SF = case catch(ergw_aaa_diameter_srv:is_first_request(?MODULE, SvcName, Peer)) of
 	     false ->
 		 [];
 	     _ ->
@@ -178,41 +170,37 @@ prepare_request(#diameter_packet{msg = ['CCR' = T | Avps]}, _, {PeerRef, Caps})
 		     'Origin-Realm' => OR,
 		     'Origin-State-Id' => OSid,
 		     'Supported-Features' => SF}],
-    lager:debug("prepare_request Msg: ~p", [Msg]),
-    {send, Msg};
+    Pkt = ergw_aaa_diameter_srv:prepare_request(
+	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
+    ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
 
-prepare_request(Packet, _SvcName, {PeerRef, _}) ->
-    lager:debug("prepare_request to ~p: ~p", [PeerRef, lager:pr(Packet, ?MODULE)]),
-    {send, Packet}.
+prepare_request(Pkt0, SvcName, {_PeerRef, _} = Peer, CallOpts) ->
+    Pkt = ergw_aaa_diameter_srv:prepare_request(
+	       Pkt0, SvcName, Peer, CallOpts),
+    ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer).
 
-prepare_request(Packet, SvcName, Peer, _From, _Opts) ->
-    prepare_request(Packet, SvcName, Peer).
+%% prepare_retransmit/4
+prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
+    prepare_request(Pkt, SvcName, Peer, CallOpts).
 
-prepare_retransmit(Packet, SvcName, Peer) ->
-    prepare_request(Packet, SvcName, Peer).
+%% handle_answer/5
+handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['CCR' | _], SvcName, Peer, CallOpts)
+  when is_map(Avps) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    ergw_aaa_diameter_srv:handle_answer(fun handle_cca/4, Msg, CallOpts);
 
-prepare_retransmit(Packet, SvcName, Peer, _From, _Opts) ->
-    prepare_request(Packet, SvcName, Peer).
-
-handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer) ->
+handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.
 
-handle_answer(#diameter_packet{msg = ['CCA' | Avps] = Msg},
-	      _Request, _SvcName, _Peer, From, Opts)
-  when is_map(Avps), is_pid(From) ->
-    ergw_aaa_session:handle_answer(From, handle_cca(Msg, #{}, [], Opts)),
-    ok;
+%% handle_error/5
+handle_error(Reason, _Request, _SvcName, undefined, CallOpts) ->
+    ergw_aaa_diameter_srv:handle_answer(fun handle_cca/4, Reason, CallOpts);
+handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    ergw_aaa_diameter_srv:retry(fun handle_cca/4, Reason, SvcName, Peer, CallOpts).
 
-handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _From, _Opts) ->
-    Msg.
-
-handle_error(Reason, _Request, _SvcName, _Peer) ->
-    {error, Reason}.
-
-handle_error(Reason, _Request, _SvcName, _Peer, From, Opts) ->
-    ergw_aaa_session:handle_answer(From, handle_cca({error, Reason}, #{}, [], Opts)),
-    ok.
-
+%% handle_request/3
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->
     handle_common_request(Command, Avps, Peer);
@@ -247,6 +235,7 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
+%% handle_cca/4
 handle_cca(['CCA' | #{'Result-Code' := [?'DIAMETER_BASE_RESULT-CODE_SUCCESS']} = Avps],
 	   Session0, Events0, _Opts) ->
     {Session, Events} = to_session({gx, 'CCA'}, {Session0, Events0}, Avps),
