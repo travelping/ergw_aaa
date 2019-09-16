@@ -119,7 +119,8 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, abort_session_request, tarif_time_change,
+    [simple_session, simple_session_async,
+     abort_session_request, tarif_time_change,
      ocs_hold_initial_timeout, ocs_hold_update_timeout,
      ccr_retry, ccr_t_rate_limit].
 
@@ -271,6 +272,68 @@ simple_session(Config) ->
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+    ?match([{update_credits,[_,_,_]}], Events2),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
+simple_session_async() ->
+    [{doc, "Simple Gy session"}].
+simple_session_async(Config) ->
+    Session = init_session(#{}, Config),
+    SOpts = #{async => true},
+    GyOpts =
+	#{credits =>
+	      #{1000 => empty,
+		2000 => empty,
+		3000 => empty
+	       }
+	 },
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, Session1} =
+	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, SOpts),
+    Events1 =
+	receive
+	    {update_session, _, Ev1} -> Ev1
+	after 100 -> ct:fail(timeout)
+	end,
+    ?match([{update_credits,[_,_,_]}], Events1),
+    ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
+
+    UsedCredits =
+	#{3000 => #{'CC-Input-Octets'  => [1092],
+		    'CC-Output-Octets' => [0],
+		    'CC-Time'          => [60],
+		    'CC-Total-Octets'  => [1092],
+		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']},
+	  2000 => #{'CC-Input-Octets'  => [0],
+		    'CC-Output-Octets' => [0],
+		    'CC-Time'          => [60],
+		    'CC-Total-Octets'  => [0],
+		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']},
+	  1000 => #{'CC-Input-Octets'  => [0],
+		    'CC-Output-Octets' => [0],
+		    'CC-Time'          => [60],
+		    'CC-Total-Octets'  => [0],
+		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
+	 },
+    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       used_credits => maps:to_list(UsedCredits)},
+    {ok, Session2} =
+	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, SOpts),
+    Events2 =
+	receive
+	    {update_session, _, Ev2} -> Ev2
+	after 100 -> ct:fail(timeout)
+	end,
     ?match([{update_credits,[_,_,_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 

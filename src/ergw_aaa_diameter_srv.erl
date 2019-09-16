@@ -121,12 +121,13 @@ finish_request(SvcName, Peer) ->
 call(App, Request, Session, Events, Config) ->
     CallOpts0 =
 	#diam_call{
+	   session = Session,
 	   seqno = diameter_session:sequence(),
 	   tries = maps:get(max_retries, Config, 0) + 1,
 	   opts = Config},
     case maps:get(async, Config, false) of
 	false ->
-	    CallOpts = CallOpts0#diam_call{session = Session, events = Events},
+	    CallOpts = CallOpts0#diam_call{events = Events},
 	    call(App, Request, Config, CallOpts);
 	true ->
 	    From = self(),
