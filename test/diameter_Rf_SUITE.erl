@@ -340,7 +340,7 @@ async(Config) ->
     ergw_aaa_session:invoke(SId, #{}, stop, AsyncSOpts),
     {ok, _Session2} =
 	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, AsyncSOpts),
-    ct:sleep(10),
+    ct:sleep(100),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
