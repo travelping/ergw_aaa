@@ -30,6 +30,7 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_session.hrl").
+-include("include/diameter_rfc4005_nasreq.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
@@ -39,6 +40,7 @@
 -define(APP, nasreq).
 -define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
 -define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
+-define(DEFAULT_TERMINATION_CAUSE, ?'TERMINATION-CAUSE_PORT_ERROR').
 
 -define(DefaultOptions, [{function, "undefined"},
 			 {'Destination-Realm', undefined}]).
@@ -76,7 +78,8 @@ validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
 invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
-invoke(_Service, authenticate, Session, Events, Opts) ->
+invoke(_Service, authenticate, Session0, Events, Opts) ->
+        Session = ?set_svc_opt('Authorisation', true, Session0),
         RecType = ?'DIAMETER_SGI_AUTH-REQUEST-TYPE_AUTHORIZE_AUTHENTICATE',
 	    Request = create_AAR(RecType, Session, Opts),
 	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
@@ -116,10 +119,14 @@ invoke(_Service, stop, Session0, Events0, Opts) ->
 	    Session2 = inc_number(Session1),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    ACRRequest = create_ACR(RecType, Session2, Opts),
-	    {_, Session3, Events1} = 
-		ergw_aaa_diameter_srv:call(?APP, ACRRequest, Session2, Events0, Opts),
-	    STRRequest = create_STR(Session2, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, STRRequest, Session3, Events1, Opts);
+		ACRRes = ergw_aaa_diameter_srv:call(?APP, ACRRequest, Session2, Events0, Opts),
+        case ?get_svc_opt('Authorisation', Session0, false) of
+            true ->
+        	    STRRequest = create_STR(Session2, Opts),
+	            ergw_aaa_diameter_srv:call(?APP, STRRequest, Session2, Events0, Opts);
+            _ -> ok
+        end,
+        ACRRes;
 	_ ->
 	    {ok, Session0, Events0}
     end;
@@ -412,9 +419,6 @@ from_session('Framed-IP-Address' = Key, Value, M) ->
 from_session('Diameter-Session-Id', SId, M) ->
     M#{'Session-Id' => SId};
 
-from_session('Termination-Cause', Cause, M) ->
-    M#{'Termination-Cause' => Cause};
-
 from_session(Key, Value, M)
   when Key =:= 'Acct-Session-Time';
        Key =:= 'User-Name';
@@ -454,6 +458,9 @@ create_ACR(Type, Session, #{now := Now} = Opts) ->
     ['ACR' | Avps].
 
 create_STR(Session, Opts) ->
+    Cause = maps:get('Termination-Cause', Session, ?'DEFAULT_TERMINATION_CAUSE'),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
-    Avps = from_session(Session, Avps0),
+    Avps1 = Avps0#{'Termination-Cause' => Cause},
+    Avps = from_session(Session, Avps1),
     ['STR' | Avps].
+
