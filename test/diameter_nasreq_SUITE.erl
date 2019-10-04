@@ -87,7 +87,7 @@ init_per_suite(Config0) ->
     [application:set_env(ergw_aaa, Key, Opts)
      || {Key, Opts} <- ?CONFIG],
     meck_init(Config),
-    diameter_test_server:start(),
+    diameter_test_server:start_nasreq(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
     case wait_for_diameter(?SERVICE, 10) of
@@ -118,6 +118,7 @@ init_session(Session, _Config) ->
 		 '3GPP-IMSI-MCC-MNC' => <<"25999">>,
 		 '3GPP-GGSN-MCC-MNC' => <<"25888">>,
 		 '3GPP-MS-TimeZone' => {128, 1},
+		 '3GPP-GPRS-Negotiated-QoS-Profile' =>   <<11,146,31,147,150,64,64,255,255,255,255,17,1,1,64,64>>,
 		 '3GPP-MSISDN' => <<"46702123456">>, '3GPP-NSAPI' => 5,
 		 '3GPP-PDP-Type' => 'IPv4', '3GPP-RAT-Type' => 6,
 		 '3GPP-SGSN-Address' => {192, 168, 1, 1},
@@ -128,7 +129,7 @@ init_session(Session, _Config) ->
 		       0>>,
 		 'Called-Station-Id' => <<"some.station.gprs">>,
 		 'Calling-Station-Id' => <<"543148000012345">>,
-		 'Framed-IP-Address' => {10, 106, 14, 227},
+		% 'Framed-IP-Address' => {10, 106, 14, 227},
 		 'Framed-Protocol' => 'GPRS-PDP-Context',
 		 'Multi-Session-Id' =>
 		     1012552258277823040188863251876666193415858290601,
@@ -190,9 +191,9 @@ simple_session(Config) ->
 				 {'Result-Code', 2001}},
 				Statistics))),
     ?equal(3,
-	   (proplists:get_value({{1, 271, 1}, send}, Statistics))),
+	   (proplists:get_value({{3, 271, 1}, send}, Statistics))),
     ?equal(3,
-	   (proplists:get_value({{1, 271, 0}, recv,
+	   (proplists:get_value({{3, 271, 0}, recv,
 				 {'Result-Code', 2001}},
 				Statistics))),
     ?equal(1,

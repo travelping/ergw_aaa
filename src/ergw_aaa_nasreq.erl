@@ -37,9 +37,12 @@
 -define(VENDOR_ID_ETSI, 13019).
 -define(VENDOR_ID_TP,   18681).
 
--define(APP, nasreq).
--define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
--define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
+-define(NASREQ_AUTH_APP, nasreq_auth).
+-define(NASREQ_ACC_APP, nasreq_acc).
+-define(DIAMETER_DICT_NASREQ_AUTH, diameter_3gpp_ts29_061_sgi_auth).
+-define(DIAMETER_DICT_NASREQ_ACC, diameter_3gpp_ts29_061_sgi_acc).
+-define(DIAMETER_APP_ID_NASREQ_AUTH, ?DIAMETER_DICT_NASREQ_AUTH:id()).
+-define(DIAMETER_APP_ID_NASREQ_ACC, ?DIAMETER_DICT_NASREQ_ACC:id()).
 -define(DEFAULT_TERMINATION_CAUSE, ?'TERMINATION-CAUSE_PORT_ERROR').
 
 -define(DefaultOptions, [{function, "undefined"},
@@ -58,11 +61,14 @@ initialize_handler(_Opts) ->
 
 initialize_service(_ServiceId, #{function := Function}) ->
     SvcOpts =
-	#{'Auth-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
-	  'Acct-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
-	  application => [{alias, ?APP},
-			  {dictionary, ?DIAMETER_DICT_NASREQ},
-			  {module, ?MODULE}]},
+	#{'Auth-Application-Id' => ?DIAMETER_APP_ID_NASREQ_AUTH,
+	  'Acct-Application-Id' => ?DIAMETER_APP_ID_NASREQ_ACC,
+	  application => [[{alias, ?NASREQ_AUTH_APP},
+			  {dictionary, ?DIAMETER_DICT_NASREQ_AUTH},
+			  {module, ?MODULE}],
+              [{alias, ?NASREQ_ACC_APP},
+			  {dictionary, ?DIAMETER_DICT_NASREQ_ACC},
+			  {module, ?MODULE}]]},
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
@@ -82,7 +88,7 @@ invoke(_Service, authenticate, Session0, Events, Opts) ->
         Session = ?set_svc_opt('Authorisation', true, Session0),
         RecType = ?'DIAMETER_SGI_AUTH-REQUEST-TYPE_AUTHORIZE_AUTHENTICATE',
 	    Request = create_AAR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?NASREQ_AUTH_APP, Request, Session, Events, Opts);
 
 invoke(_Service, authorize, Session, Events, _Opts) ->
     {ok, Session, Events};
@@ -95,7 +101,7 @@ invoke(_Service, start, Session0, Events, Opts) ->
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
 	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?NASREQ_ACC_APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -106,7 +112,7 @@ invoke(_Service, interim, Session0, Events, Opts) ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
 	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(?NASREQ_ACC_APP, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -119,11 +125,11 @@ invoke(_Service, stop, Session0, Events0, Opts) ->
 	    Session2 = inc_number(Session1),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    ACRRequest = create_ACR(RecType, Session2, Opts),
-		ACRRes = ergw_aaa_diameter_srv:call(?APP, ACRRequest, Session2, Events0, Opts),
+		ACRRes = ergw_aaa_diameter_srv:call(?NASREQ_ACC_APP, ACRRequest, Session2, Events0, Opts),
         case ?get_svc_opt('Authorisation', Session0, false) of
             true ->
         	    STRRequest = create_STR(Session2, Opts),
-	            ergw_aaa_diameter_srv:call(?APP, STRRequest, Session2, Events0, Opts);
+	            ergw_aaa_diameter_srv:call(?NASREQ_AUTH_APP, STRRequest, Session2, Events0, Opts);
             _ -> ok
         end,
         ACRRes;
@@ -303,7 +309,11 @@ to_session(Procedure, {Session0, Events0}, Avps) ->
 to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
   when is_integer(Interim), Interim > 0 ->
     Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
-    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
+    {Session#{'Acct-Interim-Interval' => Interim}, ergw_aaa_session:ev_set(Trigger, Events)};
+
+to_session(_, 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
+    {Session#{'Framed-IP-Address' => {A,B,C,D}}, Events};
+
 to_session(_, _, _, SessEv) ->
     SessEv.
 
@@ -442,11 +452,15 @@ from_session(Session, Avps) ->
 create_AAR(Type, Session, Opts) ->
     Username = maps:get('Username', Session, <<>>),
     Password = maps:get('Password', Session, <<>>),
-    FramedIP = maps:get('Framed-IP-Address', Session, {0,0,0,0}),
+    FramedIP = maps:get('Framed-IP-Address', Session, [<<0,0,0,0>>]),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Request-Type' => Type, 'User-Name' => Username, 
 		   'User-Password' => Password, 'Framed-IP-Address' => FramedIP},
-    Avps = from_session(Session, Avps1),
+    % remove 3GPP-GPRS-Negotiated-QoS-Profile until we fix the encoding according to 
+    % https://www.etsi.org/deliver/etsi_ts/129000_129099/129061/15.03.00_60/ts_129061v150300p.pdf
+    % page 90
+    Session1 = maps:without(['3GPP-GPRS-Negotiated-QoS-Profile'], Session),
+    Avps = from_session(Session1, Avps1),
     ['AAR' | Avps].
 
 create_ACR(Type, Session, #{now := Now} = Opts) ->
@@ -454,7 +468,11 @@ create_ACR(Type, Session, #{now := Now} = Opts) ->
     Avps1 = Avps0#{'Accounting-Record-Type' => Type,
 		   'Event-Timestamp' =>
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)]},
-    Avps = from_session(Session, Avps1),
+    % remove 3GPP-GPRS-Negotiated-QoS-Profile until we fix the encoding according to 
+    % https://www.etsi.org/deliver/etsi_ts/129000_129099/129061/15.03.00_60/ts_129061v150300p.pdf
+    % page 90
+    Session1 = maps:without(['3GPP-GPRS-Negotiated-QoS-Profile'], Session),
+    Avps = from_session(Session1, Avps1),
     ['ACR' | Avps].
 
 create_STR(Session, Opts) ->

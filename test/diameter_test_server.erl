@@ -18,7 +18,9 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
--export([start/0, start/2, stop/0,
+-export([start/0, start/2, 
+	 start_nasreq/0, start_nasreq/2, 
+	 stop/0,
 	 abort_session_request/4,
 	 re_auth_request/5]).
 
@@ -34,8 +36,11 @@
 
 -define(UNEXPECTED, erlang:error({unexpected, ?MODULE, ?LINE})).
 
--define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
--define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
+-define(DIAMETER_DICT_NASREQ_AUTH, diameter_3gpp_ts29_061_sgi_auth).
+-define(DIAMETER_APP_ID_NASREQ_AUTH, ?DIAMETER_DICT_NASREQ_AUTH:id()).
+
+-define(DIAMETER_DICT_NASREQ_ACC, diameter_3gpp_ts29_061_sgi_acc).
+-define(DIAMETER_APP_ID_NASREQ_ACC, ?DIAMETER_DICT_NASREQ_ACC:id()).
 
 -define(DIAMETER_DICT_GX, diameter_3gpp_ts29_212).
 -define(DIAMETER_APP_ID_GX, ?DIAMETER_DICT_GX:id()).
@@ -54,21 +59,11 @@
 %% API
 %%===================================================================
 
+
 start() ->
-    DefaultTransports =
-	[[
-	  {transport_module, diameter_tcp},
-	  {transport_config, [
-			      {reuseaddr, true},
-			      {ip, {127,0,0,1}},
-			      {port, 3868}]
-	  }
-	 ]],
-    start(#{}, DefaultTransports).
+    start(#{}, default_transport()).
 
-
-
-start(CallbackOverrides, Transports) ->
+start(CallbackOverrides, Transports) -> 
     application:ensure_all_started(diameter),
     SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
 	       {'Origin-Realm', "test-srv.example.com"},
@@ -77,9 +72,7 @@ start(CallbackOverrides, Transports) ->
 	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
 					?VENDOR_ID_ETSI,
 					?VENDOR_ID_TP]},
-	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
-					?DIAMETER_APP_ID_GX,
-					?DIAMETER_APP_ID_RO]},
+	       {'Auth-Application-Id', [?DIAMETER_APP_ID_GX,?DIAMETER_APP_ID_RO]},
 	       {'Acct-Application-Id', [?DIAMETER_APP_ID_RF]},
 	       {'Vendor-Specific-Application-Id',
 		[#'diameter_base_Vendor-Specific-Application-Id'{
@@ -88,9 +81,6 @@ start(CallbackOverrides, Transports) ->
 	       {restrict_connections, false},
 	       {string_decode, false},
 	       {decode_format, map},
-	       {application, [{alias, nasreq},
-			      {dictionary, ?DIAMETER_DICT_NASREQ},
-			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
 	       {application, [{alias, diameter_gx},
 			      {dictionary, ?DIAMETER_DICT_GX},
 			      {module, callback_overrides(diameter_gx, CallbackOverrides, [gx])}]},
@@ -104,6 +94,46 @@ start(CallbackOverrides, Transports) ->
 
     [{ok, _} = diameter:add_transport(?MODULE, {listen, Transport}) || Transport <- Transports],
     ok.
+
+start_nasreq() ->
+	start_nasreq(#{}, default_transport()).
+
+start_nasreq(CallbackOverrides, Transports) -> 
+    application:ensure_all_started(diameter),
+    SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
+	       {'Origin-Realm', "test-srv.example.com"},
+	       {'Vendor-Id', ?VENDOR_ID_TP},
+	       {'Product-Name', "Server"},
+	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
+					?VENDOR_ID_ETSI,
+					?VENDOR_ID_TP]},
+	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ_AUTH,
+					?DIAMETER_APP_ID_GX,
+					?DIAMETER_APP_ID_RO]},
+	       {'Acct-Application-Id', [?DIAMETER_APP_ID_NASREQ_ACC]},
+	       {'Vendor-Specific-Application-Id',
+		[#'diameter_base_Vendor-Specific-Application-Id'{
+		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
+		    'Auth-Application-Id' = [?DIAMETER_APP_ID_GX]}]},
+	       {restrict_connections, false},
+	       {string_decode, false},
+	       {decode_format, map},
+	       {application, [{alias, nasreq_auth},
+			      {dictionary, ?DIAMETER_DICT_NASREQ_AUTH},
+			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
+	       {application, [{alias, nasreq_acc},
+			      {dictionary, ?DIAMETER_DICT_NASREQ_ACC},
+			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
+	       {application, [{alias, diameter_gx},
+			      {dictionary, ?DIAMETER_DICT_GX},
+			      {module, callback_overrides(diameter_gx, CallbackOverrides, [gx])}]},
+	       {application, [{alias, diameter_gy},
+			      {dictionary, ?DIAMETER_DICT_RO},
+			      {module, callback_overrides(diameter_gy, CallbackOverrides, [gy])}]}],
+    ok = diameter:start_service(?MODULE, SvcOpts),
+    [{ok, _} = diameter:add_transport(?MODULE, {listen, Transport}) || Transport <- Transports],
+    ok.
+
 
 stop() ->
     diameter:stop_service(?MODULE),
@@ -506,3 +536,13 @@ callback_overrides(App, CallbackOverrides, ExtraArgs) ->
 	      AppOverrides
 	     )
     end.
+
+default_transport() ->
+	[[
+	  {transport_module, diameter_tcp},
+	  {transport_config, [
+			      {reuseaddr, true},
+			      {ip, {127,0,0,1}},
+			      {port, 3868}]
+	  }
+	 ]].

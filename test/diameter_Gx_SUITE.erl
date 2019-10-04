@@ -104,7 +104,7 @@ init_per_suite(Config0) ->
 
     meck_init(Config),
 
-    diameter_test_server:start(),
+    diameter_test_server:start_nasreq(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
 
@@ -356,7 +356,7 @@ re_auth_request(Config) ->
 				  StatsTestSrv)),
 
     %% NASREQ ACA
-    ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+    ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
     meck_validate(Config),

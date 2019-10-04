@@ -1,0 +1,178 @@
+;; Copyright 2017, Travelping GmbH <info@travelping.com>
+
+;; This program is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License
+;; as published by the Free Software Foundation; either version
+;; 2 of the License, or (at your option) any later version.
+
+;; It contains AVPs from RFC7155 and from 3GPP TS 29 061 and also ACR/ACA
+
+;;
+;; Edits:
+;;
+;; - Framed-Appletalk-Link      -> Framed-AppleTalk-Link
+;; - Framed-Appletalk-Network   -> Framed-AppleTalk-Network
+;; - Framed-Appletalk-Zone      -> Framed-AppleTalk-Zone
+;;
+
+@id 3
+@name   diameter_3gpp_ts29_061_sgi_acc
+@prefix diameter_sgi_acc
+@vendor 10415 3GPP
+
+@inherits diameter_gen_base_rfc6733
+@inherits diameter_rfc4005_nasreq
+@inherits diameter_rfc4006_cc
+@inherits diameter_3gpp_base
+
+@messages
+
+      ACR ::= <Diameter Header: 271, REQ, PXY>
+              < Session-Id >
+              { Origin-Host }
+              { Origin-Realm }
+              { Destination-Realm }
+              { Accounting-Record-Type }
+              { Accounting-Record-Number }
+              { Acct-Application-Id }
+              [ User-Name ]
+              [ Accounting-Sub-Session-Id ]
+              [ Acct-Session-Id ]
+              [ Acct-Multi-Session-Id ]
+              [ Origin-AAA-Protocol ]
+              [ Origin-State-Id ]
+              [ Destination-Host ]
+              [ Event-Timestamp ]
+              [ Acct-Delay-Time ]
+              [ NAS-Identifier ]
+              [ NAS-IP-Address ]
+              [ NAS-IPv6-Address ]
+              [ NAS-Port ]
+              [ NAS-Port-Id ]
+              [ NAS-Port-Type ]
+            * [ Class ]
+              [ Service-Type ]
+              [ Termination-Cause ]
+              [ Accounting-Input-Octets ]
+              [ Accounting-Input-Packets ]
+              [ Accounting-Output-Octets ]
+              [ Accounting-Output-Packets ]
+              [ Acct-Authentic ]
+              [ Accounting-Auth-Method ]
+              [ Acct-Link-Count ]
+              [ Acct-Session-Time ]
+              [ Acct-Tunnel-Connection ]
+              [ Acct-Tunnel-Packets-Lost ]
+              [ Callback-Id ]
+              [ Callback-Number ]
+              [ Called-Station-Id ]
+              [ Calling-Station-Id ]
+            * [ Connect-Info ]
+              [ Originating-Line-Info ]
+              [ Authorization-Lifetime ]
+              [ Session-Timeout ]
+              [ Idle-Timeout ]
+              [ Port-Limit ]
+              [ Accounting-Realtime-Required ]
+              [ Acct-Interim-Interval ]
+            * [ Filter-Id ]
+            * [ NAS-Filter-Rule ]
+            * [ QoS-Filter-Rule ]
+              [ Framed-AppleTalk-Link ]
+              [ Framed-AppleTalk-Network ]
+              [ Framed-AppleTalk-Zone ]
+              [ Framed-Compression ]
+              [ Framed-Interface-Id ]
+              [ Framed-IP-Address ]
+              [ Framed-IP-Netmask ]
+            * [ Framed-IPv6-Prefix ]
+              [ Framed-IPv6-Pool ]
+            * [ Framed-IPv6-Route ]
+              [ Framed-IPX-Network ]
+              [ Framed-MTU ]
+              [ Framed-Pool ]
+              [ Framed-Protocol ]
+            * [ Framed-Route ]
+              [ Framed-Routing ]
+            * [ Login-IP-Host ]
+            * [ Login-IPv6-Host ]
+              [ Login-LAT-Group ]
+              [ Login-LAT-Node ]
+              [ Login-LAT-Port ]
+              [ Login-LAT-Service ]
+              [ Login-Service ]
+              [ Login-TCP-Port ]
+            * [ Tunneling ]
+            * [ Proxy-Info ]
+            * [ Route-Record ]
+              [ 3GPP-IMSI]
+           ;; [ External-Identifier]                          ;; 3GPP TS 29.336 and 3GPP TS 23.003
+              [ 3GPP-Charging-Id ]
+              [ 3GPP-PDP-Type ]
+              [ 3GPP-CG-Address ]
+              [ 3GPP-GPRS-Negotiated-QoS-Profile ]
+              [ 3GPP-SGSN-Address ]
+              [ 3GPP-GGSN-Address ]
+              [ 3GPP-IMSI-MCC-MNC ]
+              [ 3GPP-GGSN-MCC-MNC ]
+              [ 3GPP-NSAPI ]
+              [ 3GPP-Selection-Mode ]
+              [ 3GPP-Charging-Characteristics ]
+              [ 3GPP-CG-IPv6-Address ]
+              [ 3GPP-SGSN-IPv6-Address ]
+              [ 3GPP-GGSN-IPv6-Address ]
+              [ 3GPP-SGSN-MCC-MNC ]
+              [ 3GPP-IMEISV ]
+              [ 3GPP-RAT-Type ]
+              [ 3GPP-User-Location-Info ]
+              [ 3GPP-MS-TimeZone ]
+              [ 3GPP-CAMEL-Charging-Info ]
+              [ 3GPP-Packet-Filter ]
+              [ 3GPP-Negotiated-DSCP ]
+              [ TWAN-Identifier ]
+              [ 3GPP-User-Location-Info-Time ]
+            * [ AVP ]
+
+      ACA ::= <Diameter Header: 271, PXY>
+              < Session-Id >
+              { Result-Code }
+              { Origin-Host }
+              { Origin-Realm }
+              { Accounting-Record-Type }
+              { Accounting-Record-Number }
+              { Acct-Application-Id }
+              [ User-Name ]
+              [ Accounting-Sub-Session-Id ]
+              [ Acct-Session-Id ]
+              [ Acct-Multi-Session-Id ]
+              [ Event-Timestamp ]
+              [ Error-Message ]
+              [ Error-Reporting-Host ]
+            * [ Failed-AVP ]
+              [ Origin-AAA-Protocol ]
+              [ Origin-State-Id ]
+              [ NAS-Identifier ]
+              [ NAS-IP-Address ]
+              [ NAS-IPv6-Address ]
+              [ NAS-Port ]
+              [ NAS-Port-Id ]
+              [ NAS-Port-Type ]
+              [ Service-Type ]
+              [ Termination-Cause ]
+              [ Accounting-Realtime-Required ]
+              [ Acct-Interim-Interval ]
+            * [ Class ]
+            * [ Proxy-Info ]
+              [ 3GPP-IPv6-DNS-Servers ]
+         ;; * [ External-Identifier]
+            * [ AVP ]
+
+@enum Framed-Protocol
+
+   PPP                            1
+   SLIP                           2
+   ARAP                           3
+   GANDALF                        4
+   XYLOGICS                       5
+   X75                            6
+   GPRS_PDP_CONTEXT               7

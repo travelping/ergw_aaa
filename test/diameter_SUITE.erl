@@ -84,7 +84,7 @@ init_per_suite(Config0) ->
 
     meck_init(Config),
 
-    diameter_test_server:start(),
+    diameter_test_server:start_nasreq(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
     lager_common_test_backend:bounce(debug),
 
@@ -131,9 +131,9 @@ compat(Config) ->
 
     ct:pal("Statistics: ~p", [Statistics]),
     % check that client has sent ACR
-    ?equal(3, proplists:get_value({{1, 271, 1}, send}, Statistics)),
+    ?equal(3, proplists:get_value({{3, 271, 1}, send}, Statistics)),
     % check that client has received ACA
-    ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
+    ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
 
     %% make sure nothing crashed
     meck_validate(Config),
@@ -155,9 +155,9 @@ accounting(Config) ->
 
     ct:pal("Statistics: ~p", [Statistics]),
     % check that client has sent ACR
-    ?equal(3, proplists:get_value({{1, 271, 1}, send}, Statistics)),
+    ?equal(3, proplists:get_value({{3, 271, 1}, send}, Statistics)),
     % check that client has received ACA
-    ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
+    ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Statistics)),
 
     %% make sure nothing crashed
     meck_validate(Config),
@@ -224,7 +224,7 @@ attrs_3gpp(Config) ->
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
-    ?equal(1, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+    ?equal(1, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
     meck_validate(Config),
