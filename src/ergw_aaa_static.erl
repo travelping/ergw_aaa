@@ -73,18 +73,13 @@ to_session({gy, _} = Procedure, SessEvs, Avps) ->
 to_session(_Procedure, {Session, Events}, Avps) ->
     {maps:merge(Session, Avps), Events}.
 
-handle_response(Procedure, #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps,
-		Session0, Events0) ->
+handle_response(Procedure, #{'Result-Code' := Code} = Avps,
+		Session0, Events0)
+  when Code < 3000 ->
     {Session, Events} = to_session(Procedure, {Session0, Events0}, Avps),
     {ok, Session, Events};
-handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events)
-  when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' ->
-    {{fail, Code}, Session, [stop | Events]};
 handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events) ->
-    {{fail, Code}, Session, Events};
-handle_response(_Procedure, Avps, Session, Events)
-  when is_map(Avps) ->
-    {ok, maps:merge(Session, Avps), Events};
+    {{fail, Code}, Session, [stop | Events]};
 handle_response(_Procedure, Response, Session, Events) ->
     lager:error("Response: ~p", [Response]),
     {Response, Session, Events}.

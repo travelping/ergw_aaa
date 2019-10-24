@@ -50,6 +50,8 @@
 
 -define(DefaultOptions, [{function, "undefined"},
 			 {'Destination-Realm', undefined},
+			 {'CC-Session-Failover', supported},
+			 {'Credit-Control-Failure-Handling', terminate},
 			 {answer_if_down, reject},
 			 {answer_if_timeout, reject}]).
 
@@ -97,7 +99,7 @@ invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_INITIAL_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    call(Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -108,7 +110,7 @@ invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_UPDATE_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    call(Request, Session, Events, Opts);
 	ocs_hold ->
 	    handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
 	peer_down ->
@@ -125,7 +127,7 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 	    Session = inc_number(Session1),
 	    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 	    Request = make_CCR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    call(Request, Session, Events, Opts);
 	ocs_hold ->
 	    handle_cca({error, ocs_hold_end}, Session0, Events, Opts);
 	peer_down ->
@@ -136,6 +138,14 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
 
 invoke(Service, Procedure, Session, Events, _Opts) ->
     {{error, {Service, Procedure}}, Session, Events}.
+
+%%%===================================================================
+%%% ergw_aaa_diameter_srv:call wrapper
+%%%===================================================================
+
+call(Request, Session, Events, Opts) ->
+    CCFH = maps:with(['Credit-Control-Failure-Handling', 'CC-Session-Failover'], Session),
+    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, maps:merge(Opts, CCFH)).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -183,6 +193,13 @@ prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
     prepare_request(Pkt, SvcName, Peer, CallOpts).
 
 %% handle_answer/5
+handle_answer(#diameter_packet{msg = [_ | #{'Result-Code' := Code}]},
+	      _, SvcName, Peer, CallOpts)
+  when Code =:= ?'DIAMETER_BASE_RESULT-CODE_TOO_BUSY';
+       Code =:= ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_DELIVER' ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    maybe_retry(Code, SvcName, Peer, CallOpts);
+
 handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['CCR' | _], SvcName, Peer, CallOpts)
   when is_map(Avps) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
@@ -197,7 +214,14 @@ handle_error(Reason, _Request, _SvcName, undefined, CallOpts) ->
     ergw_aaa_diameter_srv:handle_answer(fun handle_cca/4, Reason, CallOpts);
 handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:retry(fun handle_cca/4, Reason, SvcName, Peer, CallOpts).
+    maybe_retry(Reason, SvcName, Peer, CallOpts).
+
+maybe_retry(Reason, SvcName, Peer,
+	    #diam_call{opts = #{'CC-Session-Failover' := supported}} = CallOpts) ->
+    ergw_aaa_diameter_srv:retry(fun handle_cca/4, Reason, SvcName, Peer, CallOpts);
+maybe_retry(Reason, _SvcName, _Peer,
+	    #diam_call{session = Session, events = Events, opts = Opts}) ->
+    handle_cca({error, Reason}, Session, Events, Opts).
 
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->
@@ -218,6 +242,15 @@ validate_option('Destination-Host', Value) when is_binary(Value) ->
 validate_option('Destination-Host', [Value]) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Realm', Value) when is_binary(Value) ->
+    Value;
+validate_option('CC-Session-Failover', Value)
+  when Value =:= supported;
+       Value =:= not_supported ->
+    Value;
+validate_option('Credit-Control-Failure-Handling', Value)
+  when Value =:= terminate;
+       Value =:= continue;
+       Value =:= retry_and_terminate ->
     Value;
 validate_option(answers, Value) when is_map(Value) ->
     Value;
@@ -241,17 +274,14 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-handle_cca(['CCA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0, _Opts) ->
+handle_cca(['CCA' | #{'Result-Code' := Code} = Avps],
+	   Session0, Events0, _Opts)
+  when Code < 3000 ->
     {Session, Events} = to_session({gy, 'CCA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
 handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
-  when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' andalso
-       (Answer =:= 'CCA' orelse Answer =:= 'answer-message') ->
-    {{fail, Code}, Session, [stop | Events]};
-handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events};
+    {{fail, Code}, Session, [stop | Events]};
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
     PeerDownSession = ?set_svc_opt('State', peer_down, Session),
@@ -609,6 +639,23 @@ to_session(Procedure, SessEvs, Avps) ->
     maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
 
 %% to_session/4
+to_session({_, 'CCA'}, 'CC-Session-Failover',
+	   [?'DIAMETER_RO_CC-SESSION-FAILOVER_NOT_SUPPORTED'], {Session, Events}) ->
+    {Session#{'CC-Session-Failover' => not_supported}, Events};
+to_session({_, 'CCA'}, 'CC-Session-Failover',
+	   [?'DIAMETER_RO_CC-SESSION-FAILOVER_SUPPORTED'], {Session, Events}) ->
+    {Session#{'CC-Session-Failover' => supported}, Events};
+
+to_session({_, 'CCA'}, 'Credit-Control-Failure-Handling',
+	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_TERMINATE'], {Session, Events}) ->
+    {Session#{'Credit-Control-Failure-Handling' => terminate}, Events};
+to_session({_, 'CCA'}, 'Credit-Control-Failure-Handling',
+	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_CONTINUE'], {Session, Events}) ->
+    {Session#{'Credit-Control-Failure-Handling' => continue}, Events};
+to_session({_, 'CCA'}, 'Credit-Control-Failure-Handling',
+	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_RETRY_AND_TERMINATE'], {Session, Events}) ->
+    {Session#{'Credit-Control-Failure-Handling' => retry_and_terminate}, Events};
+
 to_session(_, 'Multiple-Services-Credit-Control', Value, {Session, Events}) ->
     MSCCmap = lists:foldl(
 		fun(#{'Rating-Group' := [RG]} = G, M) -> M#{RG => G} end, #{}, Value),

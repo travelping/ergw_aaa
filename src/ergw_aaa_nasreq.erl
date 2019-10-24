@@ -211,13 +211,14 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0, _Opts) ->
+handle_aca(['ACA' | #{'Result-Code' := RC} = Avps],
+	   Session0, Events0, _Opts)
+  when RC < 3000 ->
     {Session, Events} = to_session({nasreq, 'ACA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
-handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
+handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events};
+    {{fail, RC}, Session, [stop | Events]};
 handle_aca({error, _} = Result, Session, Events, _Opts) ->
     {Result, Session, Events}.
 

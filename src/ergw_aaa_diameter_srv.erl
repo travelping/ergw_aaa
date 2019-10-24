@@ -36,6 +36,7 @@
 	 terminate/2, code_change/3]).
 
 -include_lib("diameter/include/diameter.hrl").
+-include("include/ergw_aaa_session.hrl").
 
 -define(SERVER, ?MODULE).
 -define(REQ_LIMIT_TAB, ergw_aaa_diameter_limiter).
@@ -52,15 +53,6 @@
 	       interval    = 0,                     %% refill interval in milliseconds
 	       tokens      = 0
 	      }).
--record(diam_call,{
-		   session = #{},
-		   events = [],
-		   seqno,
-		   tries,
-		   peers_tried = [],
-		   opts,
-		   last_failure
-		  }).
 
 -define(LoadBuckets, 20).
 
