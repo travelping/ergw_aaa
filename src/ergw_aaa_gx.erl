@@ -236,31 +236,39 @@ validate_option_error(Opt, Value) ->
 %%===================================================================
 
 %% handle_cca/4
-handle_cca(['CCA' | #{'Result-Code' := [?'DIAMETER_BASE_RESULT-CODE_SUCCESS']} = Avps],
-	   Session0, Events0, _Opts) ->
-    {Session, Events} = to_session({gx, 'CCA'}, {Session0, Events0}, Avps),
-    {ok, Session, Events};
-handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
-  when Code == ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED' andalso
-       (Answer =:= 'CCA' orelse Answer =:= 'answer-message') ->
-    {{fail, Code}, Session, [stop | Events]};
-handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
-  when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events};
+handle_cca(['answer-message' = Answer | #{'Result-Code' := RC} = AVPs], Session, Events, Opts) ->
+    handle_cca(Answer, RC, AVPs, Session, Events, Opts);
+handle_cca([Answer | #{'Result-Code' := [RC]} = AVPs], Session, Events, Opts) ->
+    handle_cca(Answer, RC, AVPs, Session, Events, Opts);
+handle_cca([Answer |
+	    #{'Experimental-Result' :=
+		  [#{'Vendor-Id' := ?VENDOR_ID_3GPP,
+		     'Experimental-Result-Code' := RC}]} = AVPs],
+	   Session, Events, Opts) ->
+    handle_cca(Answer, RC, AVPs, Session, Events, Opts);
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
+					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
     NewSession = ?set_svc_opt('State', peer_down, Session),
     handle_cca(['CCA' | Avps], NewSession, Events, Opts);
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}),
+					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
     handle_cca(['CCA' | Avps], Session, Events, Opts);
-handle_cca({error, _} = Result, Session, Events, _Opts) ->
+handle_cca(Result, Session, Events, _Opts) ->
     lager:error("CCA Result: ~p", [Result]),
     {Result, Session, [stop | Events]}.
+
+%% handle_cca/5
+handle_cca('CCA', RC, AVPs, Session0, Events0, _Opts)
+  when RC < 3000 ->
+    {Session, Events} = to_session({gy, 'CCA'}, {Session0, Events0}, AVPs),
+    {ok, Session, Events};
+handle_cca(Answer, RC, _AVPs, Session, Events, _Opts)
+  when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
+    {{fail, RC}, Session, [stop | Events]}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
     {Result, ReplyAvps0} =
