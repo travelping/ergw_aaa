@@ -122,6 +122,7 @@
          * [ Proxy-Info ]
          * [ Route-Record ]
            [ Service-Information ]
+           [ 3GPP-IMSI ]
          * [ AVP ]
 
    CCA ::= < Diameter Header: 272, PXY >
