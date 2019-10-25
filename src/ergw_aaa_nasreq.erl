@@ -5,6 +5,17 @@
 %% as published by the Free Software Foundation; either version
 %% 2 of the License, or (at your option) any later version.
 
+%% Notes : 
+%% This module implements split accounting, as described in 
+%% https://tools.ietf.org/html/rfc6733#section-9.3
+%% - TODO : Implement configuration option for coupled accounting
+%% - TODO : Find a "prettier" way to deal with 2 diameter applications
+%% The dictionaries are based on 3GPP TS29.061. One particularity
+%% is that while RFC 7155 (obsoletes RFC 4005) defines the 
+%% Acct-Application-Id as mandatory in the ACR message, the 3GPP
+%% spec defines it as optional. This implementation does NOT 
+%% include this AVP in the ACR message. 
+
 -module(ergw_aaa_nasreq).
 
 -compile({parse_transform, cut}).
@@ -166,12 +177,10 @@ prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]} = Pkt0, SvcName,
 		{_, Caps} = Peer, CallOpts)
   when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
-		   origin_realm = {OR, _},
-		   acct_application_id = {[Ids], _}} = Caps,
+		   origin_realm = {OR, _}} = Caps,
 
     Msg = [T | Avps#{'Origin-Host' => OH,
-		     'Origin-Realm' => OR,
-		     'Acct-Application-Id' => Ids}],
+		     'Origin-Realm' => OR}],
     Pkt = ergw_aaa_diameter_srv:prepare_request(
 	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
@@ -180,12 +189,10 @@ prepare_request(#diameter_packet{msg = ['AAR' = T | Avps]} = Pkt0, SvcName,
 		{_, Caps} = Peer, CallOpts)
   when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
-		   origin_realm = {OR, _},
-		   acct_application_id = {[Ids], _}} = Caps,
+		   origin_realm = {OR, _}} = Caps,
 
     Msg = [T | Avps#{'Origin-Host' => OH,
-		     'Origin-Realm' => OR,
-		     'Auth-Application-Id' => Ids}],
+		     'Origin-Realm' => OR}],
     Pkt = ergw_aaa_diameter_srv:prepare_request(
 	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
@@ -194,12 +201,10 @@ prepare_request(#diameter_packet{msg = ['STR' = T | Avps]} = Pkt0, SvcName,
 		{_, Caps} = Peer, CallOpts)
   when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
-		   origin_realm = {OR, _},
-		   acct_application_id = {[Ids], _}} = Caps,
+		   origin_realm = {OR, _}} = Caps,
 
     Msg = [T | Avps#{'Origin-Host' => OH,
-		     'Origin-Realm' => OR,
-		     'Auth-Application-Id' => Ids}],
+		     'Origin-Realm' => OR}],
     Pkt = ergw_aaa_diameter_srv:prepare_request(
 	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
@@ -455,7 +460,8 @@ create_AAR(Type, Session, Opts) ->
     FramedIP = maps:get('Framed-IP-Address', Session, [<<0,0,0,0>>]),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Request-Type' => Type, 'User-Name' => Username, 
-		   'User-Password' => Password, 'Framed-IP-Address' => FramedIP},
+		   'User-Password' => Password, 'Framed-IP-Address' => FramedIP,
+           'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ_AUTH'},
     % remove 3GPP-GPRS-Negotiated-QoS-Profile until we fix the encoding according to 
     % https://www.etsi.org/deliver/etsi_ts/129000_129099/129061/15.03.00_60/ts_129061v150300p.pdf
     % page 90
