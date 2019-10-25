@@ -636,27 +636,28 @@ apply_answer_config(Answer, Answers, Session, DefaultAnswerApvs) ->
 
 %% to_session/3
 to_session(Procedure, SessEvs, Avps) ->
-    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
+    maps:fold(to_session(Procedure, _, _, Avps, _), SessEvs, Avps).
 
 %% to_session/4
 to_session({_, 'CCA'}, 'CC-Session-Failover',
-	   [?'DIAMETER_RO_CC-SESSION-FAILOVER_NOT_SUPPORTED'], {Session, Events}) ->
+	   [?'DIAMETER_RO_CC-SESSION-FAILOVER_NOT_SUPPORTED'], _, {Session, Events}) ->
     {Session#{'CC-Session-Failover' => not_supported}, Events};
 to_session({_, 'CCA'}, 'CC-Session-Failover',
-	   [?'DIAMETER_RO_CC-SESSION-FAILOVER_SUPPORTED'], {Session, Events}) ->
+	   [?'DIAMETER_RO_CC-SESSION-FAILOVER_SUPPORTED'], _, {Session, Events}) ->
     {Session#{'CC-Session-Failover' => supported}, Events};
 
 to_session({_, 'CCA'}, 'Credit-Control-Failure-Handling',
-	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_TERMINATE'], {Session, Events}) ->
+	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_TERMINATE'], _, {Session, Events}) ->
     {Session#{'Credit-Control-Failure-Handling' => terminate}, Events};
 to_session({_, 'CCA'}, 'Credit-Control-Failure-Handling',
-	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_CONTINUE'], {Session, Events}) ->
+	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_CONTINUE'], _, {Session, Events}) ->
     {Session#{'Credit-Control-Failure-Handling' => continue}, Events};
 to_session({_, 'CCA'}, 'Credit-Control-Failure-Handling',
-	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_RETRY_AND_TERMINATE'], {Session, Events}) ->
+	   [?'DIAMETER_RO_CREDIT-CONTROL-FAILURE-HANDLING_RETRY_AND_TERMINATE'], _, {Session, Events}) ->
     {Session#{'Credit-Control-Failure-Handling' => retry_and_terminate}, Events};
 
-to_session(_, 'Multiple-Services-Credit-Control', Value, {Session, Events}) ->
+to_session(_, 'Multiple-Services-Credit-Control', Value, AVPs, {Session, Events}) ->
+    RC = maps:get('Result-Code', AVPs, ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'),
     MSCCmap = lists:foldl(
 		fun(#{'Rating-Group' := [RG]} = G, M) -> M#{RG => G} end, #{}, Value),
     MSCC = maps:fold(
@@ -666,14 +667,16 @@ to_session(_, 'Multiple-Services-Credit-Control', Value, {Session, Events}) ->
 			     [#{'Rating-Group' => [RatingGroup],
 				'Result-Code' =>
 				    [?'DIAMETER_RO_RESULT-CODE_END_USER_SERVICE_DENIED']} | CC];
+			 #{'Result-Code' := _} = V when RC >= 2000, RC < 3000 ->
+			     [V | CC];
 			 V ->
-			     [V | CC]
+			     [V#{'Result-Code' => [RC]} | CC]
 		     end
 	     end, [], maps:get(credits, Session, #{})),
     {Session, [{update_credits, MSCC} | Events]};
-to_session({_, 'RAR'}, 'Rating-Group', V, {Session, Events}) ->
+to_session({_, 'RAR'}, 'Rating-Group', V, _, {Session, Events}) ->
     {Session, [Events | {report_rating_group, V}]};
-to_session(_, _, _, SessEv) ->
+to_session(_, _, _, _, SessEv) ->
     SessEv.
 
 %% see 3GPP TS 32.299, Sect. 7.1.9 Multiple-Services-Credit-Control AVP
