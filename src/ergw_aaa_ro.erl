@@ -254,6 +254,8 @@ validate_option('Credit-Control-Failure-Handling', Value)
     Value;
 validate_option(answers, Value) when is_map(Value) ->
     Value;
+validate_option(diameter_flavour, Value) when is_atom(Value) ->
+    Value;
 validate_option(answer_if_down, Value) when is_atom(Value) ->
     Value;
 validate_option(answer_if_timeout, Value) when is_atom(Value) ->
@@ -416,8 +418,8 @@ dynamic_address_flag(#{'3GPP-PDP-Type' := 'IPv6',
 dynamic_address_flag(_Session, Avps) ->
     Avps.
 
-from_session('Diameter-Session-Id', SId, M) ->
-    M#{'Session-Id' => SId};
+from_session('Diameter-Session-Id', SId, Avps) ->
+    Avps#{'Session-Id' => SId};
 
 %% 'Node-Id'
 from_session('Username', Value, Avps) when is_binary(Value) ->
@@ -600,12 +602,23 @@ from_session(?MODULE, Value, M) ->
 from_session(_Key, _Value, M) ->
     M.
 
+% The custom 1 diameter flavour is for those who want IMSI in the 3GPP-IMSI in
+% the 3GPP-IMSI AVP in the CCR root
+from_session_custom1('3GPP-IMSI', IMSI, Avps) ->
+    optional(['3GPP-IMSI'], IMSI, Avps);
+from_session_custom1(Key, Value, Avps) ->
+    from_session(Key, Value, Avps).
+
 from_session(Session, Avps0) ->
     Avps1 = optional([?SI_PSI, 'Charging-Characteristics-Selection-Mode'],
 		     ?'DIAMETER_RO_CHARGING-CHARACTERISTICS-SELECTION-MODE_HOME-DEFAULT',
 		     Avps0),
     Avps = dynamic_address_flag(Session, Avps1),
-    maps:fold(fun from_session/3, Avps, Session).
+    Fun = case ?get_svc_opt(diameter_flavour, Session, standard) of
+        custom1 -> fun from_session_custom1/3; 
+        _ -> fun from_session/3
+    end,
+    maps:fold(Fun, Avps, Session).
 
 %% ------------------------------------------------------------------
 
@@ -722,7 +735,8 @@ context_id(_Session) ->
     %% TODO: figure out what servive we are.....
     "14.32251@3gpp.org".
 
-make_CCR(Type, Session, #{now := Now} = Opts) ->
+make_CCR(Type, Session0, #{now := Now} = Opts) ->
+    Session = ?set_svc_opt(diameter_flavour, maps:get(diameter_flavour, Opts, standard), Session0),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Application-Id' => ?DIAMETER_APP_ID_RO,
 		   'CC-Request-Type'     => Type,
