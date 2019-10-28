@@ -96,7 +96,8 @@ invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
 invoke(_Service, authenticate, Session0, Events, Opts) ->
-        Session = ?set_svc_opt('Authorisation', true, Session0),
+        % Combined authentication and authorisation, setting 
+        Session = ?set_svc_opt('Authorized', true, Session0),
         RecType = ?'DIAMETER_SGI_AUTH-REQUEST-TYPE_AUTHORIZE_AUTHENTICATE',
 	    Request = create_AAR(RecType, Session, Opts),
 	    ergw_aaa_diameter_srv:call(?NASREQ_AUTH_APP, Request, Session, Events, Opts);
@@ -137,7 +138,7 @@ invoke(_Service, stop, Session0, Events0, Opts) ->
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
 	    ACRRequest = create_ACR(RecType, Session2, Opts),
 		ACRRes = ergw_aaa_diameter_srv:call(?NASREQ_ACC_APP, ACRRequest, Session2, Events0, Opts),
-        case ?get_svc_opt('Authorisation', Session0, false) of
+        case ?get_svc_opt('Authorized', Session0, false) of
             true ->
         	    STRRequest = create_STR(Session2, Opts),
 	            ergw_aaa_diameter_srv:call(?NASREQ_AUTH_APP, STRRequest, Session2, Events0, Opts);
@@ -484,7 +485,8 @@ create_ACR(Type, Session, #{now := Now} = Opts) ->
 create_STR(Session, Opts) ->
     Cause = maps:get('Termination-Cause', Session, ?'DEFAULT_TERMINATION_CAUSE'),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
-    Avps1 = Avps0#{'Termination-Cause' => Cause},
+    Avps1 = Avps0#{'Termination-Cause' => Cause,
+           'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ_AUTH'},
     Avps = from_session(Session, Avps1),
     ['STR' | Avps].
 
