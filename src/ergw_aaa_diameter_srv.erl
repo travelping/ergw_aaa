@@ -312,7 +312,7 @@ relative_peer_load(Host, _, LM, Peers) ->
 	  tokens      = Tokens} = Peer,
     Load =
 	erlang:floor((Cnt / Cap) * ?LoadBuckets) +
-	erlang:floor(((Rate - Tokens / Rate) * ?LoadBuckets)),
+	erlang:floor(((1.0 - Tokens / Rate) * ?LoadBuckets)),
     maps:update_with(Load, [Host|_], [Host], LM).
 
 %% pick_peer_h/3
@@ -320,7 +320,7 @@ pick_peer_h([], _SvcName, _Peers) ->
     false;
 pick_peer_h(Candidates, _SvcName, Peers) ->
     CandMap = lists:foldl(
-		fun({_, #diameter_caps{origin_host = {OH, _}}} = Peer, CM) ->
+		fun({_, #diameter_caps{origin_host = {_, OH}}} = Peer, CM) ->
 			maps:update_with(OH, [Peer|_], [Peer], CM)
 		end, #{}, Candidates),
     LoadMap = maps:fold(relative_peer_load(_, _, _, Peers), #{}, CandMap),
@@ -329,7 +329,7 @@ pick_peer_h(Candidates, _SvcName, Peers) ->
     Connection = pick_connection(maps:get(lists:nth(N, Cands), CandMap), Peers),
     {ok, Connection}.
 
-start_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {OH, _}}}, Peers0) ->
+start_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Peers0) ->
     Peer0 = maps:get(OH, Peers0, #peer{}),
     Peer = update_bucket(Peer0),
     #peer{outstanding = Cnt,
@@ -344,7 +344,7 @@ start_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {OH, _}}}, Pee
 	    {ok, Peers2}
     end.
 
-finish_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {OH, _}}}, Peers0) ->
+finish_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Peers0) ->
     Peers1 = case Peers0 of
 		 #{PeerRef := _} -> maps:update_with(PeerRef, _ - 1, Peers0);
 		 _               -> Peers0
