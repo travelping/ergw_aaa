@@ -40,6 +40,7 @@
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_session.hrl").
+-include("include/diameter_rfc4005_nasreq.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
 -define(VENDOR_ID_3GPP, 10415).
@@ -49,6 +50,7 @@
 -define(APP, nasreq).
 -define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
 -define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
+-define(DEFAULT_TERMINATION_CAUSE, ?'TERMINATION-CAUSE_PORT_ERROR').
 
 -define(DefaultOptions, [{function, "undefined"},
 			 {'Destination-Realm', undefined}]).
@@ -68,9 +70,9 @@ initialize_service(_ServiceId, #{function := Function}) ->
     SvcOpts =
 	#{'Auth-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
 	  'Acct-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
-	  application => [{alias, ?APP},
-			  {dictionary, ?DIAMETER_DICT_NASREQ},
-			  {module, ?MODULE}]},
+	  application => [[{alias, ?APP},
+			   {dictionary, ?DIAMETER_DICT_NASREQ},
+			   {module, ?MODULE}]]},
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
@@ -86,13 +88,15 @@ validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
 invoke(_Service, init, Session, Events, _Opts) ->
     {ok, Session, Events};
 
-%% TBD:
-%% invoke(_Service, authenticate, Session, Events, _Opts) ->
-%%     {ok, Session, Events};
+invoke(_Service, authenticate, Session0, Events, Opts) ->
+    %% Combined authentication and authorisation, setting
+    Session = ?set_svc_opt('Authorized', true, Session0),
+    RecType = ?'DIAMETER_SGI_AUTH-REQUEST-TYPE_AUTHORIZE_AUTHENTICATE',
+    Request = create_AAR(RecType, Session, Opts),
+    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
 
-%% TBD:
-%% invoke(_Service, authorize, Session, Events, _Opts) ->
-%%     {ok, Session, Events};
+invoke(_Service, authorize, Session, Events, _Opts) ->
+    {ok, Session, Events};
 
 invoke(_Service, start, Session0, Events, Opts) ->
     case ?get_svc_opt('State', Session0, stopped) of
@@ -118,17 +122,24 @@ invoke(_Service, interim, Session0, Events, Opts) ->
 	    {ok, Session0, Events}
     end;
 
-invoke(_Service, stop, Session0, Events, Opts) ->
+invoke(_Service, stop, Session0, Events0, Opts) ->
     lager:debug("Session Stop: ~p", [Session0]),
     case ?get_svc_opt('State', Session0, stopped) of
 	started ->
 	    Session1 = ?set_svc_opt('State', stopped, Session0),
-	    Session = inc_number(Session1),
+	    Session2 = inc_number(Session1),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
-	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    ACRRequest = create_ACR(RecType, Session2, Opts),
+	    ACRRes = ergw_aaa_diameter_srv:call(?APP, ACRRequest, Session2, Events0, Opts),
+	    case ?get_svc_opt('Authorized', Session0, false) of
+		true ->
+		    STRRequest = create_STR(Session2, Opts),
+		    ergw_aaa_diameter_srv:call(?APP, STRRequest, Session2, Events0, Opts);
+		_ -> ok
+	    end,
+	    ACRRes;
 	_ ->
-	    {ok, Session0, Events}
+	    {ok, Session0, Events0}
     end;
 
 invoke(Service, Procedure, Session, Events, _Opts) ->
@@ -170,6 +181,30 @@ prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]} = Pkt0, SvcName,
 	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
 
+prepare_request(#diameter_packet{msg = ['AAR' = T | Avps]} = Pkt0, SvcName,
+		{_, Caps} = Peer, CallOpts)
+  when is_map(Avps) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _}} = Caps,
+
+    Msg = [T | Avps#{'Origin-Host' => OH,
+		     'Origin-Realm' => OR}],
+    Pkt = ergw_aaa_diameter_srv:prepare_request(
+	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
+    ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
+
+prepare_request(#diameter_packet{msg = ['STR' = T | Avps]} = Pkt0, SvcName,
+		{_, Caps} = Peer, CallOpts)
+  when is_map(Avps) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _}} = Caps,
+
+    Msg = [T | Avps#{'Origin-Host' => OH,
+		     'Origin-Realm' => OR}],
+    Pkt = ergw_aaa_diameter_srv:prepare_request(
+	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
+    ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);
+
 prepare_request(Pkt0, SvcName, {_PeerRef, _} = Peer, CallOpts) ->
     Pkt = ergw_aaa_diameter_srv:prepare_request(
 	       Pkt0, SvcName, Peer, CallOpts),
@@ -184,6 +219,16 @@ handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['ACR' | _], SvcName, Pe
   when is_map(Avps) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Msg, CallOpts);
+
+handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['AAR' | _], SvcName, Peer, CallOpts)
+  when is_map(Avps) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    ergw_aaa_diameter_srv:handle_answer(fun handle_aaa/4, Msg, CallOpts);
+
+handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['STR' | _], SvcName, Peer, CallOpts)
+  when is_map(Avps) ->
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    ergw_aaa_diameter_srv:handle_answer(fun handle_sta/4, Msg, CallOpts);
 
 handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
@@ -221,8 +266,17 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-handle_aca(['ACA' | #{'Result-Code' := RC} = Avps],
-	   Session0, Events0, _Opts)
+handle_aaa(['AAA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts)
+  when RC < 3000 ->
+    {Session, Events} = to_session({nasreq, 'AAA'}, {Session0, Events0}, Avps),
+    {ok, Session, Events};
+handle_aaa([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
+  when Answer =:= 'AAA'; Answer =:= 'answer-message' ->
+    {{fail, Code}, Session, Events};
+handle_aaa({error, _} = Result, Session, Events, _Opts) ->
+    {Result, Session, Events}.
+
+handle_aca(['ACA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts)
   when RC < 3000 ->
     {Session, Events} = to_session({nasreq, 'ACA'}, {Session0, Events0}, Avps),
     {ok, Session, Events};
@@ -231,6 +285,9 @@ handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts)
     {{fail, RC}, Session, [stop | Events]};
 handle_aca({error, _} = Result, Session, Events, _Opts) ->
     {Result, Session, Events}.
+
+handle_sta(['STA' | _Avps], Session, Events, _Opts) ->
+    {ok, Session, Events}.
 
 inc_number(Session) ->
     Number = ?get_svc_opt('Accounting-Record-Number', Session, -1) + 1,
@@ -253,7 +310,11 @@ to_session(Procedure, {Session0, Events0}, Avps) ->
 to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
   when is_integer(Interim), Interim > 0 ->
     Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
-    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
+    {Session#{'Acct-Interim-Interval' => Interim}, ergw_aaa_session:ev_set(Trigger, Events)};
+
+to_session(_, 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
+    {Session#{'Framed-IP-Address' => {A,B,C,D}}, Events};
+
 to_session(_, _, _, SessEv) ->
     SessEv.
 
@@ -389,6 +450,17 @@ from_session(_Key, _Value, M) -> M.
 from_session(Session, Avps) ->
     maps:fold(fun from_session/3, Avps, Session).
 
+create_AAR(Type, Session, Opts) ->
+    Username = maps:get('Username', Session, <<>>),
+    Password = maps:get('Password', Session, <<>>),
+    FramedIP = maps:get('Framed-IP-Address', Session, [<<0,0,0,0>>]),
+    Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
+    Avps1 = Avps0#{'Auth-Request-Type' => Type, 'User-Name' => Username,
+		   'User-Password' => Password, 'Framed-IP-Address' => FramedIP,
+		   'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'},
+    Avps = from_session(Session, Avps1),
+    ['AAR' | Avps].
+
 create_ACR(Type, Session, #{now := Now} = Opts) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Accounting-Record-Type' => Type,
@@ -396,3 +468,11 @@ create_ACR(Type, Session, #{now := Now} = Opts) ->
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)]},
     Avps = from_session(Session, Avps1),
     ['ACR' | Avps].
+
+create_STR(Session, Opts) ->
+    Cause = maps:get('Termination-Cause', Session, ?'DEFAULT_TERMINATION_CAUSE'),
+    Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
+    Avps1 = Avps0#{'Termination-Cause' => Cause,
+		   'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'},
+    Avps = from_session(Session, Avps1),
+    ['STR' | Avps].
