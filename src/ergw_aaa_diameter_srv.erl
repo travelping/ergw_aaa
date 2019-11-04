@@ -330,8 +330,7 @@ pick_peer_h(Candidates, _SvcName, Peers) ->
     {ok, Connection}.
 
 start_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Peers0) ->
-    Peer0 = maps:get(OH, Peers0, #peer{}),
-    Peer = update_bucket(Peer0),
+    Peer = get_peer(OH, Peers0),
     #peer{outstanding = Cnt,
 	  capacity    = Cap,
 	  tokens      = Tokens} = Peer,
