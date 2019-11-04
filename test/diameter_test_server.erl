@@ -178,16 +178,14 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 		   origin_realm = {OR, _}} = Caps,
     #{'Session-Id' := Id,
       'Accounting-Record-Type' := Type,
-      'Accounting-Record-Number' := Number,
-      'Acct-Application-Id' := AppId} = Msg,
+      'Accounting-Record-Number' := Number} = Msg,
     ACA =  #{'Session-Id' => Id,
 	     'Result-Code' => 2001,
 	     'Origin-Host' => OH,
 	     'Origin-Realm' => OR,
 	     'Acct-Interim-Interval' => [InterimAccounting],
 	     'Accounting-Record-Type' => Type,
-	     'Accounting-Record-Number' => Number,
-	     'Acct-Application-Id' => AppId},
+	     'Accounting-Record-Number' => Number},
     case check_3gpp(Msg) of
 	Result when Result =:= ok;
 		    Result =:= {ok, no_imsi} ->
