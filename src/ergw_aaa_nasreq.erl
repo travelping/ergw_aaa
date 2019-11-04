@@ -5,6 +5,16 @@
 %% as published by the Free Software Foundation; either version
 %% 2 of the License, or (at your option) any later version.
 
+%% Notes :
+%% The dictionaries are based on 3GPP TS29.061. One particularity
+%% is that while RFC 7155 (obsoletes RFC 4005) defines the
+%% Acct-Application-Id as mandatory in the ACR message, the 3GPP
+%% spec defines it as optional.
+%% According to RFC 7155, Sect. 1.1 the Acct-Application-Id was
+%% already mandatory (see the RFC for an explanation). In order
+%% to be more compatible this application defines the Id as
+%% optional and alays fills it in requests and answers
+
 -module(ergw_aaa_nasreq).
 
 -compile({parse_transform, cut}).
@@ -151,11 +161,11 @@ prepare_request(#diameter_packet{msg = ['ACR' = T | Avps]} = Pkt0, SvcName,
   when is_map(Avps) ->
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _},
-		   acct_application_id = {[Ids], _}} = Caps,
+		   acct_application_id = {[AcctAppId|_], _}} = Caps,
 
     Msg = [T | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
-		     'Acct-Application-Id' => Ids}],
+		     'Acct-Application-Id' => [AcctAppId]}],
     Pkt = ergw_aaa_diameter_srv:prepare_request(
 	    Pkt0#diameter_packet{msg = Msg}, SvcName, Peer, CallOpts),
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer);

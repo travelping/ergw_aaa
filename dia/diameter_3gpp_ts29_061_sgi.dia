@@ -34,7 +34,7 @@
               { Destination-Realm }
               { Accounting-Record-Type }
               { Accounting-Record-Number }
-              { Acct-Application-Id }
+              [ Acct-Application-Id ]
               [ User-Name ]
               [ Accounting-Sub-Session-Id ]
               [ Acct-Session-Id ]
@@ -140,7 +140,7 @@
               { Origin-Realm }
               { Accounting-Record-Type }
               { Accounting-Record-Number }
-              { Acct-Application-Id }
+              [ Acct-Application-Id ]
               [ User-Name ]
               [ Accounting-Sub-Session-Id ]
               [ Acct-Session-Id ]
