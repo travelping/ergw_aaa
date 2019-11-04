@@ -18,7 +18,9 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
 
--export([start/0, start/2, stop/0,
+-export([start/0, start/2,
+	 start_nasreq/0, start_nasreq/2,
+	 stop/0,
 	 abort_session_request/4,
 	 re_auth_request/5]).
 
@@ -55,17 +57,44 @@
 %%===================================================================
 
 start() ->
-    DefaultTransports =
-	[[
-	  {transport_module, diameter_tcp},
-	  {transport_config, [
-			      {reuseaddr, true},
-			      {ip, {127,0,0,1}}]
-	  }
-	 ]],
-    start(#{}, DefaultTransports).
+    start(#{}, default_transport()).
 
 start(CallbackOverrides, Transports) ->
+    application:ensure_all_started(diameter),
+    SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
+	       {'Origin-Realm', "test-srv.example.com"},
+	       {'Vendor-Id', ?VENDOR_ID_TP},
+	       {'Product-Name', "Server"},
+	       {'Supported-Vendor-Id', [?VENDOR_ID_3GPP,
+					?VENDOR_ID_ETSI,
+					?VENDOR_ID_TP]},
+	       {'Auth-Application-Id', [?DIAMETER_APP_ID_GX, ?DIAMETER_APP_ID_RO]},
+	       {'Acct-Application-Id', [?DIAMETER_APP_ID_RF]},
+	       {'Vendor-Specific-Application-Id',
+		[#'diameter_base_Vendor-Specific-Application-Id'{
+		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
+		    'Auth-Application-Id' = [?DIAMETER_APP_ID_GX]}]},
+	       {restrict_connections, false},
+	       {string_decode, false},
+	       {decode_format, map},
+	       {application, [{alias, diameter_gx},
+			      {dictionary, ?DIAMETER_DICT_GX},
+			      {module, callback_overrides(diameter_gx, CallbackOverrides, [gx])}]},
+	       {application, [{alias, diameter_gy},
+			      {dictionary, ?DIAMETER_DICT_RO},
+			      {module, callback_overrides(diameter_gy, CallbackOverrides, [gy])}]},
+	       {application, [{alias, diameter_rf},
+			      {dictionary, ?DIAMETER_DICT_RF},
+			      {module, callback_overrides(diameter_rf, CallbackOverrides, [rf])}]}],
+    ok = diameter:start_service(?MODULE, SvcOpts),
+
+    [{ok, _} = diameter:add_transport(?MODULE, {listen, Transport}) || Transport <- Transports],
+    ok.
+
+start_nasreq() ->
+    start_nasreq(#{}, default_transport()).
+
+start_nasreq(CallbackOverrides, Transports) ->
     application:ensure_all_started(diameter),
     SvcOpts = [{'Origin-Host', "server.test-srv.example.com"},
 	       {'Origin-Realm', "test-srv.example.com"},
@@ -77,7 +106,7 @@ start(CallbackOverrides, Transports) ->
 	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
 					?DIAMETER_APP_ID_GX,
 					?DIAMETER_APP_ID_RO]},
-	       {'Acct-Application-Id', [?DIAMETER_APP_ID_RF]},
+	       {'Acct-Application-Id', [?DIAMETER_APP_ID_NASREQ]},
 	       {'Vendor-Specific-Application-Id',
 		[#'diameter_base_Vendor-Specific-Application-Id'{
 		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -93,10 +122,7 @@ start(CallbackOverrides, Transports) ->
 			      {module, callback_overrides(diameter_gx, CallbackOverrides, [gx])}]},
 	       {application, [{alias, diameter_gy},
 			      {dictionary, ?DIAMETER_DICT_RO},
-			      {module, callback_overrides(diameter_gy, CallbackOverrides, [gy])}]},
-	       {application, [{alias, diameter_rf},
-			      {dictionary, ?DIAMETER_DICT_RF},
-			      {module, callback_overrides(diameter_rf, CallbackOverrides, [rf])}]}],
+			      {module, callback_overrides(diameter_gy, CallbackOverrides, [gy])}]}],
     ok = diameter:start_service(?MODULE, SvcOpts),
 
     [{ok, _} = diameter:add_transport(?MODULE, {listen, Transport}) || Transport <- Transports],
@@ -193,6 +219,42 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	_ ->
 	    {answer_message, 5005}
     end;
+
+handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extra)
+  when is_map(Msg) ->
+    InterimAccounting = 1800,
+    AuthLifeTime = 3600,
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _}} = Caps,
+    #{'Session-Id' := Id,
+      'Auth-Request-Type' := Type,
+      'Auth-Application-Id' := AppId} = Msg,
+    FramedIP = case maps:get('Framed-IP-Address', Msg, [<<0,0,0,0>>]) of
+		   [<<0,0,0,0>>] -> [<<10,106,14,227>>];
+		   FramedIPReq -> FramedIPReq
+	       end,
+    AAA =  #{'Session-Id' => Id,
+	     'Result-Code' => 2001,
+	     'Origin-Host' => OH,
+	     'Origin-Realm' => OR,
+	     'Acct-Interim-Interval' => [InterimAccounting],
+	     'Authorization-Lifetime' => [AuthLifeTime],
+	     'Framed-IP-Address' => FramedIP,
+	     'Auth-Request-Type' => Type,
+	     'Auth-Application-Id' => AppId},
+    {reply, ['AAA' | AAA]};
+
+handle_request(#diameter_packet{msg = ['STR' | Msg]}, _SvcName, {_, Caps}, _Extra)
+  when is_map(Msg) ->
+    #diameter_caps{origin_host = {OH, _},
+		   origin_realm = {OR, _}} = Caps,
+    #{'Session-Id' := Id} = Msg,
+    STA =  #{'Session-Id' => Id,
+	     'Result-Code' => 2001,
+	     'Origin-Host' => OH,
+	     'Origin-Realm' => OR},
+    {reply, ['STA' | STA]};
+
 
 handle_request(#diameter_packet{
 		  msg = ['CCR' |
@@ -465,3 +527,10 @@ callback_overrides(App, CallbackOverrides, ExtraArgs) ->
 	      AppOverrides
 	     )
     end.
+
+default_transport() ->
+    [[{transport_module, diameter_tcp},
+      {transport_config, [
+			  {reuseaddr, true},
+			  {ip, {127,0,0,1}}]}
+     ]].

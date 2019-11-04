@@ -188,6 +188,9 @@ merge_svc(K, V, Opts)
        K =:= 'Acct-Application-Id';
        K =:= 'Vendor-Specific-Application-Id' ->
     svc_set(K, V, Opts);
+merge_svc(K, [V1|_] = V, Opts)
+  when K =:= application, is_list(V1) ->
+    svc_set(K, V, Opts);
 merge_svc(K, V, Opts)
   when K =:= application, is_list(V) ->
     svc_set(K, [V], Opts).
