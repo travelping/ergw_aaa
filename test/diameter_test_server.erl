@@ -354,7 +354,7 @@ handle_request(#diameter_packet{msg = _Msg}, _SvcName, _, _Extra) ->
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
 check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
-	     '3GPP-Charging-Id'       := [<<214, 208, 226, 238>>],
+	     '3GPP-Charging-Id'       := [3604013806],
 	     '3GPP-PDP-Type'          := [0],
 	     '3GPP-SGSN-Address'      := [<<192, 168, 1, 1>>],
 	     '3GPP-IMSI-MCC-MNC'      := [<<"25999">>],

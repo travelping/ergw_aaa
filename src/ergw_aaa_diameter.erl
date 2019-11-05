@@ -220,99 +220,47 @@ build_transport_caps(_, _, Caps) ->
 %% 3GPP IE
 %%===================================================================
 
-format_address({A, B, C, D}) -> <<A, B, C, D>>;
-format_address({A, B, C, D, E, F, G, H}) ->
-    <<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>;
-format_address(Addr) -> Addr.
-
-pdp_type('IPv4')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4';
-pdp_type('IPv6')                    -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV6';
-pdp_type('IPv4v6')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_IPV4V6';
-pdp_type('PPP')                     -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP';
-pdp_type('Non-IP')                  -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_NON-IP';
-pdp_type(_)                         -> ?'DIAMETER_SGI_3GPP-PDP-TYPE_PPP'.
-
 '3gpp_from_session'(Key, Value)
   when (Key =:= '3GPP-Charging-Gateway-Address' orelse
 	Key =:= '3GPP-SGSN-Address' orelse
 	Key =:= '3GPP-GGSN-Address') andalso
        ?IS_IPv4(Value) ->
-    format_address(Value);
+    ergw_aaa_3gpp_dict:ip2bin(Value);
 
 '3gpp_from_session'(Key, Value)
   when (Key =:= '3GPP-Charging-Gateway-IPv6-Address' orelse
 	Key =:= '3GPP-SGSN-IPv6-Address' orelse
 	Key =:= '3GPP-GGSN-IPv6-Address') andalso
        ?IS_IPv6(Value) ->
-    format_address(Value);
-
-'3gpp_from_session'('3GPP-IPv6-DNS-Servers', Value)
-  when is_list(Value) ->
-    << <<(format_address(IP))/binary>> || IP <- Value >>;
-'3gpp_from_session'('3GPP-IPv6-DNS-Servers', Value)
-  when is_binary(Value) ->
-    Value;
-
-'3gpp_from_session'('3GPP-Teardown-Indicator', true) ->
-    <<1>>;
-'3gpp_from_session'('3GPP-Teardown-Indicator', <<_:7, 1:1>>) ->
-    <<1>>;
-'3gpp_from_session'('3GPP-Teardown-Indicator', Value)
-  when is_integer(Value) ->
-    << (Value rem 2) >>;
-'3gpp_from_session'('3GPP-Teardown-Indicator', _Value) ->
-    <<0>>;
-
-'3gpp_from_session'('3GPP-Session-Stop-Indicator', true) ->
-    <<255>>;
-'3gpp_from_session'('3GPP-Session-Stop-Indicator', Value)
-  when is_integer(Value), Value /= 0 ->
-    <<255>>;
-'3gpp_from_session'('3GPP-Session-Stop-Indicator', Value)
-  when is_binary(Value) ->
-    Value;
-'3gpp_from_session'('3GPP-Session-Stop-Indicator', _Value) ->
-    <<0>>;
+    ergw_aaa_3gpp_dict:ip2bin(Value);
 
 '3gpp_from_session'(Key, Value)
-  when Key =:= '3GPP-RAT-Type'
-       andalso is_integer(Value) ->
-    <<Value>>;
+  when Key =:= '3GPP-PDP-Type';
+       Key =:= '3GPP-GPRS-Negotiated-QoS-Profile';
+       Key =:= '3GPP-NSAPI';
+       Key =:= '3GPP-Session-Stop-Indicator';
+       Key =:= '3GPP-Selection-Mode';
+       Key =:= '3GPP-Charging-Characteristics';
+       Key =:= '3GPP-IPv6-DNS-Servers';
+       Key =:= '3GPP-Teardown-Indicator';
+       Key =:= '3GPP-RAT-Type';
+       Key =:= '3GPP-MS-TimeZone';
+       Key =:= '3GPP-Allocate-IP-Type';
+       Key =:= '3GPP-Secondary-RAT-Usage' ->
+    ergw_aaa_3gpp_dict:encode(Key, Value);
 
 '3gpp_from_session'(Key, Value)
-  when Key =:= '3GPP-Charging-Id'
-       andalso is_integer(Value) ->
-    <<Value:32>>;
-
-'3gpp_from_session'(Key, Value)
-  when Key =:= '3GPP-Camel-Charging' orelse
-       Key =:= '3GPP-IMSI' orelse
-       Key =:= '3GPP-GPRS-Negotiated-QoS-Profile' orelse
-       Key =:= '3GPP-IMSI-MCC-MNC' orelse
-       Key =:= '3GPP-GGSN-MCC-MNC' orelse
-       Key =:= '3GPP-SGSN-MCC-MNC' orelse
-       Key =:= '3GPP-IMEISV' orelse
-       Key =:= '3GPP-User-Location-Info' orelse
-       Key =:= '3GPP-Packet-Filter' orelse
+  when Key =:= '3GPP-Charging-Id';
+       Key =:= '3GPP-Camel-Charging';
+       Key =:= '3GPP-IMSI';
+       Key =:= '3GPP-IMSI-MCC-MNC';
+       Key =:= '3GPP-GGSN-MCC-MNC';
+       Key =:= '3GPP-SGSN-MCC-MNC';
+       Key =:= '3GPP-IMEISV';
+       Key =:= '3GPP-User-Location-Info';
+       Key =:= '3GPP-Packet-Filter';
        Key =:= '3GPP-Negotiated-DSCP' ->
-    Value;
-
-'3gpp_from_session'('3GPP-PDP-Type', Value) ->
-    pdp_type(Value);
-
-'3gpp_from_session'('3GPP-MS-TimeZone', {A, B}) ->
-    <<A, B>>;
-
-'3gpp_from_session'('3GPP-Charging-Characteristics', Value)
-  when is_binary(Value) ->
-    erlang:iolist_to_binary([io_lib:format("~2.16.0B", [X]) || <<X>> <= Value]);
-
-'3gpp_from_session'(Key, Value)
-  when (Key =:= '3GPP-NSAPI' orelse
-	Key =:= '3GPP-Selection-Mode') andalso
-       is_integer(Value) ->
-    erlang:integer_to_binary(Value, 16).
-
+    Value.
 
 arp_from_session('Priority-Level' = Key, PL, ARP) ->
     ARP#{Key => PL};
