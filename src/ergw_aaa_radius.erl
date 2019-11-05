@@ -349,73 +349,52 @@ session_options('Acct-Authentic', 'Diameter', Attrs) ->
     [{?Acct_Authentic, 4}|Attrs];
 
 %% 3GPP TS 29.061 Attributes
-session_options('3GPP-IMSI', Value, ACC) ->
-    [{?X_3GPP_IMSI, Value}|ACC];
+session_options('3GPP-IMSI', Value, Attrs) ->
+    [{?X_3GPP_IMSI, Value}|Attrs];
 session_options('3GPP-Charging-Id', Value, Attrs) ->
     [{?X_3GPP_Charging_ID, Value}|Attrs];
-
-session_options('3GPP-PDP-Type', 'IPv4', Attrs) ->
-    [{?X_3GPP_PDP_Type, 0}|Attrs];
-session_options('3GPP-PDP-Type', 'IPv6', Attrs) ->
-    [{?X_3GPP_PDP_Type, 2}|Attrs];
-session_options('3GPP-PDP-Type', 'IPv4v6', Attrs) ->
-    [{?X_3GPP_PDP_Type, 3}|Attrs];
-session_options('3GPP-PDP-Type', 'PPP', Attrs) ->
-    [{?X_3GPP_PDP_Type, 1}|Attrs];
-session_options('3GPP-PDP-Type', 'Non-IP', Attrs) ->
-    [{?X_3GPP_PDP_Type, 4}|Attrs];
-
+session_options('3GPP-PDP-Type' = Key, Value, Attrs) ->
+    [{?X_3GPP_PDP_Type, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-Charging-Gateway-Address', Value, Attrs) ->
     [{?X_3GPP_Charging_Gateway_Address, Value}|Attrs];
-session_options('3GPP-GPRS-Negotiated-QoS-Profile', QoS, Attrs) ->
-    Value0 = iolist_to_binary([io_lib:format("~2.16.0B", [X]) || <<X>> <= QoS ]),
-    Value =
-	case byte_size(QoS) of
-	    3  -> ["98", Value0];
-	    11 -> ["99", Value0];
-	    14 -> ["05", Value0];
-	    _  -> ["07", Value0]
-	end,
-    [{?X_3GPP_GPRS_Negotiated_QoS_profile, Value}|Attrs];
-
-
+session_options('3GPP-GPRS-Negotiated-QoS-Profile' = Key, Value, Attrs) ->
+    [{?X_3GPP_GPRS_Negotiated_QoS_profile, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-SGSN-Address', Value, Attrs) ->
     [{?X_3GPP_SGSN_Address, Value}|Attrs];
 session_options('3GPP-GGSN-Address', Value, Attrs) ->
     [{?X_3GPP_GGSN_Address, Value}|Attrs];
-session_options('3GPP-IMSI-MCC-MNC', Value, ACC) ->
-    [{?X_3GPP_IMSI_MCC_MNC, Value}|ACC];
-session_options('3GPP-GGSN-MCC-MNC', Value, ACC) ->
-    [{?X_3GPP_GGSN_MCC_MNC, Value}|ACC];
-session_options('3GPP-NSAPI', Value, ACC) ->
-    [{?X_3GPP_NSAPI, io_lib:format("~1.16B", [Value])}|ACC];
-session_options('3GPP-Session-Stop-Indicator', Value, Attrs) ->
-    [{?X_3GPP_Session_Stop_Indicator, Value}|Attrs];
-session_options('3GPP-Selection-Mode', Value, Attrs) ->
-    [{?X_3GPP_Selection_Mode, io_lib:format("~1.16B", [Value])}|Attrs];
-session_options('3GPP-Charging-Characteristics', Value, Attrs) ->
-    Hex = [ io_lib:format("~2.16.0B", [X]) || <<X>> <= Value ],
-    [{?X_3GPP_Charging_Characteristics, Hex}|Attrs];
+session_options('3GPP-IMSI-MCC-MNC', Value, Attrs) ->
+    [{?X_3GPP_IMSI_MCC_MNC, Value}|Attrs];
+session_options('3GPP-GGSN-MCC-MNC', Value, Attrs) ->
+    [{?X_3GPP_GGSN_MCC_MNC, Value}|Attrs];
+session_options('3GPP-NSAPI' = Key, Value, Attrs) ->
+    [{?X_3GPP_NSAPI, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
+session_options('3GPP-Session-Stop-Indicator' = Key, Value, Attrs) ->
+    [{?X_3GPP_Session_Stop_Indicator, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
+session_options('3GPP-Selection-Mode' = Key, Value, Attrs) ->
+    [{?X_3GPP_Selection_Mode, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
+session_options('3GPP-Charging-Characteristics' = Key, Value, Attrs) ->
+    [{?X_3GPP_Charging_Characteristics, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-Charging-Gateway-IPv6-Address', Value, Attrs) ->
     [{?X_3GPP_Charging_Gateway_IPv6_Address, Value}|Attrs];
 session_options('3GPP-SGSN-IPv6-Address', Value, Attrs) ->
     [{?X_3GPP_SGSN_IPv6_Address, Value}|Attrs];
 session_options('3GPP-GGSN-IPv6-Address', Value, Attrs) ->
     [{?X_3GPP_GGSN_IPv6_Address, Value}|Attrs];
-session_options('3GPP-IPv6-DNS-Servers', Value, Attrs) ->
-    [{?X_3GPP_IPv6_DNS_Servers, Value}|Attrs];
-session_options('3GPP-SGSN-MCC-MNC', Value, ACC) ->
-    [{?X_3GPP_SGSN_MCC_MNC, Value}|ACC];
-session_options('3GPP-Teardown-Indicator', Value, Attrs) ->
-    [{?X_3GPP_Teardown_Indicator, Value}|Attrs];
-session_options('3GPP-IMEISV', Value, ACC) ->
-    [{?X_3GPP_IMEISV, Value}|ACC];
-session_options('3GPP-RAT-Type', Value, Attrs) ->
-    [{?X_3GPP_RAT_Type, Value}|Attrs];
+session_options('3GPP-IPv6-DNS-Servers' = Key, Value, Attrs) ->
+    [{?X_3GPP_IPv6_DNS_Servers, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
+session_options('3GPP-SGSN-MCC-MNC', Value, Attrs) ->
+    [{?X_3GPP_SGSN_MCC_MNC, Value}|Attrs];
+session_options('3GPP-Teardown-Indicator' = Key, Value, Attrs) ->
+    [{?X_3GPP_Teardown_Indicator, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
+session_options('3GPP-IMEISV', Value, Attrs) ->
+    [{?X_3GPP_IMEISV, Value}|Attrs];
+session_options('3GPP-RAT-Type' = Key, Value, Attrs) ->
+    [{?X_3GPP_RAT_Type, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-User-Location-Info', Value, Attrs) ->
     [{?X_3GPP_User_Location_Info, Value}|Attrs];
-session_options('3GPP-MS-TimeZone', {TZ, DST}, Attrs) ->
-    [{?X_3GPP_MS_TimeZone, <<TZ:8, DST:8>>}|Attrs];
+session_options('3GPP-MS-TimeZone' = Key, Value, Attrs) ->
+    [{?X_3GPP_MS_TimeZone, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-Camel-Charging', Value, Attrs) ->
     [{?X_3GPP_Camel_Charging, Value}|Attrs];
 session_options('3GPP-Packet-Filter', Value, Attrs) ->
@@ -683,6 +662,12 @@ to_session_opts(_Attr, 'Access-Rule', Value, SOpts) ->
 
 to_session_opts(_Attr, Key, Value, SOpts)
   when
+      %% 3GPP TS 29.061 Attributes
+      Key =:= '3GPP-IPv6-DNSServers' ->
+    SOpts#{Key => ergw_aaa_3gpp_dict:decode(Key, Value)};
+
+to_session_opts(_Attr, Key, Value, SOpts)
+  when
       %% Generic Attributes
       Key =:= 'Class';
       Key =:= 'State';
@@ -692,8 +677,6 @@ to_session_opts(_Attr, Key, Value, SOpts)
       Key =:= 'Idle-Timeout';
       Key =:= 'Framed-IP-Address';
       Key =:= 'Framed-Interface-Id';
-      %% 3GPP TS 29.061 Attributes
-      %% TODO: 3GPP-Ipv6-DNSServers
       %% Microsoft MPPE Keys
       Key =:= 'MS-MPPE-Send-Key';
       Key =:= 'MS-MPPE-Recv-Key';
