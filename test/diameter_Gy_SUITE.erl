@@ -122,7 +122,10 @@ all() ->
     [simple_session, simple_session_async,
      abort_session_request, tarif_time_change,
      ocs_hold_initial_timeout, ocs_hold_update_timeout,
-     ccr_retry, ccr_t_rate_limit].
+     ccr_retry,
+     %% ccr_t_rate_limit
+     rate_limit
+    ].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -511,6 +514,41 @@ ccr_retry(Config) ->
     ?CLEAR_TC_INFO(),
     ok.
 
+rate_limit(_Config) ->
+    Self = self(),
+
+    CollectFun =
+	fun CollectFun(_, [], Acc) ->
+		Acc;
+	    CollectFun(Key, [H|T], Acc) ->
+		receive
+		    {H, Key, {R, _, _}} ->
+			maps:update_with(R, fun(X) -> X + 1 end, 1, CollectFun(Key, T, Acc))
+		end
+	end,
+
+    %% make sure the token bucket is completely filled, previous test might have drained it
+    ct:sleep(2000),
+
+    %% with 4 peers, a rate limit at 10 req/s and 2 retries (= 3 attempts max) we should
+    %% be able to get 40 requests through
+    SRefs = [begin Ref = make_ref(), spawn(?MODULE, async_session, [Self, Ref]), Ref end
+	     || _ <- lists:seq(1, 60)],
+
+    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
+	     when OkayI >= 40 andalso
+		  LimitI /= 0 andalso
+		  OkayI + LimitI =:= 60,
+	   CollectFun('CCR-Initial', SRefs, #{})),
+    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
+	     when OkayT >= 40 andalso
+		  LimitT /= 0 andalso
+		  OkayT + LimitT =:= 60,
+	   CollectFun('CCR-Terminate', SRefs, #{})),
+    ok.
+
+ccr_t_rate_limit() ->
+    [{doc, "older version of the rate limit test, does not work, keep for reference"}].
 ccr_t_rate_limit(Config) ->
     %% this test is somewhat trickier : we need to generate sessions with a rate independent
     %% from separate processes to avoid dependency on rate limiter settings. Also it should
@@ -676,6 +714,32 @@ basic_session(CCR_I_T_Delay) ->
 	end,
     set_test_info(ccr_t_rate_limit, {session, SId}, Result).
 
+async_session(Owner, Ref) ->
+    async_session(Owner, Ref, 1100).
+
+async_session(Owner, Ref, Delay) ->
+    Session = init_session(#{}, []),
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    GyOpts = #{credits => #{1000 => empty}},
+    IResult = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+    Owner ! {Ref, 'CCR-Initial', IResult},
+
+    timer:sleep(Delay),
+    UsedCredits =
+	[{1000, #{'CC-Input-Octets'  => [0],
+		  'CC-Output-Octets' => [0],
+		  'CC-Time'          => [60],
+		  'CC-Total-Octets'  => [0],
+		  'Reporting-Reason' =>
+		      [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_FINAL']}
+	 }],
+    GyTerm = #{'Termination-Cause' =>
+		   ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       used_credits => UsedCredits},
+    TResult = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+    Owner ! {Ref, 'CCR-Terminate', TResult},
+
+    ok.
 
 %%%===================================================================
 %%% Test server request handler override
