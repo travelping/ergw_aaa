@@ -60,13 +60,10 @@ start() ->
 	  {transport_module, diameter_tcp},
 	  {transport_config, [
 			      {reuseaddr, true},
-			      {ip, {127,0,0,1}},
-			      {port, 3868}]
+			      {ip, {127,0,0,1}}]
 	  }
 	 ]],
     start(#{}, DefaultTransports).
-
-
 
 start(CallbackOverrides, Transports) ->
     application:ensure_all_started(diameter),

@@ -38,16 +38,16 @@
 	 {'Service-Type',          'Framed-User'}]).
 
 -define(DIAMETER_TRANSPORTS,
-	[[{connect_to, <<"aaa://127.0.0.1:3870">>}],
-	 [{connect_to, <<"aaa://127.0.0.1:3971">>}],
-	 [{connect_to, <<"aaa://127.0.0.1:3872">>}],
-	 [{connect_to, <<"aaa://127.0.0.1:3873">>}]]).
+	[[{connect_to, <<"aaa://127.0.10.10">>}],
+	 [{connect_to, <<"aaa://127.0.10.20">>}],
+	 [{connect_to, <<"aaa://127.0.10.30">>}],
+	 [{connect_to, <<"aaa://127.0.10.40">>}]]).
 
 -define(TEST_SERVER_TRANSPORTS,
-	[{3870, "server1.test-srv.example.com"},
-	 {3871, "server2.test-srv.example.com"},
-	 {3872, "server3.test-srv.example.com"},
-	 {3873, "server4.test-srv.example.com"}]).
+	[{{127, 0, 10, 10}, "server1.test-srv.example.com"},
+	 {{127, 0, 10, 20}, "server2.test-srv.example.com"},
+	 {{127, 0, 10, 30}, "server3.test-srv.example.com"},
+	 {{127, 0, 10, 40}, "server4.test-srv.example.com"}]).
 
 -define(TEST_SERVER_CALLBACK_OVERRIDE,
 	#{diameter_gy => [{handle_request, {?MODULE, test_server_request, []}}]}).
@@ -138,9 +138,8 @@ init_per_suite(Config0) ->
 	[[{transport_module, diameter_tcp},
 	  {capabilities, [{'Origin-Host', Host}]},
 	  {transport_config,
-	   [{reuseaddr, true}, {ip, {127, 0, 0, 1}},
-	    {port, Port}]}]
-	 || {Port, Host} <- ?TEST_SERVER_TRANSPORTS],
+	   [{reuseaddr, true}, {ip, IP}]}]
+	 || {IP, Host} <- ?TEST_SERVER_TRANSPORTS],
 
     diameter_test_server:start(?TEST_SERVER_CALLBACK_OVERRIDE, TestTransports),
     {ok, _} = application:ensure_all_started(ergw_aaa),
