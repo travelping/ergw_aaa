@@ -91,12 +91,23 @@ get_cfg_value([H|T], Config) ->
 wait_for_diameter(_SvcName, 0) ->
     "DIAMETER connection failed";
 wait_for_diameter(SvcName, Cnt) ->
-    case diameter:service_info(SvcName, connections) of
-	[] ->
-	    ct:sleep(100),
-	    wait_for_diameter(SvcName, Cnt - 1);
+    [{transport, T}] = diameter:service_info(SvcName, [transport]),
+    State =
+	lists:foldl(
+	  fun(X, {Cs, Okay} = Acc) ->
+		  case {proplists:get_value(type, X),
+			proplists:get_value(watchdog, X, undefined)} of
+		      {connect, {_, _, okay}} -> {Cs + 1, Okay + 1};
+		      {connect, _}            -> {Cs + 1, Okay};
+		      _                       -> Acc
+		  end
+	  end, {0, 0}, T),
+    case State of
+	{Cs, Cs} ->
+	    ok;
 	_ ->
-	    ok
+	    ct:sleep(100),
+	    wait_for_diameter(SvcName, Cnt - 1)
     end.
 
 %% pretty_print(Record) ->
