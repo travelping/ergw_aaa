@@ -36,6 +36,9 @@
 
 -define(UNEXPECTED, erlang:error({unexpected, ?MODULE, ?LINE})).
 
+-define(DIAMETER_DICT_BASE_ACC, diameter_3gpp_ts29_061_sgi_base_acc).
+-define(DIAMETER_APP_ID_BASE_ACC, ?DIAMETER_DICT_BASE_ACC:id()).
+
 -define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
 -define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
 
@@ -106,7 +109,8 @@ start_nasreq(CallbackOverrides, Transports) ->
 	       {'Auth-Application-Id', [?DIAMETER_APP_ID_NASREQ,
 					?DIAMETER_APP_ID_GX,
 					?DIAMETER_APP_ID_RO]},
-	       {'Acct-Application-Id', [?DIAMETER_APP_ID_NASREQ]},
+	       {'Acct-Application-Id', [?DIAMETER_APP_ID_NASREQ,
+					?DIAMETER_APP_ID_BASE_ACC]},
 	       {'Vendor-Specific-Application-Id',
 		[#'diameter_base_Vendor-Specific-Application-Id'{
 		    'Vendor-Id'           = ?VENDOR_ID_3GPP,
@@ -116,6 +120,9 @@ start_nasreq(CallbackOverrides, Transports) ->
 	       {decode_format, map},
 	       {application, [{alias, nasreq},
 			      {dictionary, ?DIAMETER_DICT_NASREQ},
+			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
+	       {application, [{alias, nasreq_base_acc},
+			      {dictionary, ?DIAMETER_DICT_BASE_ACC},
 			      {module, callback_overrides(nasreq, CallbackOverrides, [nasreq])}]},
 	       {application, [{alias, diameter_gx},
 			      {dictionary, ?DIAMETER_DICT_GX},
