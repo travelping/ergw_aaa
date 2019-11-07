@@ -3,6 +3,25 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.2.0 - 05 Nov 2019
+---------------------------
+
+* reworked rate limit and overload control mechanism
+* OTP 22.1  support
+* support ASR on (almost) all DIAMETER interfaces
+* Gy RAR support
+* updated erGW interface
+* OCS hold support for Gy
+
+Version 3.1.0 - 13 Jun 2019
+---------------------------
+
+* support for DIAMETER Gx, Rf and Ro protocol
+* OTP 21.3 support
+* rate limit for Gy and Ro
+* enhanced config for DIAMETER transports
+* updated erGW interface
+
 Version 3.0.0 - 01 Aug 2018
 ---------------------------
 
