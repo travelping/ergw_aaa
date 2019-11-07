@@ -12,6 +12,9 @@
 -include_lib("common_test/include/ct.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
+-import(ergw_aaa_test_lib,
+	[set_cfg_value/3, get_cfg_value/2]).
+
 -define(error_option(Config),
 	?match({error,{_, _}}, (catch ergw_aaa_config:validate_config(Config)))).
 	%% ?match({error,{options, _}}, (catch ergw_aaa_config:validate_config(Config)))).
@@ -105,53 +108,9 @@
 	]).
 
 %%%===================================================================
-%%% Config manipulation
+%%% Helpers
 %%%===================================================================
 
-set_cfg_value(Key, Value) when is_function(Value) ->
-    Value(Key);
-set_cfg_value(Key, Value) ->
-    {Key, Value}.
-
-set_cfg_value([Key], Value, Config) when is_boolean(Value) ->
-    lists:keystore(Key, 1, proplists:delete(Key, Config), set_cfg_value(Key, Value));
-set_cfg_value([{Key, Pos}], Value, Config) ->
-    Tuple = lists:keyfind(Key, 1, Config),
-    lists:keystore(Key, 1, Config, setelement(Pos, Tuple, set_cfg_value(Key, Value)));
-set_cfg_value([Key], Value, Config) ->
-    lists:keystore(Key, 1, Config, set_cfg_value(Key, Value));
-set_cfg_value([{Key, Pos} | T], Value, Config) ->
-    Tuple = lists:keyfind(Key, 1, Config),
-    lists:keystore(Key, 1, Config,
-		   setelement(Pos, Tuple, set_cfg_value(T, Value, element(Pos, Tuple))));
-set_cfg_value([Pos | T], Value, Config)
-  when is_integer(Pos), is_tuple(Config) ->
-    setelement(Pos, Config, set_cfg_value(T, Value, element(Pos, Config)));
-set_cfg_value([Pos | T], Value, Config)
-  when is_integer(Pos), is_list(Config) ->
-    Arr0 = array:from_list(Config),
-    Arr1 = array:set(Pos - 1, set_cfg_value(T, Value, array:get(Pos - 1, Arr0)), Arr0),
-    array:to_list(Arr1);
-set_cfg_value([H | T], Value, Config) ->
-    Prop = proplists:get_value(H, Config, []),
-    lists:keystore(H, 1, Config, {H, set_cfg_value(T, Value, Prop)}).
-
-add_cfg_value([Key], Value, Config) ->
-    ct:pal("Cfg: ~p", [[{Key, Value} | Config]]),
-    [{Key, Value} | Config];
-add_cfg_value([H | T], Value, Config) ->
-    Prop = proplists:get_value(H, Config, []),
-    lists:keystore(H, 1, Config, {H, add_cfg_value(T, Value, Prop)}).
-
-get_opt(Key, List) when is_list(List) ->
-    proplists:get_value(Key, List);
-get_opt(Key, Map) when is_map(Map) ->
-    maps:get(Key, Map).
-
-get_cfg_value([Key], Config) ->
-    get_opt(Key, Config);
-get_cfg_value([H|T], Config) ->
-    get_cfg_value(T, get_opt(H, Config)).
 
 %%%===================================================================
 %%% Tests + API
