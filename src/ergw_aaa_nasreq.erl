@@ -6,6 +6,9 @@
 %% 2 of the License, or (at your option) any later version.
 
 %% Notes :
+%% This module supports the split and the coupled accounting model,
+%% as described in https://tools.ietf.org/html/rfc6733#section-9.3
+%%
 %% The dictionaries are based on 3GPP TS29.061. One particularity
 %% is that while RFC 7155 (obsoletes RFC 4005) defines the
 %% Acct-Application-Id as mandatory in the ACR message, the 3GPP
@@ -48,11 +51,15 @@
 -define(VENDOR_ID_TP,   18681).
 
 -define(APP, nasreq).
+-define(BASE_ACC_APP, nasreq_base_acc).
 -define(DIAMETER_DICT_NASREQ, diameter_3gpp_ts29_061_sgi).
+-define(DIAMETER_DICT_NASREQ_BASE_ACC, diameter_3gpp_ts29_061_sgi_base_acc).
+-define(DIAMETER_APP_ID_BASE_ACC, ?DIAMETER_DICT_NASREQ_BASE_ACC:id()).
 -define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
 -define(DEFAULT_TERMINATION_CAUSE, ?'TERMINATION-CAUSE_PORT_ERROR').
 
 -define(DefaultOptions, [{function, "undefined"},
+			 {accounting, coupled},
 			 {'Destination-Realm', undefined}]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
@@ -66,13 +73,24 @@
 initialize_handler(_Opts) ->
     {ok, []}.
 
-initialize_service(_ServiceId, #{function := Function}) ->
+initialize_service(_ServiceId, #{function := Function, accounting := AcctModel}) ->
+    {AcctId, Appl} =
+	case AcctModel of
+	    split   ->
+		AcctAppl = [[{alias, ?BASE_ACC_APP},
+			     {dictionary, ?DIAMETER_DICT_NASREQ_BASE_ACC},
+			     {module, ?MODULE}]],
+		{?DIAMETER_APP_ID_BASE_ACC, AcctAppl};
+	    coupled ->
+		{?DIAMETER_APP_ID_NASREQ, []}
+	end,
     SvcOpts =
 	#{'Auth-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
-	  'Acct-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
+	  'Acct-Application-Id' => AcctId,
 	  application => [[{alias, ?APP},
 			   {dictionary, ?DIAMETER_DICT_NASREQ},
-			   {module, ?MODULE}]]},
+			   {module, ?MODULE}]
+			  | Appl]},
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
@@ -105,8 +123,9 @@ invoke(_Service, start, Session0, Events, Opts) ->
 	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
 	    Session = maps:without(Keys, inc_number(Session1)),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
+	    App = acct_app_alias(Opts),
 	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(App, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -116,8 +135,9 @@ invoke(_Service, interim, Session0, Events, Opts) ->
 	started ->
 	    Session = inc_number(Session0),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
+	    App = acct_app_alias(Opts),
 	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    ergw_aaa_diameter_srv:call(App, Request, Session, Events, Opts);
 	_ ->
 	    {ok, Session0, Events}
     end;
@@ -129,8 +149,9 @@ invoke(_Service, stop, Session0, Events0, Opts) ->
 	    Session1 = ?set_svc_opt('State', stopped, Session0),
 	    Session2 = inc_number(Session1),
 	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
+	    App = acct_app_alias(Opts),
 	    ACRRequest = create_ACR(RecType, Session2, Opts),
-	    ACRRes = ergw_aaa_diameter_srv:call(?APP, ACRRequest, Session2, Events0, Opts),
+	    ACRRes = ergw_aaa_diameter_srv:call(App, ACRRequest, Session2, Events0, Opts),
 	    case ?get_svc_opt('Authorized', Session0, false) of
 		true ->
 		    STRRequest = create_STR(Session2, Opts),
@@ -250,6 +271,10 @@ handle_request(_Packet, _SvcName, _Peer) ->
 
 validate_option(function, Value) when is_atom(Value) ->
     Value;
+validate_option(accounting, coupled = Value) ->
+    Value;
+validate_option(accounting, split = Value) ->
+    Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Host', [Value]) when is_binary(Value) ->
@@ -265,6 +290,9 @@ validate_option_error(Opt, Value) ->
 %%===================================================================
 %% internal helpers
 %%===================================================================
+
+acct_app_alias(#{accounting := coupled}) -> ?APP;
+acct_app_alias(#{accounting := split}) -> ?BASE_ACC_APP.
 
 handle_aaa(['AAA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts)
   when RC < 3000 ->

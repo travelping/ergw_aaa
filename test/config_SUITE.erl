@@ -111,6 +111,28 @@
 %%% Helpers
 %%%===================================================================
 
+match_map(Match, Map, File, Line) ->
+    maps:fold(
+      fun(Key, Expected, R) ->
+	      case maps:is_key(Key, Map) of
+		  true ->
+		      Actual = maps:get(Key, Map),
+		      case erlang:match_spec_test({Actual, ok}, [{{Expected, '$1'}, [], ['$1']}], table) of
+			  {ok, ok, _, _} ->
+			      R andalso true;
+			  {ok, false, _, _} ->
+			      ct:pal("MISMATCH(~s:~b, ~s)~nExpected: ~p~nActual:   ~p~n",
+				     [File, Line, Key, Expected, Actual]),
+			      false
+		      end;
+		  _ ->
+		      ct:pal("MAP KEY MISSING(~s:~b, ~s)~n", [File, Line, Key]),
+		      false
+	      end
+      end, true, Match) orelse error(badmatch),
+    ok.
+
+-define(match_map(Expected, Actual), match_map(Expected, Actual, ?FILE, ?LINE)).
 
 %%%===================================================================
 %%% Tests + API
@@ -212,6 +234,9 @@ config(_Config)  ->
 
     ?error_set([handlers, ergw_aaa_nasreq], []),
     ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),
+    ?error_set([handlers, ergw_aaa_nasreq, accounting], []),
+    ?ok_set([handlers, ergw_aaa_nasreq, accounting], split),
+    ?ok_set([handlers, ergw_aaa_nasreq, accounting], coupled),
 
     ?error_set([services, 'DIAMETER-Service', handler], invalid_handler),
 
@@ -223,9 +248,9 @@ config(_Config)  ->
     ?equal(proplists:get_value(function, ?DIAMETER_CONFIG),
 	   get_cfg_value([services, 'DIAMETER-Service', function], ValidatedCfg)),
     %% make sure the handler config is also passed through to the session
-    ?equal(maps:from_list(?DIAMETER_CONFIG ++ ?DIAMETER_SERVICE_OPTS),
-	   get_cfg_value([apps, 'DIAMETER-Application', procedures,
-			  authenticate, 'DIAMETER-Service'], ValidatedCfg)),
+    ?match_map(maps:from_list(?DIAMETER_CONFIG ++ ?DIAMETER_SERVICE_OPTS),
+	       get_cfg_value([apps, 'DIAMETER-Application', procedures,
+			      authenticate, 'DIAMETER-Service'], ValidatedCfg)),
 
     ?error_set([handlers, ergw_aaa_rf], []),
     ?error_set([handlers, ergw_aaa_rf, invalid_option], []),

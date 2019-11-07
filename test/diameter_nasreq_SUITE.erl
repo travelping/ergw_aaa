@@ -71,17 +71,36 @@
 %%% Common Test callbacks
 %%%===================================================================
 
-all() ->
+common() ->
     [compat,
      simple,
      accounting,
      acct_interim_interval,
      attrs_3gpp].
 
+groups() ->
+    [{coupled, [], common()},
+     {split, [], common()}].
+
+all() ->
+    [{group, coupled},
+     {group, split}].
+
 init_per_suite(Config0) ->
-    Config = [{handler_under_test, ?HUT} | Config0],
+    [{handler_under_test, ?HUT} | Config0].
+
+end_per_suite(_Config) ->
+    ok.
+
+init_per_group(Group, Config) ->
     application:load(ergw_aaa),
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
+    AppConfig =
+	case Group of
+	    coupled -> set_cfg_value([handlers, ergw_aaa_nasreq, accounting], coupled, ?CONFIG);
+	    split   -> set_cfg_value([handlers, ergw_aaa_nasreq, accounting], split, ?CONFIG);
+	    _       -> ?CONFIG
+	end,
+    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- AppConfig],
 
     meck_init(Config),
 
@@ -93,11 +112,11 @@ init_per_suite(Config0) ->
 	ok ->
 	    Config;
 	Other ->
-	    end_per_suite(Config),
+	    end_per_group(Group, Config),
 	    {skip, Other}
     end.
 
-end_per_suite(Config) ->
+end_per_group(_Group, Config) ->
     meck_unload(Config),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
@@ -269,7 +288,19 @@ stats('STR', _, Stats) ->
     proplists:get_value({{1, 275, 1}, send}, Stats);
 stats({'STA', RC}, _, Stats) ->
     proplists:get_value({{1, 275, 0}, recv, {'Result-Code', RC}}, Stats);
-stats('ACR', _, Stats) ->
-    proplists:get_value({{1, 271, 1}, send}, Stats);
-stats({'ACA', RC}, _, Stats) ->
-    proplists:get_value({{1, 271, 0}, recv, {'Result-Code', RC}}, Stats).
+stats('ACR', Config, Stats) ->
+    TCGProps = ?config(tc_group_properties, Config),
+    AccAppId =
+	case proplists:get_value(name, TCGProps) of
+	    split -> 3;
+	    _     -> 1
+	end,
+    proplists:get_value({{AccAppId, 271, 1}, send}, Stats);
+stats({'ACA', RC}, Config, Stats) ->
+    TCGProps = ?config(tc_group_properties, Config),
+    AccAppId =
+	case proplists:get_value(name, TCGProps) of
+	    split -> 3;
+	    _     -> 1
+	end,
+    proplists:get_value({{AccAppId, 271, 0}, recv, {'Result-Code', RC}}, Stats).
