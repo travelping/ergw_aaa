@@ -23,21 +23,9 @@
 		     }).
 
 -record(diam_call,{
-		   session = #{},
-		   events = [],
 		   seqno,
 		   tries,
 		   peers_tried = [],
 		   opts,
 		   last_failure
 		  }).
-
--define(get_svc_opt(Key, Session, Default),
-	ergw_aaa_session:get_svc_opt(?MODULE, Key, Session, Default)).
--define(set_svc_opt(Key, Value, Session),
-	ergw_aaa_session:set_svc_opt(?MODULE, Key, Value, Session)).
-
--define(get_svc_all_opt(Session),
-	ergw_aaa_session:get_svc_opt(?MODULE, Session)).
--define(set_svc_all_opt(Opts, Session),
-	ergw_aaa_session:set_svc_opt(?MODULE, Opts, Session)).

@@ -26,7 +26,7 @@
 
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
-	 initialize_handler/1, initialize_service/2, invoke/5]).
+	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 
 %%
 %% diameter callbacks
@@ -66,6 +66,12 @@
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
+-record(state, {pending = #{}      :: #{atom() => reference()},
+		state = init       :: atom(),
+		authorized = false :: boolean(),
+		record_number      :: 'undefined' | integer()
+	       }).
+
 %%===================================================================
 %% API
 %%===================================================================
@@ -103,68 +109,87 @@ validate_service(_Service, HandlerOpts, Opts) ->
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
 
-invoke(_Service, init, Session, Events, _Opts) ->
-    {ok, Session, Events};
+invoke(_Service, init, Session, Events, _Opts, _State) ->
+    {ok, Session, Events, #state{state = stopped}};
 
-invoke(_Service, authenticate, Session0, Events, Opts) ->
+invoke(_Service, authenticate, Session, Events, Opts, State0) ->
     %% Combined authentication and authorisation, setting
-    Session = ?set_svc_opt('Authorized', true, Session0),
+    State = State0#state{authorized = true},
     RecType = ?'DIAMETER_SGI_AUTH-REQUEST-TYPE_AUTHORIZE_AUTHENTICATE',
     Request = create_AAR(RecType, Session, Opts),
-    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+    await_response(send_request(?APP, Request, Opts), 'AAR', Session, Events, State, Opts);
 
-invoke(_Service, authorize, Session, Events, _Opts) ->
-    {ok, Session, Events};
+invoke(_Service, authorize, Session, Events, _Opts, State) ->
+    {ok, Session, Events, State};
 
-invoke(_Service, start, Session0, Events, Opts) ->
-    case ?get_svc_opt('State', Session0, stopped) of
-	stopped ->
-	    Session1 = ?set_svc_opt('State', started, Session0),
-	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
-	    Session = maps:without(Keys, inc_number(Session1)),
-	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
-	    App = acct_app_alias(Opts),
-	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(App, Request, Session, Events, Opts);
+invoke(_Service, start, Session0, Events, Opts, #state{state = stopped} = State0) ->
+    State = inc_record_number(State0#state{state = started}),
+    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
+    Session = maps:without(Keys, Session0),
+    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_START_RECORD',
+    App = acct_app_alias(Opts),
+    Request = create_ACR(RecType, Session, Opts, State),
+    await_response(send_request(App, Request, Opts), 'ACR', Session, Events, State, Opts);
+
+invoke(_Service, interim, Session, Events, Opts, #state{state = started} = State0) ->
+    State = inc_record_number(State0),
+    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
+    App = acct_app_alias(Opts),
+    Request = create_ACR(RecType, Session, Opts, State),
+    await_response(send_request(App, Request, Opts), 'ACR', Session, Events, State, Opts);
+
+invoke(_Service, stop, Session, Events, Opts,
+       #state{state = started, authorized = Authorized} = State0) ->
+    lager:debug("Session Stop: ~p", [Session]),
+    State1 = inc_record_number(State0#state{state = stopped}),
+    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
+    App = acct_app_alias(Opts),
+    ACRRequest = create_ACR(RecType, Session, Opts, State1),
+    ACRRes = await_response(send_request(App, ACRRequest, Opts), 'ACR', Session, Events, State1, Opts),
+    case Authorized of
+	true ->
+	    STRRequest = create_STR(Session, Opts),
+	    State2 = element(4, ACRRes),
+	    STRRes =
+		await_response(send_request(?APP, STRRequest, Opts), 'STR', Session, Events, State2, Opts),
+	    setelement(4, ACRRes, element(4, STRRes));
 	_ ->
-	    {ok, Session0, Events}
+	    ACRRes
     end;
 
-invoke(_Service, interim, Session0, Events, Opts) ->
-    case ?get_svc_opt('State', Session0, stopped) of
-	started ->
-	    Session = inc_number(Session0),
-	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
-	    App = acct_app_alias(Opts),
-	    Request = create_ACR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(App, Request, Session, Events, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+invoke(_Service, Procedure, Session, Events, _Opts, State)
+  when Procedure =:= start; Procedure =:= interim; Procedure =:= stop ->
+    {ok, Session, Events, State};
 
-invoke(_Service, stop, Session0, Events0, Opts) ->
-    lager:debug("Session Stop: ~p", [Session0]),
-    case ?get_svc_opt('State', Session0, stopped) of
-	started ->
-	    Session1 = ?set_svc_opt('State', stopped, Session0),
-	    Session2 = inc_number(Session1),
-	    RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
-	    App = acct_app_alias(Opts),
-	    ACRRequest = create_ACR(RecType, Session2, Opts),
-	    ACRRes = ergw_aaa_diameter_srv:call(App, ACRRequest, Session2, Events0, Opts),
-	    case ?get_svc_opt('Authorized', Session0, false) of
-		true ->
-		    STRRequest = create_STR(Session2, Opts),
-		    ergw_aaa_diameter_srv:call(?APP, STRRequest, Session2, Events0, Opts);
-		_ -> ok
-	    end,
-	    ACRRes;
-	_ ->
-	    {ok, Session0, Events0}
-    end;
+invoke(Service, Procedure, Session, Events, _Opts, State) ->
+    {{error, {Service, Procedure}}, Session, Events, State}.
 
-invoke(Service, Procedure, Session, Events, _Opts) ->
-    {{error, {Service, Procedure}}, Session, Events}.
+%%%===================================================================
+%%% ergw_aaa_diameter_srv wrapper
+%%%===================================================================
+
+send_request(App, Request, Config) ->
+    ergw_aaa_diameter_srv:send_request(?MODULE, App, Request, Config).
+
+await_response(Promise, Type, Session, Events, #state{pending = Pending} = State, #{async := true}) ->
+    {ok, Session, Events, State#state{pending = Pending#{Promise => Type}}};
+await_response(Promise, Type, Session, Events, State, Opts) ->
+    Msg = ergw_aaa_diameter_srv:await_response(Promise),
+    handle_response(Type, Msg, Session, Events, Opts, State).
+
+
+%% handle_response/6
+handle_response(Promise, Msg, Session, Events, Opts, #state{pending = Pending0} = State)
+  when is_reference(Promise) ->
+    {Type, Pending} = maps:take(Promise, Pending0),
+    handle_response(Type, Msg, Session, Events, Opts, State#state{pending = Pending});
+
+handle_response('ACR', Msg, Session, Events, Opts, State) ->
+    handle_aca(Msg, Session, Events, Opts, State);
+handle_response('AAR', Msg, Session, Events, Opts, State) ->
+    handle_aaa(Msg, Session, Events, Opts, State);
+handle_response('STR', Msg, Session, Events, Opts, State) ->
+    handle_sta(Msg, Session, Events, Opts, State).
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -236,31 +261,16 @@ prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
     prepare_request(Pkt, SvcName, Peer, CallOpts).
 
 %% handle_answer/5
-handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['ACR' | _], SvcName, Peer, CallOpts)
-  when is_map(Avps) ->
-    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Msg, CallOpts);
-
-handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['AAR' | _], SvcName, Peer, CallOpts)
-  when is_map(Avps) ->
-    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:handle_answer(fun handle_aaa/4, Msg, CallOpts);
-
-handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['STR' | _], SvcName, Peer, CallOpts)
-  when is_map(Avps) ->
-    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:handle_answer(fun handle_sta/4, Msg, CallOpts);
-
 handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.
 
 %% handle_error/5
-handle_error(Reason, _Request, _SvcName, undefined, CallOpts) ->
-    ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Reason, CallOpts);
+handle_error(Reason, _Request, _SvcName, undefined, _CallOpts) ->
+    Reason;
 handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:retry(fun handle_aca/4, Reason, SvcName, Peer, CallOpts).
+    ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts).
 
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
@@ -294,32 +304,33 @@ validate_option_error(Opt, Value) ->
 acct_app_alias(#{accounting := coupled}) -> ?APP;
 acct_app_alias(#{accounting := split}) -> ?BASE_ACC_APP.
 
-handle_aaa(['AAA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts)
+handle_aaa(['AAA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, State)
   when RC < 3000 ->
     {Session, Events} = to_session({nasreq, 'AAA'}, {Session0, Events0}, Avps),
-    {ok, Session, Events};
-handle_aaa([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
+    {ok, Session, Events, State};
+handle_aaa([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'AAA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events};
-handle_aaa({error, _} = Result, Session, Events, _Opts) ->
-    {Result, Session, Events}.
+    {{fail, Code}, Session, Events, State};
+handle_aaa({error, _} = Result, Session, Events, _Opts, State) ->
+    {Result, Session, Events, State}.
 
-handle_aca(['ACA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts)
+handle_aca(['ACA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, State)
   when RC < 3000 ->
     {Session, Events} = to_session({nasreq, 'ACA'}, {Session0, Events0}, Avps),
-    {ok, Session, Events};
-handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts)
+    {ok, Session, Events, State};
+handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, RC}, Session, [stop | Events]};
-handle_aca({error, _} = Result, Session, Events, _Opts) ->
-    {Result, Session, Events}.
+    {{fail, RC}, Session, [stop | Events], State};
+handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
+    {Result, Session, Events, State}.
 
-handle_sta(['STA' | _Avps], Session, Events, _Opts) ->
-    {ok, Session, Events}.
+handle_sta(['STA' | _Avps], Session, Events, _Opts, State) ->
+    {ok, Session, Events, State}.
 
-inc_number(Session) ->
-    Number = ?get_svc_opt('Accounting-Record-Number', Session, -1) + 1,
-    ?set_svc_opt('Accounting-Record-Number', Number, Session).
+inc_record_number(#state{record_number = Number} = State) when is_integer(Number) ->
+    State#state{record_number = Number + 1};
+inc_record_number(State) ->
+    State#state{record_number = 0}.
 
 %% to_session/3
 to_session(Procedure, {Session0, Events0}, Avps) ->
@@ -403,10 +414,6 @@ framed_protocol('GPRS-PDP-Context')        -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_GPR
 %framed_protocol('TP-CAPWAP')               -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP'.
 framed_protocol(_)                         -> ?'DIAMETER_SGI_FRAMED-PROTOCOL_PPP'.
 
-from_service('Accounting-Record-Number' = Key, Value, M) ->
-    M#{Key => Value};
-from_service(_, _, M) ->
-    M.
 
 from_session(Key, Value, M)
   when Key =:= '3GPP-Charging-Gateway-Address';
@@ -470,9 +477,6 @@ from_session(Key, Value, M)
        Key =:= 'Framed-Interface-Id' ->
     M#{Key => [Value]};
 
-from_session(?MODULE, Value, M) ->
-    maps:fold(fun from_service/3, M, Value);
-
 from_session(_Key, _Value, M) -> M.
 
 from_session(Session, Avps) ->
@@ -489,9 +493,10 @@ create_AAR(Type, Session, Opts) ->
     Avps = from_session(Session, Avps1),
     ['AAR' | Avps].
 
-create_ACR(Type, Session, #{now := Now} = Opts) ->
+create_ACR(Type, Session, #{now := Now} = Opts, #state{record_number = RecNumber}) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
-    Avps1 = Avps0#{'Accounting-Record-Type' => Type,
+    Avps1 = Avps0#{'Accounting-Record-Type'   => Type,
+		   'Accounting-Record-Number' => RecNumber,
 		   'Event-Timestamp' =>
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)]},
     Avps = from_session(Session, Avps1),

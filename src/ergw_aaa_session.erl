@@ -22,7 +22,7 @@
 	 interim/2, interim/3,
 	 stop/2, stop/3,
 	 terminate/1, get/1, get/2, set/2, set/3, unset/2,
-	 request/4, response/4, handle_answer/2]).
+	 request/4, response/4]).
 
 %% Session Object API
 -export([attr_get/2, attr_get/3, attr_set/3,
@@ -30,15 +30,13 @@
 	 merge/2, to_session/1,
 	 native_to_seconds/1]).
 
--export([get_svc_opt/2, get_svc_opt/4,
-	 set_svc_opt/3, set_svc_opt/4]).
-
 -include("include/ergw_aaa_session.hrl").
 
 -record(data, {'$version' = 1,
 	       owner,
 	       owner_monitor,
 	       application,
+	       handlers,
 	       session
 	      }).
 -record(state, {
@@ -110,9 +108,6 @@ response(#aaa_request{from = Fun} = Request, Result, Avps, SessionOpts)
   when is_function(Fun, 4), is_map(Avps) ->
     Fun(Request, Result, Avps, SessionOpts).
 
-handle_answer(Session, Answer) ->
-    gen_statem:cast(Session, {answer, Answer}).
-
 authenticate(Session, SessionOpts)
   when is_map(SessionOpts) ->
     case invoke(Session, SessionOpts, authenticate, [inc_session_id]) of
@@ -165,20 +160,6 @@ unset(Session, Options) when is_list(Options) ->
 unset(Session, Option) when is_atom(Option) ->
     gen_statem:call(Session, {unset, [Option]}).
 
-get_svc_opt(Service, Session) ->
-    maps:get(Service, Session, #{}).
-
-get_svc_opt(Service, Key, Session, Default) ->
-    M = maps:get(Service, Session, #{}),
-    maps:get(Key, M, Default).
-
-set_svc_opt(Service, Opts, Session) ->
-    maps:put(Service, Opts, Session).
-
-set_svc_opt(Service, Key, Value, Session) ->
-    Opts = get_svc_opt(Service, Session),
-    maps:put(Service, Opts#{Key => Value}, Session).
-
 %%===================================================================
 %% gen_statem callbacks
 %%===================================================================
@@ -209,14 +190,15 @@ init([Owner, SessionOpts]) ->
     ergw_aaa_session_reg:register(DiamSessionId),
 
     Data = #data{
-	       owner         = Owner,
-	       owner_monitor = MonRef,
-	       application   = App,
-	       session       = DefaultSessionOpts
+	      owner         = Owner,
+	      owner_monitor = MonRef,
+	      application   = App,
+	      handlers      = #{},
+	      session       = DefaultSessionOpts
 	      },
     State = #state{},
-    {Reply, Session, _Events} = exec(init, SessionOpts, #{}, Data),
-    {Reply, State, Data#data{session = Session}}.
+    {Reply, DataOut, _Events} = exec(init, SessionOpts, #{}, Data),
+    {Reply, State, DataOut}.
 
 handle_event({call, From}, get, _State, Data) ->
     {keep_state_and_data, [{reply, From, Data#data.session}]};
@@ -288,21 +270,19 @@ handle_event(cast, {answer, _}, _State, _Data) ->
     keep_state_and_data;
 
 handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts},
-	     _State, #data{owner = Owner} = Data) ->
+	     _State, Data0) ->
     Async = maps:get(async, Opts, false),
-    case exec(Procedure, SessionOpts, Opts, Data) of
-	{_, NewSession, _} = Reply when Async =:= false ->
-	    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
-	{Result, NewSession, Events} when Async =:= true ->
-	    if Events /= [] -> Owner ! {update_session, NewSession, Events};
-	       true         -> ok
-	    end,
-	    Reply = {Result, NewSession},
-	    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
-	{_, NewSession} = Reply ->
-	    {keep_state, Data#data{session = NewSession}, [{reply, From, Reply}]};
-	Reply ->
-	    {keep_state_and_data, [{reply, From, Reply}]}
+    case exec(Procedure, SessionOpts, Opts, Data0) of
+	{Result, #data{session = Session} = Data, Events} when Async =:= false ->
+	    Reply = {Result, Session, Events},
+	    {keep_state, Data, [{reply, From, Reply}]};
+	{Result, #data{session = Session} = Data, Events} when Async =:= true ->
+	    update_session(Session, Events, Data),
+	    Reply = {Result, Session},
+	    {keep_state, Data, [{reply, From, Reply}]};
+	{Result, #data{session = Session} = Data} ->
+	    Reply = {Result, Session},
+	    {keep_state, Data, [{reply, From, Reply}]}
     end;
 
 handle_event(cast, terminate, _State, _Data) ->
@@ -314,6 +294,15 @@ handle_event(info, {'DOWN', _Ref, process, Owner, Info},
     lager:error("Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
     handle_owner_exit(Data),
     {stop, normal};
+
+handle_event(info, {'$reply', Promise, Handler, Msg, Opts} = _Info,
+	     _State, #data{handlers = HandlersS, session = Session} = Data0) ->
+    State = maps:get(Handler, HandlersS, undefined),
+    {_, SessOut, EvsOut, StateOut} =
+	Handler:handle_response(Promise, Msg, Session, [], Opts, State),
+    Data = Data0#data{handlers = maps:put(Handler, StateOut, HandlersS), session = SessOut},
+    update_session(SessOut, EvsOut, Data),
+    {keep_state, Data};
 
 handle_event(Type, Event, _State, _Data) ->
     lager:warning("unhandled event ~p:~p", [Type, Event]),
@@ -366,7 +355,7 @@ prepare_next_session_id(Session) ->
 
 handle_owner_exit(Data) ->
     Opts = #{now => erlang:monotonic_time()},
-    action(stop, Data#data.session, Opts, Data).
+    action(stop, Opts, Data).
 
 maps_merge_with(K, Fun, V, Map) ->
     maps:update_with(K, maps:fold(Fun, V, _), V, Map).
@@ -395,13 +384,18 @@ normalize_opts(Opts) when is_map(Opts) ->
 %% provider helpers
 %%===================================================================
 
+update_session(_Session, [], _Data) ->
+    ok;
+update_session(Session, Events, #data{owner = Owner}) ->
+    Owner ! {update_session, Session, Events}.
+
 exec(Procedure, SessionOpts, Opts0, #data{owner = Owner, session = SessionIn} = Data) ->
     Opts = Opts0#{now => maps:get(now, Opts0, erlang:monotonic_time()),
 		  owner => Owner},
     Session0 = session_merge(SessionIn, SessionOpts),
     Session1 = maps:fold(fun handle_session_opts/3, Session0, Opts),
     Session2 = update_accounting_state(Procedure, Session1, Opts),
-    action(Procedure, Session2, Opts, Data).
+    action(Procedure, Opts, Data#data{session = Session2}).
 
 native_to_seconds(Native) ->
     round(Native / erlang:convert_time_unit(1, second, native)).
@@ -430,28 +424,40 @@ update_accounting_state(_Procedure, Session, _Opts) ->
     Session.
 
 services(init, App) ->
-    maps:get(session, App, []);
+    Procedures =
+	maps:fold(
+	  fun(_, Svcs, S0) ->
+		  lists:foldl(fun({Svc, _}, S1) -> S1#{Svc => #{}} end, S0, Svcs)
+	  end, #{}, maps:get(procedures, App, #{})),
+    Session = maps:get(session, App, []),
+    {Keys, _} = lists:unzip(Session),
+    Session ++ maps:to_list(maps:without(Keys, Procedures));
 services(Procedure, App) ->
     Procedures = maps:get(procedures, App, #{}),
     maps:get(Procedure, Procedures, []).
 
-action(Procedure, Session, Opts, #data{application = App} = _Data) ->
+action(Procedure, Opts, #data{application = App} = Data) ->
     Pipeline = services(Procedure, App),
-    pipeline(Procedure, Session, [], Opts, Pipeline).
+    pipeline(Procedure, Data, [], Opts, Pipeline).
 
-pipeline(_, Session, Events, _Opts, []) ->
-    {ok, Session, Events};
-pipeline(Procedure, SessionIn, EventsIn, Opts, [Head|Tail]) ->
-    case step(Head, Procedure, SessionIn, EventsIn, Opts) of
-	{ok, SessionOut, EventsOut} ->
-	    pipeline(Procedure, SessionOut, EventsOut, Opts, Tail);
+pipeline(_, Data, Events, _Opts, []) ->
+    {ok, Data, Events};
+pipeline(Procedure, DataIn, EventsIn, Opts, [Head|Tail]) ->
+    case step(Head, Procedure, DataIn, EventsIn, Opts) of
+	{ok, DataOut, EventsOut} ->
+	    pipeline(Procedure, DataOut, EventsOut, Opts, Tail);
 	Other ->
 	    Other
     end.
 
-step({Service, SvcOpts}, Procedure, Session, Events, Opts)
+step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
+					  session = Session} = Data, Events, Opts)
   when is_atom(Service) ->
     Svc = ergw_aaa_config:get_service(Service),
     StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),
-    Handler:invoke(Service, Procedure, Session, Events, StepOpts).
+    State = maps:get(Handler, HandlersS, undefined),
+    {Result, SessOut, EvsOut, StateOut} =
+	Handler:invoke(Service, Procedure, Session, Events, StepOpts, State),
+    {Result, Data#data{handlers = maps:put(Handler, StateOut, HandlersS),
+		       session = SessOut}, EvsOut}.

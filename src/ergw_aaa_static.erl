@@ -11,7 +11,7 @@
 
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
-	 initialize_handler/1, initialize_service/2, invoke/5]).
+	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 
 -import(ergw_aaa_session, [to_session/1]).
 
@@ -39,11 +39,15 @@ validate_service(_Service, HandlerOpts, Opts) ->
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
 
-invoke(_Service, Procedure, Session, Events, #{answers := Answers, answer := Answer}) ->
-    handle_response(Procedure, maps:get(Answer, Answers, #{}), Session, Events);
-invoke(_Service, _Procedure, Session, Events, Opts) ->
+invoke(_Service, Procedure, Session, Events, #{answers := Answers, answer := Answer}, State) ->
+    handle_response(Procedure, maps:get(Answer, Answers, #{}), Session, Events, State);
+invoke(_Service, _Procedure, Session, Events, Opts, State) ->
     SOpts = maps:without(?OptKeys, Opts),
-    {ok, maps:merge(Session, SOpts), Events}.
+    {ok, maps:merge(Session, SOpts), Events, State}.
+
+%% handle_response/6
+handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
+    {ok, Session, Events, State}.
 
 %%%===================================================================
 %%% Options Validation
@@ -74,12 +78,12 @@ to_session(_Procedure, {Session, Events}, Avps) ->
     {maps:merge(Session, Avps), Events}.
 
 handle_response(Procedure, #{'Result-Code' := Code} = Avps,
-		Session0, Events0)
+		Session0, Events0, State)
   when Code < 3000 ->
     {Session, Events} = to_session(Procedure, {Session0, Events0}, Avps),
-    {ok, Session, Events};
-handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events) ->
-    {{fail, Code}, Session, [stop | Events]};
-handle_response(_Procedure, Response, Session, Events) ->
+    {ok, Session, Events, State};
+handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
+    {{fail, Code}, Session, [stop | Events], State};
+handle_response(_Procedure, Response, Session, Events, State) ->
     lager:error("Response: ~p", [Response]),
-    {Response, Session, Events}.
+    {Response, Session, Events, State}.

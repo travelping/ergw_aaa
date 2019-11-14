@@ -610,7 +610,8 @@ ocs_hold_initial_timeout(Config) ->
 		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
 	 },
     GyTerm = #{used_credits => maps:to_list(UsedCredits)},
-    {{error, ocs_hold_end}, _Session2, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, []),
+    ?match({{error, ocs_hold_end}, _Session2, [stop]},
+	   ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [])),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
 

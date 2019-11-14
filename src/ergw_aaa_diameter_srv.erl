@@ -27,9 +27,8 @@
 	 start_request/2,
 	 start_request/3,
 	 finish_request/2,
-	 call/5, retry/5,
-	 prepare_request/4,
-	 handle_answer/3]).
+	 send_request/4, retry_request/4, await_response/1, await_response/2,
+	 prepare_request/4]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -109,27 +108,31 @@ finish_request(SvcName, Peer) ->
 %%% diameter:call wrapper
 %%%===================================================================
 
-%% call/5
-call(App, Request, Session, Events, Config) ->
+%% send_request/4
+send_request(Handler, App, Request, Config) ->
+    Promise = make_ref(),
     CallOpts0 =
 	#diam_call{
-	   session = Session,
 	   seqno = diameter_session:sequence(),
 	   tries = maps:get(max_retries, Config, 0) + 1,
 	   opts = Config},
-    case maps:get(async, Config, false) of
-	false ->
-	    CallOpts = CallOpts0#diam_call{events = Events},
-	    call(App, Request, Config, CallOpts);
-	true ->
-	    From = self(),
-	    proc_lib:spawn(
-	      fun() ->
-		      Result = call(App, Request, Config, CallOpts0),
-		      ergw_aaa_session:handle_answer(From, Result)
-	      end),
-	    {ok, Session}
+    From = self(),
+    proc_lib:spawn(
+      fun() ->
+	      Result = (catch call(App, Request, Config, CallOpts0)),
+	      From ! {'$reply', Promise, Handler, Result, Config}
+      end),
+    Promise.
+
+await_response(Promise) ->
+    await_response(Promise, infinity).
+
+await_response(Promise, Timeout) ->
+    receive
+	{'$reply', Promise, _, Result, _} -> Result
+    after Timeout -> timeout
     end.
+
 
 handle_plain_error(Module, Error, Request, SvcName, CallOpts)
   when is_atom(Module) ->
@@ -169,11 +172,10 @@ call(App, Request, #{function := Function} = Config, CallOpts) ->
 	    Result
     end.
 
-%% retry/5
-retry(Fun, Reason, _SvcName, _Peer,
-      #diam_call{session = Session, events = Events, opts = Opts, tries = 1}) ->
-    Fun({error, Reason}, Session, Events, Opts);
-retry(_, _, _, Peer, #diam_call{tries = Tries, peers_tried = PeersTried} = CallOpts) ->
+%% retry_request/4
+retry_request(Reason, _SvcName, _Peer, #diam_call{tries = 1}) ->
+    {error, Reason};
+retry_request(_, _, Peer, #diam_call{tries = Tries, peers_tried = PeersTried} = CallOpts) ->
     {retry, CallOpts#diam_call{tries = Tries - 1,
 			       peers_tried = [Peer | PeersTried]}}.
 
@@ -185,10 +187,6 @@ prepare_request(#diameter_packet{header = Hdr0} = Packet, _SvcName, _Peer,
 		Hdr0#diameter_header.is_retransmitted =:= true orelse PeersTried /= [],
 	    end_to_end_id = SeqNo},
     Packet#diameter_packet{header = Hdr}.
-
-%% handle_answer/3
-handle_answer(Fun, Msg, #diam_call{session = Session, events = Events, opts = Opts}) ->
-    Fun(Msg, Session, Events, Opts).
 
 %%%===================================================================
 %% gen_server callbacks

@@ -23,5 +23,11 @@
     {ok, [supervisor:child_spec()]} | {error, term()}.
 
 -callback invoke(ServiceId :: atom(), Procedure :: atom(),
-		 Session :: session(), Events :: list(), Opts :: map()) ->
-    {ok | atom(), session()}.
+		 Session :: session(), Events :: list(),
+		 Opts :: map(), State :: term()) ->
+    {ok | atom(), Result :: term(), session(), StateOut :: term()}.
+
+-callback handle_response(Promise :: reference(), Result :: term(),
+			  Session :: session(), Events :: list(),
+			  Opts :: map(), StateIn :: term()) ->
+    {ok | atom(), Result :: term(), session(), StateOut :: term()}.

@@ -21,7 +21,7 @@
 
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
-	 initialize_handler/1, initialize_service/2, invoke/5]).
+	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3]).
 
 %%
@@ -56,6 +56,13 @@
 
 -define(SI_PSI, 'Service-Information', 'PS-Information').
 
+-record(state, {pending = undefined :: 'undefined' | reference(),
+		state = init        :: atom(),
+		record_number = 0   :: integer(),
+		seq_number = 1      :: integer(),
+		sdc = []            :: list()
+	       }).
+
 %%===================================================================
 %% API
 %%===================================================================
@@ -85,53 +92,69 @@ validate_service(_Service, HandlerOpts, Opts) ->
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
 
-invoke(_Service, init, Session, Events, _Opts) ->
-    {ok, Session, Events};
+invoke(_Service, init, Session, Events, _Opts, _State) ->
+    {ok, Session, Events, #state{state = stopped}};
 
-invoke(_Service, {_, 'Initial'}, Session0, Events, Opts) ->
-    case ?get_svc_opt('State', Session0, stopped) of
-	stopped ->
-	    Session1 = ?set_svc_opt('State', started, Session0),
-	    Keys = ['service_data', 'InPackets', 'OutPackets',
-		    'InOctets', 'OutOctets', 'Acct-Session-Time'],
-	    Session2 = maps:without(Keys, Session1),
-	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
-	    {Request, Session} = create_ACR(RecType, Session2, Opts),
-	    lager:debug("Session Start: ~p", [Session]),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+invoke(_Service, {_, 'Initial'}, Session0, Events, Opts,
+       #state{state = stopped} = State0) ->
+    State1 = State0#state{state = started},
+    Keys = ['service_data', 'InPackets', 'OutPackets',
+	    'InOctets', 'OutOctets', 'Acct-Session-Time'],
+    Session = maps:without(Keys, Session0),
+    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
+    {Request, State} = create_ACR(RecType, Session, Opts, State1),
+    lager:debug("Session Start: ~p", [Session]),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
-invoke(_Service, {_, 'Update'}, Session0, Events, Opts) ->
-    State = ?get_svc_opt('State', Session0, stopped),
-    GyEvent = maps:get(gy_event, Opts, interim),
-    case {State, GyEvent} of
+invoke(_Service, {_, 'Update'}, Session0, Events, Opts,
+       #state{state = SessState} = State0) ->
+    State1 = close_service_data_containers(Session0, State0),
+    Session = maps:without([service_data], Session0),
+    case {SessState, maps:get(gy_event, Opts, interim)} of
 	{started, cdr_closure} ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
-	    Session1 = close_service_data_containers(Session0),
-	    {Request, Session} = create_ACR(RecType, Session1, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
+	    {Request, State} = create_ACR(RecType, Session, Opts, State1),
+	    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 	_ ->
-	    Session = close_service_data_containers(Session0),
-	    {ok, Session, Events}
+	    {ok, Session, Events, State1}
     end;
 
-invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts) ->
+invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts,
+       #state{state = started} = State0) ->
     lager:debug("Session Stop: ~p", [Session0]),
-    case ?get_svc_opt('State', Session0, stopped) of
-	started ->
-	    Session1 = ?set_svc_opt('State', stopped, Session0),
-	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
-	    Session2 = close_service_data_containers(Session1),
-	    {Request, Session} = create_ACR(RecType, Session2, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+    State1 = close_service_data_containers(Session0, State0#state{state = stopped}),
+    Session = maps:without([service_data], Session0),
+    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
+    {Request, State} = create_ACR(RecType, Session, Opts, State1),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
-invoke(Service, Procedure, Session, Events, _Opts) ->
-    {{error, {Service, Procedure}}, Session, Events}.
+invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
+  when Procedure =:= 'Initial';
+       Procedure =:= 'Update';
+       Procedure =:= 'Terminate' ->
+    {ok, Session, Events, State};
+
+invoke(Service, Procedure, Session, Events, _Opts, State) ->
+    {{error, {Service, Procedure}}, Session, Events, State}.
+
+%%%===================================================================
+%%% ergw_aaa_diameter_srv wrapper
+%%%===================================================================
+
+send_request(Request, Config) ->
+    ergw_aaa_diameter_srv:send_request(?MODULE, ?APP, Request, Config).
+
+await_response(Promise, Session, Events, State, #{async := true}) ->
+    {ok, Session, Events, State#state{pending = Promise}};
+await_response(Promise, Session, Events, State, Opts) ->
+    Msg = ergw_aaa_diameter_srv:await_response(Promise),
+    handle_aca(Msg, Session, Events, Opts, State).
+
+%% handle_response/6
+handle_response(Promise, Msg, Session, Events, Opts, #state{pending = Promise} = State) ->
+    handle_aca(Msg, Session, Events, Opts, State#state{pending = undefined});
+handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
+    {ok, Session, Events, State}.
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -178,21 +201,16 @@ prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
     prepare_request(Pkt, SvcName, Peer, CallOpts).
 
 %% handle_answer/5
-handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['ACR' | _], SvcName, Peer, CallOpts)
-  when is_map(Avps) ->
-    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Msg, CallOpts);
-
 handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.
 
 %% handle_error/5
-handle_error(Reason, _Request, _SvcName, undefined, CallOpts) ->
-    ergw_aaa_diameter_srv:handle_answer(fun handle_aca/4, Reason, CallOpts);
+handle_error(Reason, _Request, _SvcName, undefined, _CallOpts) ->
+    Reason;
 handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:retry(fun handle_aca/4, Reason, SvcName, Peer, CallOpts).
+    ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts).
 
 %% handle_request/3
 handle_request(_Packet, _SvcName, _Peer) ->
@@ -220,21 +238,17 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-%% handle_aca/4
+%% handle_aca/5
 handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0, _Opts) ->
+	   Session0, Events0, _Opts, State) ->
     {Session, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
-    {ok, Session, Events};
-handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts)
+    {ok, Session, Events, State};
+handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events};
-handle_aca({error, _} = Result, Session, Events, _Opts) ->
+    {{fail, Code}, Session, Events, State};
+handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
     lager:error("ACR failed with: ~p", [Result]),
-    {Result, Session, Events}.
-
-inc_number(Key, Session) ->
-    Number = ?get_svc_opt(Key, Session, -1) + 1,
-    {Number, ?set_svc_opt(Key, Number, Session)}.
+    {Result, Session, Events, State}.
 
 %% to_session/3
 to_session(Procedure, {Session0, Events0}, Avps) ->
@@ -298,26 +312,20 @@ optional(Key, Value, Avps)
 
 %%%===================================================================
 
-close_service_data_containers(#{service_data := SDC0} = Session0) ->
-    DiamSession0 = ?get_svc_all_opt(Session0),
-    {SDC, DiamSession1} =
-	lists:mapfoldr(
-	  fun(SD, SessIn) ->
-		  {LocSeqNo, SessOut} =
-		      inc_number('SD-Local-Sequence-Number', SessIn),
-		  {SD#{'Local-Sequence-Number' => LocSeqNo}, SessOut}
-	  end,
-	  DiamSession0, SDC0),
-    DiamSession =
-	maps:update_with('Service-Data-Container',
-			 fun(S) -> S ++ SDC end, SDC, DiamSession1),
-    Session = maps:without([service_data], Session0),
-    ergw_aaa_session:set_svc_opt(?MODULE, DiamSession, Session);
-close_service_data_containers(Session) ->
-    Session.
+number_sdcs([], _) ->
+    [];
+number_sdcs([H|T], N) ->
+    [H#{'Local-Sequence-Number' => N}|number_sdcs(T, N + 1)].
 
-from_service(_, _, M) ->
-    M.
+close_service_data_containers(#{service_data := SDC},
+			      #state{seq_number = LocSeqNo,
+				     sdc = ServiceDataCont} = State) ->
+    State#state{
+      seq_number = LocSeqNo + length(SDC),
+      sdc = ServiceDataCont ++ number_sdcs(SDC, LocSeqNo)
+     };
+close_service_data_containers(_Session, State) ->
+    State.
 
 dynamic_address_flag(Key, {0,0,0,0}, Avps) ->
     optional(Key, 1, Avps);
@@ -382,19 +390,11 @@ accounting(Base, 'OutOctets', Value, Avps) ->
 %%   [ Traffic-Steering-Policy-Identifier-DL ]
 %%   [ Traffic-Steering-Policy-Identifier-UL ]
 
-service_data(Session0, Avps0) ->
-    DiamSession = ?get_svc_all_opt(Session0),
-    Avps =
-	case DiamSession of
-	    #{'Service-Data-Container' := SDC}
-	      when is_list(SDC) ->
-		assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0);
-	    _ ->
-		Avps0
-	end,
-    Session = ergw_aaa_session:set_svc_opt(
-		?MODULE, DiamSession#{'Service-Data-Container' => []}, Session0),
-    {Avps, Session}.
+service_data(Avps0, #state{sdc = SDC} = State) when length(SDC) /= 0 ->
+    Avps = assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0),
+    {Avps, State#state{sdc = []}};
+service_data(Avps, State) ->
+    {Avps, State}.
 
 monitors_from_session('IP-CAN', #{?MODULE := Monitor}, Avps) ->
     maps:fold(fun from_session/3, Avps, Monitor);
@@ -573,8 +573,6 @@ from_session('Acct-Interim-Interval' = Key, Value, Avps) ->
 from_session(monitors, Monitors, Avps) ->
     maps:fold(fun monitors_from_session/3, Avps, Monitors);
 
-from_session(?MODULE, Value, M) ->
-    maps:fold(fun from_service/3, M, Value);
 from_session(_Key, _Value, M) ->
     M.
 
@@ -592,13 +590,12 @@ stop_indicator(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD', Avps) ->
 stop_indicator(_Type, Avps) ->
     Avps.
 
-create_ACR(Type, Session0, #{now := Now} = Opts) ->
-    {RecNumber, Session1} = inc_number('Accounting-Record-Number', Session0),
+create_ACR(Type, Session, #{now := Now} = Opts, #state{record_number = RecNumber} = State0) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Accounting-Record-Type' => Type,
 		   'Accounting-Record-Number' => RecNumber,
 		   'Acct-Application-Id'      => ?DIAMETER_APP_ID_RF,
-		   'Service-Context-Id'       => [context_id(Session0)],
+		   'Service-Context-Id'       => [context_id(Session)],
 		   'Event-Timestamp' =>
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)],
 		   'Service-Information'      =>
@@ -607,6 +604,5 @@ create_ACR(Type, Session0, #{now := Now} = Opts) ->
 			      [#{'PDP-Context-Type' => 0}]}]
 		  },
     Avps2 = stop_indicator(Type, Avps1),
-    {Avps, Session} = service_data(Session1, Avps2),
-
-    {['ACR' | from_session(Session, Avps)], Session}.
+    {Avps, State} = service_data(Avps2, State0),
+    {['ACR' | from_session(Session, Avps)], State#state{record_number = RecNumber + 1}}.
