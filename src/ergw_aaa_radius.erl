@@ -13,7 +13,7 @@
 
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
-	 initialize_handler/1, initialize_service/2, invoke/5]).
+	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3]).
 
 -import(ergw_aaa_session, [attr_append/3, merge/2]).
@@ -66,87 +66,72 @@ session_auth_options('PAP', Session, Attrs) ->
 session_auth_options(_, _Session, Attrs) ->
     Attrs.
 
-invoke(_Service, init, Session, Events, _Opts) ->
-    {ok, Session, Events};
+invoke(_Service, init, Session, Events, _Opts, _) ->
+    State = #{'State' => stopped},
+    {ok, Session, Events, State};
 
-invoke(_Service, authenticate = Procedure, Session, Events, #{now := Now} = Opts) ->
-    RadiusSession = ?get_svc_all_opt(Session),
-
-    UserName0 = maps:get('Username', Session, <<>>),
-    UserName = maps:get('Username', RadiusSession, UserName0),
+invoke(_Service, authenticate = Procedure, Session0, Events0, #{now := Now} = Opts, State0) ->
+    UserName0 = maps:get('Username', Session0, <<>>),
+    UserName = maps:get('Username', State0, UserName0),
 
     Attrs0 = [{?User_Name, UserName},
 	      {?Event_Timestamp,
 	       system_time_to_universal_time(Now + erlang:time_offset(), native)}],
     Attrs1 = session_auth_options(
-	       maps:get('Authentication-Method', Session, 'PAP'), Session, Attrs0),
-    Attrs2 = radius_session_options(RadiusSession, Attrs1),
-    Attrs3 = session_options(Session, Attrs2),
+	       maps:get('Authentication-Method', Session0, 'PAP'), Session0, Attrs0),
+    Attrs2 = radius_session_options(State0, Attrs1),
+    Attrs3 = session_options(Session0, Attrs2),
     Attrs = remove_accounting_attrs(Attrs3),
 
     Req = #radius_request{
 	     cmd = request,
 	     attrs = Attrs,
 	     msg_hmac = true,
-	     eap_msg = maps:get('EAP-Data', Session, <<>>)},
+	     eap_msg = maps:get('EAP-Data', Session0, <<>>)},
 
-    {Verdict, SessionOpts, Events1} =
-	radius_response(Procedure, send_request(Req, Session, Opts), Opts, Session, Events),
+    {Verdict, Session, Events, State} =
+	radius_response(Procedure, send_request(Req, Session0, Opts),
+			Opts, Session0, Events0, State0),
     case Verdict of
 	success ->
-	    {ok, SessionOpts#{'Authentication-Result' => Verdict}, Events1};
+	    {ok, Session, Events, State#{'Authentication-Result' => Verdict}};
 	challenge ->
-	    {Verdict, SessionOpts#{'Authentication-Result' => pending}, Events1};
+	    {Verdict, Session, Events, State#{'Authentication-Result' => pending}};
 	_ ->
-	    {Verdict, SessionOpts#{'Authentication-Result' => Verdict}, Events1}
+	    {Verdict, Session, Events, State#{'Authentication-Result' => Verdict}}
     end;
 
-invoke(_Service, authorize, #{'Authentication-Result' := success} = Session, Events, _) ->
-    {ok, Session, Events};
+invoke(_Service, authorize,Session, Events, _,
+       #{'Authentication-Result' := success} = State) ->
+    {ok, Session, Events, State};
 
-invoke(_Service, authorize, Session, Events, _) ->
-    {denied, Session, Events};
+invoke(_Service, authorize, Session, Events, _, State) ->
+    {denied, Session, Events, State};
 
-invoke(_Service, start, Session0, Events, Opts) ->
-    RadiusSession0 = ?get_svc_all_opt(Session0),
-    case maps:get('State', RadiusSession0, stopped) of
-	stopped ->
-	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
-	    Session = maps:without(Keys, Session0),
-	    RadiusSession = RadiusSession0#{'State' => 'started'},
-	    accounting(?RStatus_Type_Start, [], Session, Events, RadiusSession, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+invoke(_Service, start, Session0, Events, Opts, #{'State' := stopped} = State) ->
+    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
+    Session = maps:without(Keys, Session0),
+    accounting(?RStatus_Type_Start, [], Session, Events, Opts, State#{'State' => started});
 
-invoke(_Service, interim, Session, Events, Opts) ->
-    RadiusSession = ?get_svc_all_opt(Session),
-    case maps:get('State', RadiusSession, stopped) of
-	started ->
-	    accounting(?RStatus_Type_Update, [], Session, Events, RadiusSession, Opts);
-	_ ->
-	    {ok, Session, Events}
-    end;
+invoke(_Service, interim, Session, Events, Opts, #{'State' := started} = State) ->
+    accounting(?RStatus_Type_Update, [], Session, Events, Opts, State);
 
-invoke(_Service, stop, Session, Events, Opts) ->
-    RadiusSession0 = ?get_svc_all_opt(Session),
-    case maps:get('State', RadiusSession0, stopped) of
-	started ->
-	    RadiusSession = RadiusSession0#{'State' => 'stopped'},
-	    accounting(?RStatus_Type_Stop, [], Session, Events, RadiusSession, Opts);
-	_ ->
-	    {ok, Session, Events}
-    end;
+invoke(_Service, stop, Session, Events, Opts, #{'State' := started} = State) ->
+    accounting(?RStatus_Type_Stop, [], Session, Events, Opts, State#{'State' => stopped});
 
-invoke(Service, Procedure, Session, Events, _Opts) ->
-    {{error, {Service, Procedure}}, Session, Events}.
+invoke(_Service, Procedure, Session, Events, _Opts, State)
+  when Procedure =:= start; Procedure =:= interim; Procedure =:= stop ->
+    {ok, Session, Events, State};
 
-accounting(Type, Attrs0, Session0, Events, RadiusSession, #{now := Now} = Opts) ->
-    UserName0 = maps:get('Username', Session0, <<>>),
-    UserName = maps:get('Username', RadiusSession, UserName0),
+invoke(Service, Procedure, Session, Events, _Opts, State) ->
+    {{error, {Service, Procedure}}, Session, Events, State}.
 
-    Attrs1 = radius_session_options(RadiusSession, Attrs0),
-    Attrs2 = session_options(Session0, Attrs1),
+accounting(Type, Attrs0, Session, Events, #{now := Now} = Opts, State) ->
+    UserName0 = maps:get('Username', Session, <<>>),
+    UserName = maps:get('Username', State, UserName0),
+
+    Attrs1 = radius_session_options(State, Attrs0),
+    Attrs2 = session_options(Session, Attrs1),
     Attrs = [{?RStatus_Type,   Type},
 	     {?User_Name,      UserName},
 	     {?Event_Timestamp,
@@ -156,13 +141,16 @@ accounting(Type, Attrs0, Session0, Events, RadiusSession, #{now := Now} = Opts) 
     case Opts of
 	#{async := true} ->
 	    proc_lib:spawn(
-	      fun() -> send_request(Req, Session0, Opts) end);
+	      fun() -> send_request(Req, Session, Opts) end);
 	_ ->
-	    send_request(Req, Session0, Opts)
+	    send_request(Req, Session, Opts)
     end,
 
-    Session = ?set_svc_all_opt(RadiusSession, Session0),
-    {ok, Session, Events}.
+    {ok, Session, Events, State}.
+
+%% handle_response/6
+handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
+    {ok, Session, Events, State}.
 
 %%%===================================================================
 %%% Options Validation
@@ -204,27 +192,28 @@ validate_option(Opt, Value) ->
 %%===================================================================
 
 %% to_session/3
-to_session(Procedure, SessEvs, Avps) ->
-    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
+to_session(Procedure, {Session0, Events0}, Avps) ->
+    {Session, Events, _} =
+	maps:fold(to_session(Procedure, _, _, _), {Session0, Events0, #{}}, Avps),
+    {Session, Events}.
 
 %% to_session/4
-to_session(_, 'Acct-Interim-Interval', Interim, {Session, Events}) ->
+to_session(_, 'Acct-Interim-Interval', Interim, {Session, Events, State}) ->
     Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
-    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
+    {Session, ergw_aaa_session:ev_set(Trigger, Events), State};
 
-to_session(_, Key, Value, {Session, Events})
+to_session(_, Key, Value, {Session, Events, State})
 when Key =:= 'Session-Timeout';
      Key =:= 'Idle-Timeout' ->
-    {Session#{Key => Value * 1000}, Events};
+    {Session#{Key => Value * 1000}, Events, State};
 
-to_session(_, 'State', Value, {Session, Events}) ->
-    {?set_svc_opt('RADIUS-State', Value, Session), Events};
-to_session(_, Key, Value, {Session, Events})
+to_session(_, Key, Value, {Session, Events, State})
   when Key =:= 'Class';
+       Key =:= 'State';
        Key =:= 'Username' ->
-    {?set_svc_opt(Key, Value, Session), Events};
-to_session(_, _, _, SessEv) ->
-    SessEv.
+    {Session, Events, maps:put(Key, Value, State)};
+to_session(_, _, _, SessEvSt) ->
+    SessEvSt.
 
 %%%===================================================================
 
@@ -566,46 +555,46 @@ framed_protocol('TP-CAPWAP')         -> 16#48f90001;
 framed_protocol(_)                   -> 1.
 
 radius_response(Procedure, {ok, Response, RequestAuthenticator}, #{server := {_, _, Secret}},
-		Session, Events) ->
+		Session, Events, State) ->
     radius_reply(Procedure,
-      eradius_lib:decode_request(Response, Secret, RequestAuthenticator), Session, Events);
-radius_response(_Procedure, Response, _, Session, Events) ->
+      eradius_lib:decode_request(Response, Secret, RequestAuthenticator), Session, Events, State);
+radius_response(_Procedure, Response, _, Session, Events, State) ->
     lager:error("RADIUS failed with ~p", [Response]),
-    {fail, Session, Events}.
+    {fail, Session, Events, State}.
 
-radius_reply(Procedure, #radius_request{cmd = accept} = Reply, Session0, Events0) ->
+radius_reply(Procedure, #radius_request{cmd = accept} = Reply, Session0, Events0, State0) ->
     lager:debug("RADIUS Reply: ~p", [Reply]),
     try
 	SOpts = process_radius_attrs(Reply),
-	{Session1, Events} = to_session(Procedure, {Session0, Events0}, SOpts),
+	{Session1, Events, State} = to_session(Procedure, {Session0, Events0, State0}, SOpts),
 	Session2 = Session1#{'Acct-Authentic' => 'RADIUS'},
 	Session = handle_eap_msg(Reply, Session2),
-	{ok, Session, Events}
+	{ok, Session, Events, State}
     catch
 	throw:#aaa_err{} = _CtxErr ->
-	    {fail, Session0, Events0}
+	    {fail, Session0, Events0, State0}
     end;
 
-radius_reply(Procedure, #radius_request{cmd = challenge} = Reply, Session0, Events0) ->
+radius_reply(Procedure, #radius_request{cmd = challenge} = Reply, Session0, Events0, State0) ->
     lager:debug("RADIUS Challenge: ~p", [lager:pr(Reply, ?MODULE)]),
     try
 	SOpts = process_radius_attrs(Reply),
-	{Session1, Events} = to_session(Procedure, {Session0, Events0}, SOpts),
+	{Session1, Events, State} = to_session(Procedure, {Session0, Events0, State0}, SOpts),
 	Session = handle_eap_msg(Reply, Session1),
-	{ok, Session, Events}
+	{ok, Session, Events, State}
     catch
 	throw:#aaa_err{} = _CtxErr ->
-	    {fail, Session0, Events0}
+	    {fail, Session0, Events0, State0}
     end;
 
-radius_reply(_Procedure, #radius_request{cmd = reject} = Reply, Session0, Events) ->
+radius_reply(_Procedure, #radius_request{cmd = reject} = Reply, Session0, Events, State) ->
     lager:debug("RADIUS failed with ~p", [Reply]),
     Session = handle_eap_msg(Reply, Session0),
-    {fail, Session, Events};
+    {fail, Session, Events, State};
 
-radius_reply(_Procedure, Reply, Session, Events) ->
+radius_reply(_Procedure, Reply, Session, Events, State) ->
     lager:debug("RADIUS failed with ~p", [Reply]),
-    {fail, Session, Events}.
+    {fail, Session, Events, State}.
 
 handle_eap_msg(#radius_request{eap_msg = EAP}, Session)
   when EAP /= <<>> ->

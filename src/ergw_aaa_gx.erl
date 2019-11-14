@@ -21,7 +21,7 @@
 
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
-	 initialize_handler/1, initialize_service/2, invoke/5]).
+	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3, from_session/2]).
 
 %% diameter callbacks
@@ -54,6 +54,11 @@
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
+-record(state, {pending = undefined :: 'undefined' | reference(),
+		state = init       :: atom(),
+		request_number     :: 'undefined' | integer()
+	       }).
+
 %%===================================================================
 %% API
 %%===================================================================
@@ -83,48 +88,60 @@ validate_service(_Service, HandlerOpts, Opts) ->
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
 
-invoke(_Service, init, Session, Events, _Opts) ->
-    {ok, Session, Events};
+invoke(_Service, init, Session, Events, _Opts, _State) ->
+    {ok, Session, Events, #state{state = stopped}};
 
-invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts) ->
-    case ?get_svc_opt('State', Session0, stopped) of
-	stopped ->
-	    Session1 = ?set_svc_opt('State', started, Session0),
-	    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
-	    Session = maps:without(Keys, inc_number(Session1)),
-	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_INITIAL_REQUEST',
-	    Request = make_CCR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+invoke(_Service, {_, 'CCR-Initial'}, Session0, Events, Opts,
+       #state{state = stopped} = State0) ->
+    State = inc_request_number(State0#state{state = started}),
+    Keys = ['InPackets', 'OutPackets', 'InOctets', 'OutOctets', 'Acct-Session-Time'],
+    Session = maps:without(Keys, Session0),
+    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_INITIAL_REQUEST',
+    Request = make_CCR(RecType, Session, Opts, State),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
-invoke(_Service, {_, 'CCR-Update'}, Session0, Events, Opts) ->
-    case ?get_svc_opt('State', Session0, stopped) of
-	started ->
-	    Session = inc_number(Session0),
-	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_UPDATE_REQUEST',
-	    Request = make_CCR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+invoke(_Service, {_, 'CCR-Update'}, Session, Events, Opts,
+       #state{state = started} = State0) ->
+    State = inc_request_number(State0),
+    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_UPDATE_REQUEST',
+    Request = make_CCR(RecType, Session, Opts, State),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
-invoke(_Service, {_, 'CCR-Terminate'}, Session0, Events, Opts) ->
-    lager:debug("Session Stop: ~p", [Session0]),
-    case ?get_svc_opt('State', Session0, stopped) of
-	started ->
-	    Session1 = ?set_svc_opt('State', stopped, Session0),
-	    Session = inc_number(Session1),
-	    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
-	    Request = make_CCR(RecType, Session, Opts),
-	    ergw_aaa_diameter_srv:call(?APP, Request, Session, Events, Opts);
-	_ ->
-	    {ok, Session0, Events}
-    end;
+invoke(_Service, {_, 'CCR-Terminate'}, Session, Events, Opts,
+       #state{state = started} = State0) ->
+    lager:debug("Session Stop: ~p", [Session]),
+    State = inc_request_number(State0#state{state = stopped}),
+    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
+    Request = make_CCR(RecType, Session, Opts, State),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
-invoke(Service, Procedure, Session, Events, _Opts) ->
-    {{error, {Service, Procedure}}, Session, Events}.
+invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
+  when Procedure =:= 'CCR-Initial';
+       Procedure =:= 'CCR-Update';
+       Procedure =:= 'CCR-Terminate' ->
+    {ok, Session, Events, State};
+
+invoke(Service, Procedure, Session, Events, _Opts, State) ->
+    {{error, {Service, Procedure}}, Session, Events, State}.
+
+%%%===================================================================
+%%% ergw_aaa_diameter_srv wrapper
+%%%===================================================================
+
+send_request(Request, Config) ->
+    ergw_aaa_diameter_srv:send_request(?MODULE, ?APP, Request, Config).
+
+await_response(Promise, Session, Events, State, #{async := true}) ->
+    {ok, Session, Events, State#state{pending = Promise}};
+await_response(Promise, Session, Events, State, Opts) ->
+    Msg = ergw_aaa_diameter_srv:await_response(Promise),
+    handle_cca(Msg, Session, Events, Opts, State).
+
+%% handle_response/6
+handle_response(Promise, Msg, Session, Events, Opts, #state{pending = Promise} = State) ->
+    handle_cca(Msg, Session, Events, Opts, State#state{pending = undefined});
+handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
+    {ok, Session, Events, State}.
 
 %%===================================================================
 %% DIAMETER handler callbacks
@@ -184,21 +201,16 @@ prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
     prepare_request(Pkt, SvcName, Peer, CallOpts).
 
 %% handle_answer/5
-handle_answer(#diameter_packet{msg = [_ | Avps] = Msg}, ['CCR' | _], SvcName, Peer, CallOpts)
-  when is_map(Avps) ->
-    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:handle_answer(fun handle_cca/4, Msg, CallOpts);
-
 handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.
 
 %% handle_error/5
-handle_error(Reason, _Request, _SvcName, undefined, CallOpts) ->
-    ergw_aaa_diameter_srv:handle_answer(fun handle_cca/4, Reason, CallOpts);
+handle_error(Reason, _Request, _SvcName, undefined, _CallOpts) ->
+    Reason;
 handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
-    ergw_aaa_diameter_srv:retry(fun handle_cca/4, Reason, SvcName, Peer, CallOpts).
+    ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts).
 
 %% handle_request/3
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
@@ -235,40 +247,41 @@ validate_option_error(Opt, Value) ->
 %% internal helpers
 %%===================================================================
 
-%% handle_cca/4
-handle_cca(['answer-message' = Answer | #{'Result-Code' := RC} = AVPs], Session, Events, Opts) ->
-    handle_cca(Answer, RC, AVPs, Session, Events, Opts);
-handle_cca([Answer | #{'Result-Code' := [RC]} = AVPs], Session, Events, Opts) ->
-    handle_cca(Answer, RC, AVPs, Session, Events, Opts);
+%% handle_cca/5
+handle_cca(['answer-message' = Answer | #{'Result-Code' := RC} = AVPs],
+	   Session, Events, Opts, State) ->
+    handle_cca(Answer, RC, AVPs, Session, Events, Opts, State);
+handle_cca([Answer | #{'Result-Code' := [RC]} = AVPs],
+	   Session, Events, Opts, State) ->
+    handle_cca(Answer, RC, AVPs, Session, Events, Opts, State);
 handle_cca([Answer |
 	    #{'Experimental-Result' :=
 		  [#{'Vendor-Id' := ?VENDOR_ID_3GPP,
 		     'Experimental-Result-Code' := RC}]} = AVPs],
-	   Session, Events, Opts) ->
-    handle_cca(Answer, RC, AVPs, Session, Events, Opts);
+	   Session, Events, Opts, State) ->
+    handle_cca(Answer, RC, AVPs, Session, Events, Opts, State);
 handle_cca({error, no_connection}, Session, Events,
-	   #{answer_if_down := Answer, answers := Answers} = Opts) ->
+	   #{answer_if_down := Answer, answers := Answers} = Opts, State) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
-    NewSession = ?set_svc_opt('State', peer_down, Session),
-    handle_cca(['CCA' | Avps], NewSession, Events, Opts);
+    handle_cca(['CCA' | Avps], Session, Events, Opts, State#state{state = peer_down});
 handle_cca({error, no_connection}, Session, Events,
-	   #{answer_if_timeout := Answer, answers := Answers} = Opts) ->
+	   #{answer_if_timeout := Answer, answers := Answers} = Opts, State) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
-    handle_cca(['CCA' | Avps], Session, Events, Opts);
-handle_cca(Result, Session, Events, _Opts) ->
+    handle_cca(['CCA' | Avps], Session, Events, Opts, State);
+handle_cca(Result, Session, Events, _Opts, State) ->
     lager:error("CCA Result: ~p", [Result]),
-    {Result, Session, [stop | Events]}.
+    {Result, Session, [stop | Events], State}.
 
-%% handle_cca/5
-handle_cca('CCA', RC, AVPs, Session0, Events0, _Opts)
+%% handle_cca/6
+handle_cca('CCA', RC, AVPs, Session0, Events0, _Opts, State)
   when RC < 3000 ->
     {Session, Events} = to_session({gy, 'CCA'}, {Session0, Events0}, AVPs),
-    {ok, Session, Events};
-handle_cca(Answer, RC, _AVPs, Session, Events, _Opts)
+    {ok, Session, Events, State};
+handle_cca(Answer, RC, _AVPs, Session, Events, _Opts, State)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
-    {{fail, RC}, Session, [stop | Events]}.
+    {{fail, RC}, Session, [stop | Events], State}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
     {Result, ReplyAvps0} =
@@ -294,10 +307,10 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
     lager:debug("~p reply Avps: ~p", [Command, ReplyAvps]),
     {reply, [ReplyCode | ReplyAvps]}.
 
-inc_number(Session) ->
-    ModuleOpts = maps:get(?MODULE, Session, #{}),
-    Number = maps:get('CC-Request-Number', ModuleOpts, -1),
-    Session#{?MODULE => ModuleOpts#{'CC-Request-Number' => Number + 1}}.
+inc_request_number(#state{request_number = Number} = State) when is_integer(Number) ->
+    State#state{request_number = Number + 1};
+inc_request_number(State) ->
+    State#state{request_number = 0}.
 
 diameter_reply_code('ASR') -> 'ASA';
 diameter_reply_code('RAR') -> 'RAA'.
@@ -360,11 +373,6 @@ ip2bin(Bin) when is_binary(Bin)->
 map_update_with(Key, Fun, Init, Map) ->
     V = maps:get(Key, Map, Init),
     Map#{Key => Fun(V)}.
-
-from_service('CC-Request-Number' = Key, Value, M) ->
-    M#{Key => Value};
-from_service(_, _, M) ->
-    M.
 
 session_to_usu_key('InOctets')  -> 'CC-Input-Octets';
 session_to_usu_key('OutOctets') -> 'CC-Output-Octets'.
@@ -537,9 +545,6 @@ from_session(Key, Value, M)
 		    fun(V) -> umi_from_session(Key, Value, V) end,
 		    umi_session_init(), M);
 
-from_session(?MODULE, Value, M) ->
-    maps:fold(fun from_service/3, M, Value);
-
 from_session(_Key, _Value, M) ->
     M.
 
@@ -592,9 +597,10 @@ to_session(_, _, _, SessEv) ->
 %%       'CC-Request-Type'     => Type,
 %%       'CC-Request-Number'   => ReqNum}.
 
-make_CCR(Type, Session, Opts) ->
+make_CCR(Type, Session, Opts, #state{request_number = ReqNumber}) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Application-Id' => ?DIAMETER_APP_ID_GX,
-		   'CC-Request-Type'     => Type},
+		   'CC-Request-Type'     => Type,
+		   'CC-Request-Number'   => ReqNumber},
     Avps = from_session(Session, Avps1),
     ['CCR' | Avps ].
