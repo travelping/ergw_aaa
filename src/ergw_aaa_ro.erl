@@ -301,7 +301,7 @@ handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts, State0) ->
     {Avps, State} =
-	apply_answer_config(Answer, Answers, Session, State0#state{state = peer_down}),
+	apply_answer_config(Answer, Answers, State0#state{state = peer_down}),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
 handle_cca({error, timeout}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts, State0) ->
@@ -633,29 +633,29 @@ from_session_opts(Session, Avps0, Opts) ->
 %% ------------------------------------------------------------------
 
 apply_answer_config(Answer, Answers, State) ->
-    apply_answer_config(Answer, Answers, State,
-			#{'Result-Code' =>
-			      ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}).
-apply_answer_config(Answer, Answers, State, DefaultAnswerApvs) ->
-    case maps:get(Answer, Answers, DefaultAnswerApvs) of
-	{ocs_hold, GCUs} ->
-	    GCUs1 = lists:map(
-		      fun (#{'Granted-Service-Unit' :=
-				 [#{'CC-Time-Min' := [MinTime],
-				    'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
-			      GSU1 = GSU#{'CC-Time' =>
-					      [MinTime + rand:uniform(MaxTime - MinTime)]},
-			      GCU#{'Granted-Service-Unit' =>
-				       [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
-			  (GCU) ->
-			      GCU
-		      end, GCUs),
-	    {#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
-	       'Multiple-Services-Credit-Control' => GCUs1},
-	     State#state{state = ocs_hold}};
-	AVPs when is_map(AVPs) ->
-	    {AVPs, State}
-    end.
+    apply_answer_config(maps:get(Answer, Answers, undefined), State).
+
+apply_answer_config({ocs_hold, GCUs}, State) ->
+    GCUs1 = lists:map(
+	      fun (#{'Granted-Service-Unit' :=
+			 [#{'CC-Time-Min' := [MinTime],
+			    'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
+		      GSU1 = GSU#{'CC-Time' =>
+				      [MinTime + rand:uniform(MaxTime - MinTime)]},
+		      GCU#{'Granted-Service-Unit' =>
+			       [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
+		  (GCU) ->
+		      GCU
+	      end, GCUs),
+    {#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+       'Multiple-Services-Credit-Control' => GCUs1},
+     State#state{state = ocs_hold}};
+apply_answer_config(AVPs, State)
+  when is_map(AVPs) ->
+    {AVPs, State};
+apply_answer_config(undefined, State) ->
+    AVPs = #{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'},
+    {AVPs, State}.
 
 %% to_session/3
 to_session(Procedure, SessEvs, Avps) ->
