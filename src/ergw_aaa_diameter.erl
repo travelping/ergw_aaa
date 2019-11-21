@@ -127,6 +127,11 @@ validate_transport(connect_to = Opt, Value) when is_binary(Value) ->
 validate_transport(K, V)
   when K =:= 'Origin-Host'; K =:= 'Origin-Realm' ->
     validate_capability(K, V);
+validate_transport(fragment_timer, Value) when Value =:= infinity ->
+    Value;
+validate_transport(fragment_timer, Value) 
+  when is_integer(Value), Value >= 0, Value =< 16#FFFFFFFF ->
+    Value;
 validate_transport(recbuf, Value) when is_integer(Value), Value >= 16*1024 ->
     Value;
 validate_transport(sndbuf, Value) when is_integer(Value), Value >= 16*1024 ->
@@ -165,7 +170,7 @@ transport_module(_) -> unknown.
 
 transport_config(tcp, Type, Raddr, Port, Opts) ->
     [Type, {raddr, Raddr}, {rport, Port}
-     | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, nodelay], Opts))];
+     | maps:to_list(maps:with([fragment_timer, reuseaddr, recbuf, sndbuf, nodelay], Opts))];
 transport_config(sctp, Type, Raddr, Port, Opts) ->
     [Type, {raddr, Raddr}, {rport, Port}
      | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, unordered], Opts))].
