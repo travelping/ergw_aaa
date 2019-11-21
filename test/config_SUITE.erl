@@ -195,11 +195,13 @@ config(_Config)  ->
     ?error_set([functions, 'diam-test', transports, 1, connect_to], <<"http://example.com:12345">>),
 
     % transport options
-    ?ok_set([functions, 'diam-test', transports, 1, recbuf], 424242),
+	?ok_set([functions, 'diam-test', transports, 1, fragment_timer], 200),
+	?ok_set([functions, 'diam-test', transports, 1, recbuf], 424242),
     ?ok_set([functions, 'diam-test', transports, 1, sndbuf], 424242),
     ?ok_set([functions, 'diam-test', transports, 1, unordered], false),
     ?ok_set([functions, 'diam-test', transports, 1, reuseaddr], false),
     ?ok_set([functions, 'diam-test', transports, 1, nodelay], false),
+	?error_set([functions, 'diam-test', transports, 1, fragment_timer], invalid),
     ?error_set([functions, 'diam-test', transports, 1, recbuf], invalid),
     ?error_set([functions, 'diam-test', transports, 1, recbuf], 13),
     ?error_set([functions, 'diam-test', transports, 1, sndbuf], invalid),
