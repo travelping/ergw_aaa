@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.3.0 - 26 Nov 2019
+---------------------------
+
+* added NASREQ Authentication
+* support for couple and split accounting model
+* rewrite handler state storage
+
 Version 3.2.0 - 05 Nov 2019
 ---------------------------
 
