@@ -125,7 +125,6 @@ init_per_suite(Config0) ->
     meck_init(Config),
 
     {ok, _} = application:ensure_all_started(ergw_aaa),
-    lager_common_test_backend:bounce(debug),
 
     Config.
 

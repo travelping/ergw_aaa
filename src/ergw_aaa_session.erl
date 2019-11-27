@@ -1,4 +1,4 @@
-%% Copyright 2016-2018, Travelping GmbH <info@travelping.com>
+%% Copyright 2016-2019, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -30,6 +30,7 @@
 	 merge/2, to_session/1,
 	 native_to_seconds/1]).
 
+-include_lib("kernel/include/logger.hrl").
 -include("include/ergw_aaa_session.hrl").
 
 -record(data, {'$version' = 1,
@@ -217,7 +218,7 @@ handle_event({call, From}, {unset, Options}, _State, Data = #data{session = Sess
 
 handle_event(info, {'EXIT', Owner, Reason},
 	     _State, #data{owner = Owner} = Data) ->
-    lager:error("Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
+    ?LOG(error, "Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
     handle_owner_exit(Data),
     {stop, normal};
 
@@ -286,12 +287,12 @@ handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts},
     end;
 
 handle_event(cast, terminate, _State, _Data) ->
-    lager:info("Handling terminate request: ~p", [_Data]),
+    ?LOG(info, "Handling terminate request: ~p", [_Data]),
     {stop, normal};
 
 handle_event(info, {'DOWN', _Ref, process, Owner, Info},
 	     _State, #data{owner = Owner} = Data) ->
-    lager:error("Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
+    ?LOG(error, "Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
     handle_owner_exit(Data),
     {stop, normal};
 
@@ -305,11 +306,11 @@ handle_event(info, {'$reply', Promise, Handler, Msg, Opts} = _Info,
     {keep_state, Data};
 
 handle_event(Type, Event, _State, _Data) ->
-    lager:warning("unhandled event ~p:~p", [Type, Event]),
+    ?LOG(warning, "unhandled event ~p:~p", [Type, Event]),
     keep_state_and_data.
 
 terminate(Reason, Data) ->
-    lager:error("ctld Session terminating with state ~p with reason ~p", [Data, Reason]),
+    ?LOG(error, "ctld Session terminating with state ~p with reason ~p", [Data, Reason]),
     ok.
 
 code_change(_OldVsn, Data, _Extra) ->

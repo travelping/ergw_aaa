@@ -10,6 +10,7 @@
 -compile({parse_transform, do}).
 -compile({parse_transform, cut}).
 
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("../include/diameter_rfc4006_cc.hrl").
@@ -170,7 +171,7 @@ abort_session_request(gy, SessionId, DH, DR) ->
 %%===================================================================
 
 peer_up(_SvcName, _Peer, State, _Extra) ->
-    lager:debug("peer_up: ~p, ~p~n", [_Peer, _Extra]),
+    ?LOG(debug, "peer_up: ~p, ~p~n", [_Peer, _Extra]),
     State.
 
 peer_down(_SvcName, _Peer, State, _Extra) ->
@@ -188,11 +189,11 @@ prepare_request(#diameter_packet{msg = [T | Avps]} = Packet, _, {_PeerRef, Caps}
     Msg = [T | Avps#{'Origin-Host' => OH,
 		     'Origin-Realm' => OR,
 		     'Origin-State-Id' => OSid}],
-    lager:debug("prepare_request Msg: ~p", [Msg]),
+    ?LOG(debug, "prepare_request Msg: ~p", [Msg]),
     {send, Packet#diameter_packet{msg = Msg}};
 
 prepare_request(Packet, _SvcName, {PeerRef, _}, _Extra) ->
-    lager:debug("prepare_request to ~p: ~p", [PeerRef, Packet]),
+    ?LOG(debug, "prepare_request to ~p: ~p", [PeerRef, Packet]),
     {send, Packet}.
 
 prepare_retransmit(_Packet, _SvcName, _Peer, _Extra) ->

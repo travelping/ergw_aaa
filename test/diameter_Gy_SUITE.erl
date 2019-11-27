@@ -146,7 +146,6 @@ init_per_suite(Config0) ->
 
     diameter_test_server:start(?TEST_SERVER_CALLBACK_OVERRIDE, TestTransports),
     {ok, _} = application:ensure_all_started(ergw_aaa),
-    lager_common_test_backend:bounce(debug),
 
     case wait_for_diameter(?SERVICE, 10) of
 	ok ->
