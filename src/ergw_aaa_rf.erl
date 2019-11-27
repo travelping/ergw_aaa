@@ -1,4 +1,4 @@
-%% Copyright 2018, Travelping GmbH <info@travelping.com>
+%% Copyright 2018,2019 Travelping GmbH <info@travelping.com>
 %%
 %% This program is free software: you can redistribute it and/or modify
 %% it under the terms of the GNU Lesser General Public License as
@@ -36,6 +36,7 @@
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/diameter_3gpp_ts32_299_rf.hrl").
@@ -103,7 +104,7 @@ invoke(_Service, {_, 'Initial'}, Session0, Events, Opts,
     Session = maps:without(Keys, Session0),
     RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
     {Request, State} = create_ACR(RecType, Session, Opts, State1),
-    lager:debug("Session Start: ~p", [Session]),
+    ?LOG(debug, "Session Start: ~p", [Session]),
     await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
 invoke(_Service, {_, 'Update'}, Session0, Events, Opts,
@@ -121,7 +122,7 @@ invoke(_Service, {_, 'Update'}, Session0, Events, Opts,
 
 invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts,
        #state{state = started} = State0) ->
-    lager:debug("Session Stop: ~p", [Session0]),
+    ?LOG(debug, "Session Stop: ~p", [Session0]),
     State1 = close_service_data_containers(Session0, State0#state{state = stopped}),
     Session = maps:without([service_data], Session0),
     RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
@@ -162,13 +163,13 @@ handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
 
 %% peer_up/3
 peer_up(_SvcName, _Peer, State) ->
-    lager:debug("peer_up: ~p~n", [_Peer]),
+    ?LOG(debug, "peer_up: ~p~n", [_Peer]),
     State.
 
 %% peer_down/3
 peer_down(SvcName, Peer, State) ->
     ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
-    lager:debug("peer_down: ~p~n", [Peer]),
+    ?LOG(debug, "peer_down: ~p~n", [Peer]),
     State.
 
 %% pick_peer/5
@@ -247,7 +248,7 @@ handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events, State};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
-    lager:error("ACR failed with: ~p", [Result]),
+    ?LOG(error, "ACR failed with: ~p", [Result]),
     {Result, Session, Events, State}.
 
 %% to_session/3

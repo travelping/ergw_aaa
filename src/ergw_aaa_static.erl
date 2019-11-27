@@ -1,4 +1,4 @@
-%% Copyright 2016,2018 Travelping GmbH <info@travelping.com>
+%% Copyright 2016-2019 Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -15,6 +15,7 @@
 
 -import(ergw_aaa_session, [to_session/1]).
 
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 
@@ -85,5 +86,5 @@ handle_response(Procedure, #{'Result-Code' := Code} = Avps,
 handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
     {{fail, Code}, Session, [stop | Events], State};
 handle_response(_Procedure, Response, Session, Events, State) ->
-    lager:error("Response: ~p", [Response]),
+    ?LOG(error, "Response: ~p", [Response]),
     {Response, Session, Events, State}.

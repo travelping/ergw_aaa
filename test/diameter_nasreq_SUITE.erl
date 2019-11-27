@@ -106,7 +106,6 @@ init_per_group(Group, Config) ->
 
     diameter_test_server:start_nasreq(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
-    lager_common_test_backend:bounce(debug),
 
     case wait_for_diameter(?SERVICE, 10) of
 	ok ->

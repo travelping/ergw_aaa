@@ -1,4 +1,4 @@
-%% Copyright 2016, Travelping GmbH <info@travelping.com>
+%% Copyright 2016-2019, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -22,6 +22,7 @@
 -include("include/ergw_aaa_session.hrl").
 
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/logger.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
@@ -161,7 +162,7 @@ validate_ip(Opt, Host) when is_list(Host) ->
 	{ok, #hostent{h_addr_list = [IP | _]}} ->
 	    IP;
 	_ ->
-	    lager:error("can't resolve remote RADIUS server name '~s'", [Host]),
+	    ?LOG(error, "can't resolve remote RADIUS server name '~s'", [Host]),
 	    throw({error, {options, {Opt, Host}}})
     end;
 validate_ip(_Opt, {_,_,_,_} = IP) ->
@@ -559,11 +560,11 @@ radius_response(Procedure, {ok, Response, RequestAuthenticator}, #{server := {_,
     radius_reply(Procedure,
       eradius_lib:decode_request(Response, Secret, RequestAuthenticator), Session, Events, State);
 radius_response(_Procedure, Response, _, Session, Events, State) ->
-    lager:error("RADIUS failed with ~p", [Response]),
+    ?LOG(error, "RADIUS failed with ~p", [Response]),
     {fail, Session, Events, State}.
 
 radius_reply(Procedure, #radius_request{cmd = accept} = Reply, Session0, Events0, State0) ->
-    lager:debug("RADIUS Reply: ~p", [Reply]),
+    ?LOG(debug, "RADIUS Reply: ~p", [Reply]),
     try
 	SOpts = process_radius_attrs(Reply),
 	{Session1, Events, State} = to_session(Procedure, {Session0, Events0, State0}, SOpts),
@@ -576,7 +577,7 @@ radius_reply(Procedure, #radius_request{cmd = accept} = Reply, Session0, Events0
     end;
 
 radius_reply(Procedure, #radius_request{cmd = challenge} = Reply, Session0, Events0, State0) ->
-    lager:debug("RADIUS Challenge: ~p", [lager:pr(Reply, ?MODULE)]),
+    ?LOG(debug, "RADIUS Challenge: ~p", [Reply]),
     try
 	SOpts = process_radius_attrs(Reply),
 	{Session1, Events, State} = to_session(Procedure, {Session0, Events0, State0}, SOpts),
@@ -588,12 +589,12 @@ radius_reply(Procedure, #radius_request{cmd = challenge} = Reply, Session0, Even
     end;
 
 radius_reply(_Procedure, #radius_request{cmd = reject} = Reply, Session0, Events, State) ->
-    lager:debug("RADIUS failed with ~p", [Reply]),
+    ?LOG(debug, "RADIUS failed with ~p", [Reply]),
     Session = handle_eap_msg(Reply, Session0),
     {fail, Session, Events, State};
 
 radius_reply(_Procedure, Reply, Session, Events, State) ->
-    lager:debug("RADIUS failed with ~p", [Reply]),
+    ?LOG(debug, "RADIUS failed with ~p", [Reply]),
     {fail, Session, Events, State}.
 
 handle_eap_msg(#radius_request{eap_msg = EAP}, Session)
@@ -614,7 +615,7 @@ to_session_opts({#attribute{name = [ $T, $P, $- | Name]} = Attr, Value}, SOpts) 
 to_session_opts({#attribute{name = Name} = Attr, Value}, SOpts) ->
     to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
 to_session_opts({Attr, Value}, SOpts) ->
-    lager:debug("unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
+    ?LOG(debug, "unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
     SOpts.
 
 %% Service-Type = Framed-User
@@ -622,7 +623,7 @@ to_session_opts(_Attr, 'Service-Type', 2, SOpts) ->
     SOpts#{'Service-Type' => 'Framed-User'};
 
 to_session_opts(_Attr, 'Service-Type', Value, _SOpts) ->
-    lager:debug("unexpected Value in Service-Type: ~p", [Value]),
+    ?LOG(debug, "unexpected Value in Service-Type: ~p", [Value]),
     throw(?AAA_ERR(?FATAL));
 
 %% Framed-Protocol = PPP
@@ -632,7 +633,7 @@ to_session_opts(_Attr, 'Framed-Protocol', 1, SOpts) ->
 to_session_opts(_Attr, 'Framed-Protocol', 7, SOpts) ->
     SOpts#{'Framed-Protocol' => 'GPRS-PDP-Context'};
 to_session_opts(_Attr, 'Framed-Protocol', Value, _SOpts) ->
-    lager:debug("unexpected Value in Framed-Protocol: ~p", [Value]),
+    ?LOG(debug, "unexpected Value in Framed-Protocol: ~p", [Value]),
     throw(?AAA_ERR(?FATAL));
 
 %% Alc-Primary-Dns
@@ -690,7 +691,7 @@ to_session_opts(_Attr, Key, Value, SOpts)
       Key =:= 'CAPWAP-Power-Save-Busy-Timeout' ->
     SOpts#{Key => Value};
 to_session_opts(Attr, {'EXIT', {badarg, _}}, Value, SOpts) ->
-    lager:debug("unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
+    ?LOG(debug, "unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
     SOpts.
 
 remove_accounting_attrs(Attrs) ->

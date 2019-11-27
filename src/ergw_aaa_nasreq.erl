@@ -1,4 +1,4 @@
-%% Copyright 2017, Travelping GmbH <info@travelping.com>
+%% Copyright 2017-2019, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -40,6 +40,7 @@
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_session.hrl").
@@ -140,7 +141,7 @@ invoke(_Service, interim, Session, Events, Opts, #state{state = started} = State
 
 invoke(_Service, stop, Session, Events, Opts,
        #state{state = started, authorized = Authorized} = State0) ->
-    lager:debug("Session Stop: ~p", [Session]),
+    ?LOG(debug, "Session Stop: ~p", [Session]),
     State1 = inc_record_number(State0#state{state = stopped}),
     RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
     App = acct_app_alias(Opts),
@@ -197,13 +198,13 @@ handle_response('STR', Msg, Session, Events, Opts, State) ->
 
 %% peer_up/3
 peer_up(_SvcName, _Peer, State) ->
-    lager:debug("peer_up: ~p~n", [_Peer]),
+    ?LOG(debug, "peer_up: ~p~n", [_Peer]),
     State.
 
 %% peer_down/3
 peer_down(SvcName, Peer, State) ->
     ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
-    lager:debug("peer_down: ~p~n", [Peer]),
+    ?LOG(debug, "peer_down: ~p~n", [Peer]),
     State.
 
 %% pick_peer/5

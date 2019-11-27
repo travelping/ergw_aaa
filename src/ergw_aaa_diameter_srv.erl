@@ -1,4 +1,4 @@
-%% Copyright 2017, Travelping GmbH <info@travelping.com>
+%% Copyright 2017-2019, Travelping GmbH <info@travelping.com>
 %%
 %% This program is free software: you can redistribute it and/or modify
 %% it under the terms of the GNU Lesser General Public License as
@@ -34,6 +34,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include("include/ergw_aaa_session.hrl").
 
@@ -239,7 +240,7 @@ handle_info({'DOWN', MRef, _Type, Pid, _Info}, State) ->
     {noreply, State};
 
 handle_info(Info, State) ->
-    lager:warning("handle_info: ~p", [Info]),
+    ?LOG(warning, "handle_info: ~p", [Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->

@@ -1,4 +1,4 @@
-%% Copyright 2017,2018, Travelping GmbH <info@travelping.com>
+%% Copyright 2017-2019 Travelping GmbH <info@travelping.com>
 %%
 %% This program is free software: you can redistribute it and/or modify
 %% it under the terms of the GNU Lesser General Public License as
@@ -35,6 +35,7 @@
 	 handle_request/3]).
 
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/ergw_aaa_session.hrl").
@@ -109,7 +110,7 @@ invoke(_Service, {_, 'CCR-Update'}, Session, Events, Opts,
 
 invoke(_Service, {_, 'CCR-Terminate'}, Session, Events, Opts,
        #state{state = started} = State0) ->
-    lager:debug("Session Stop: ~p", [Session]),
+    ?LOG(debug, "Session Stop: ~p", [Session]),
     State = inc_request_number(State0#state{state = stopped}),
     RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
     Request = make_CCR(RecType, Session, Opts, State),
@@ -149,13 +150,13 @@ handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
 
 %% peer_up/3
 peer_up(_SvcName, _Peer, State) ->
-    lager:debug("peer_up: ~p~n", [_Peer]),
+    ?LOG(debug, "peer_up: ~p~n", [_Peer]),
     State.
 
 %% peer_down/3
 peer_down(SvcName, Peer, State) ->
     ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
-    lager:debug("peer_down: ~p~n", [Peer]),
+    ?LOG(debug, "peer_down: ~p~n", [Peer]),
     State.
 
 %% pick_peer/5
@@ -271,7 +272,7 @@ handle_cca({error, no_connection}, Session, Events,
 					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
 handle_cca(Result, Session, Events, _Opts, State) ->
-    lager:error("CCA Result: ~p", [Result]),
+    ?LOG(error, "CCA Result: ~p", [Result]),
     {Result, Session, [stop | Events], State}.
 
 %% handle_cca/6
@@ -304,7 +305,7 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
 		    'Session-Id' => SessionId},
     ReplyCode = diameter_reply_code(Command),
     ReplyAvps = diameter_reply_avps(Result, ReplyAvps2),
-    lager:debug("~p reply Avps: ~p", [Command, ReplyAvps]),
+    ?LOG(debug, "~p reply Avps: ~p", [Command, ReplyAvps]),
     {reply, [ReplyCode | ReplyAvps]}.
 
 inc_request_number(#state{request_number = Number} = State) when is_integer(Number) ->
@@ -583,10 +584,10 @@ to_session(Procedure, SessEvs, Avps) ->
 to_session(_, 'Usage-Monitoring-Information', Value, SessEv) ->
     lists:foldl(fun umi_to_session/2, SessEv, Value);
 to_session(_, 'Charging-Rule-Install', V, {Session, Events}) ->
-    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- V],
+    [?LOG(info, "CRI: ~p", [R]) || R <- V],
     {Session, [{pcc, install, V} | Events]};
 to_session(_, 'Charging-Rule-Remove', V, {Session, Events}) ->
-    [lager:info("CRI: ~p", [lager:pr(R, ?MODULE)]) || R <- V],
+    [?LOG(info, "CRI: ~p", [R]) || R <- V],
     {Session, [{pcc, remove, V} | Events]};
 to_session(_, _, _, SessEv) ->
     SessEv.
