@@ -610,7 +610,9 @@ process_radius_attrs(#radius_request{attrs = Attrs}) ->
 session_opt_append(Key, Opt, SOpts) ->
     attr_append(Key, Opt, SOpts).
 
-to_session_opts({#attribute{name = [ $T, $P, $- | Name]} = Attr, Value}, SOpts) ->
+to_session_opts({#attribute{name = "TP-" ++ Name} = Attr, Value}, SOpts) ->
+    to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
+to_session_opts({#attribute{name = "X_" ++ Name} = Attr, Value}, SOpts) ->
     to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
 to_session_opts({#attribute{name = Name} = Attr, Value}, SOpts) ->
     to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
