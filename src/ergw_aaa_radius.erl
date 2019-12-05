@@ -653,7 +653,7 @@ to_session_opts(_Attr, 'Access-Rule', Value, SOpts) ->
 to_session_opts(_Attr, Key, Value, SOpts)
   when
       %% 3GPP TS 29.061 Attributes
-      Key =:= '3GPP-IPv6-DNSServers' ->
+      Key =:= '3GPP-IPv6-DNS-Servers' ->
     SOpts#{Key => ergw_aaa_3gpp_dict:decode(Key, Value)};
 
 to_session_opts(_Attr, Key, Value, SOpts)
