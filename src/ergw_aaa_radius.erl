@@ -27,6 +27,7 @@
 -include_lib("eradius/include/dictionary_3gpp.hrl").
 -include_lib("eradius/include/dictionary_tunnel.hrl").
 -include_lib("eradius/include/dictionary_rfc4679.hrl").
+-include_lib("eradius/include/dictionary_rfc6911.hrl").
 -include_lib("eradius/include/dictionary_alcatel_sr.hrl").
 -include_lib("eradius/include/dictionary_microsoft.hrl").
 -include_lib("eradius/include/dictionary_travelping.hrl").
@@ -271,8 +272,15 @@ session_options('Framed-Protocol', Value, Attrs) ->
 
 session_options('Framed-IP-Address', Value, Attrs) ->
     [{?Framed_IP_Address, Value}|Attrs];
+session_options('Framed-Pool', Value, Attrs) ->
+    [{?Framed_Pool, Value}|Attrs];
+session_options('Framed-IPv6-Prefix', Value, Attrs) ->
+    [{?Framed_IPv6_Prefix, Value}|Attrs];
+session_options('Framed-IPv6-Pool', Value, Attrs) ->
+    [{?Framed_IPv6_Pool, Value}|Attrs];
 session_options('Framed-Interface-Id', Value, Attrs) ->
     [{?Framed_Interface_Id, Value}|Attrs];
+
 session_options('Session-Id', Value, Attrs) ->
     Id = io_lib:format("~40.16.0B", [Value]),
     [{?Acct_Session_Id, Id}|Attrs];
@@ -659,7 +667,8 @@ to_session_opts(_Attr, Key, Value, SOpts)
     SOpts#{Key => ergw_aaa_3gpp_dict:decode(Key, Value)};
 
 to_session_opts(_Attr, Key, Value, SOpts)
-  when Key =:= 'Class' ->
+  when Key =:= 'Class';
+       Key =:= 'DNS-Server-IPv6-Address' ->
     repeated(Key, Value, SOpts);
 
 to_session_opts(_Attr, Key, Value, SOpts)
@@ -671,6 +680,7 @@ to_session_opts(_Attr, Key, Value, SOpts)
       Key =:= 'Session-Timeout';
       Key =:= 'Idle-Timeout';
       Key =:= 'Framed-IP-Address';
+      Key =:= 'Framed-IPv6-Prefix';
       Key =:= 'Framed-Interface-Id';
       %% Microsoft MPPE Keys
       Key =:= 'MS-MPPE-Send-Key';
