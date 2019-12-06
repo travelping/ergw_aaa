@@ -162,8 +162,12 @@ simple() ->
 simple(Config) ->
     Stats0 = get_stats(?SERVICE),
 
-    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
-						     #{'Framed-IP-Address' => {10,10,10,10}}),
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>}),
 
     {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
     ?match([{set, {{ergw_aaa_nasreq, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],

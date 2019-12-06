@@ -354,6 +354,8 @@ to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
 
 to_session(_, 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
     {Session#{'Framed-IP-Address' => {A,B,C,D}}, Events};
+to_session(_, 'Framed-IPv6-Prefix', [Prefix], {Session, Events}) ->
+    {Session#{'Framed-IPv6-Prefix' => ergw_aaa_diameter:decode_ipv6prefix(Prefix)}, Events};
 
 to_session(_, _, _, SessEv) ->
     SessEv.
@@ -423,6 +425,7 @@ from_session(Key, Value, M)
        Key =:= '3GPP-Charging-Gateway-IPv6-Address';
        Key =:= '3GPP-SGSN-IPv6-Address';
        Key =:= '3GPP-GGSN-IPv6-Address';
+       Key =:= '3GPP-IPv6-DNS-Servers';
        Key =:= '3GPP-Charging-Id';
        Key =:= '3GPP-Camel-Charging';
        Key =:= '3GPP-PDP-Type';
@@ -462,6 +465,8 @@ from_session('IP', Value, M) ->
     M#{'Framed-IP-Address' => [format_address(Value)]};
 from_session('Framed-IP-Address' = Key, Value, M) ->
     M#{Key => [format_address(Value)]};
+from_session('Framed-IPv6-Prefix' = Key, Value, M) ->
+    M#{Key => [ergw_aaa_diameter:encode_ipv6prefix(Value)]};
 
 from_session('Diameter-Session-Id', SId, M) ->
     M#{'Session-Id' => SId};
@@ -475,7 +480,9 @@ from_session(Key, Value, M)
        Key =:= 'Class';
        Key =:= 'Called-Station-Id';
        Key =:= 'Calling-Station-Id';
-       Key =:= 'Framed-Interface-Id' ->
+       Key =:= 'Framed-Interface-Id';
+       Key =:= 'Framed-Pool';
+       Key =:= 'Framed-IPv6-Pool' ->
     M#{Key => [Value]};
 
 from_session(_Key, _Value, M) -> M.
@@ -486,10 +493,10 @@ from_session(Session, Avps) ->
 create_AAR(Type, Session, Opts) ->
     Username = maps:get('Username', Session, <<>>),
     Password = maps:get('Password', Session, <<>>),
-    FramedIP = maps:get('Framed-IP-Address', Session, [<<0,0,0,0>>]),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
-    Avps1 = Avps0#{'Auth-Request-Type' => Type, 'User-Name' => Username,
-		   'User-Password' => Password, 'Framed-IP-Address' => FramedIP,
+    Avps1 = Avps0#{'Auth-Request-Type' => Type,
+		   'User-Name' => Username,
+		   'User-Password' => Password,
 		   'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'},
     Avps = from_session(Session, Avps1),
     ['AAR' | Avps].

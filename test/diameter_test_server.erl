@@ -241,15 +241,22 @@ handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extr
 		   [<<0,0,0,0>>] -> [<<10,106,14,227>>];
 		   FramedIPReq -> FramedIPReq
 	       end,
-    AAA =  #{'Session-Id' => Id,
-	     'Result-Code' => 2001,
-	     'Origin-Host' => OH,
-	     'Origin-Realm' => OR,
-	     'Acct-Interim-Interval' => [InterimAccounting],
-	     'Authorization-Lifetime' => [AuthLifeTime],
-	     'Framed-IP-Address' => FramedIP,
-	     'Auth-Request-Type' => Type,
-	     'Auth-Application-Id' => AppId},
+    AAA0 =  #{'Session-Id' => Id,
+	      'Result-Code' => 2001,
+	      'Origin-Host' => OH,
+	      'Origin-Realm' => OR,
+	      'Acct-Interim-Interval' => [InterimAccounting],
+	      'Authorization-Lifetime' => [AuthLifeTime],
+	      'Framed-IP-Address' => FramedIP,
+	      'Auth-Request-Type' => Type,
+	      'Auth-Application-Id' => AppId},
+    AAA = if is_map_key('Framed-IPv6-Prefix', Msg) ->
+		  AAA0#{'3GPP-IPv6-DNS-Servers' =>
+			    ergw_aaa_3gpp_dict:encode('3GPP-IPv6-DNS-Servers',
+						      [{16#fe80,0,0,0,0,0,0,1},
+						       {16#fe80,0,0,0,0,0,0,2}])};
+	     true -> AAA0
+	  end,
     {reply, ['AAA' | AAA]};
 
 handle_request(#diameter_packet{msg = ['STR' | Msg]}, _SvcName, {_, Caps}, _Extra)

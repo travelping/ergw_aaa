@@ -13,6 +13,7 @@
 -export([validate_function/1,
 	 initialize_function/2]).
 -export(['3gpp_from_session'/2, qos_from_session/1]).
+-export([encode_ipv6prefix/1, decode_ipv6prefix/1]).
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("diameter/include/diameter.hrl").
@@ -327,3 +328,14 @@ qos_from_session(_K, _V, Info) ->
 
 qos_from_session(Info) ->
     maps:fold(fun qos_from_session/3, #{}, Info).
+
+encode_ipv6prefix({{A,B,C,D,E,F,G,H}, PLen}) ->
+    L = (PLen + 7) div 8,
+    <<IP:L/bytes, _R/binary>> = <<A:16, B:16, C:16, D:16, E:16, F:16, G:16, H:16>>,
+    <<0, PLen:8, IP/binary>>.
+
+decode_ipv6prefix(<<_:8, PLen:8, Bin/binary>>) ->
+    BinLen = (PLen + 7) div 8,
+    <<P:BinLen/bytes, Rest/binary>> = Bin,
+    <<A:16,B:16,C:16,D:16,E:16,F:16,G:16,H:16>> = eradius_lib:pad_to(16, P),
+    {{{A,B,C,D,E,F,G,H}, PLen}, Rest}.

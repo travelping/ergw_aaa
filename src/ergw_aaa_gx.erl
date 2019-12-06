@@ -440,8 +440,8 @@ from_session('Framed-IP-Address', IP, Avps) ->
     Avps#{'Framed-IP-Address' => [ip2bin(IP)]};
 
 %% 'Framed-IPv6-Prefix'
-from_session('Framed-IPv6-Prefix', {IP, PrefixLen}, Avps) ->
-    Avps#{'Framed-IPv6-Prefix' => [<<0:4, PrefixLen:4, (ip2bin(IP))/binary>>]};
+from_session('Framed-IPv6-Prefix', Prefix, Avps) ->
+    Avps#{'Framed-IPv6-Prefix' => ergw_aaa_diameter:decode_ipv6prefix(Prefix)};
 
 %% 'IP-CAN-Type'
 
