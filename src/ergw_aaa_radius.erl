@@ -16,8 +16,6 @@
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3]).
 
--import(ergw_aaa_session, [attr_append/3, merge/2]).
-
 -include("ergw_aaa_internal.hrl").
 -include("include/ergw_aaa_session.hrl").
 
@@ -247,9 +245,11 @@ gethostbyname(Name) ->
 radius_session_options(RadiusSession, Attrs) ->
     maps:fold(fun radius_session_options/3, Attrs, RadiusSession).
 
-radius_session_options('Class', Class, Attrs) ->
-    [{?Class, Class}|Attrs];
-radius_session_options('RADIUS-State', State, Attrs) ->
+radius_session_options('Class', [], Attrs) ->
+    Attrs;
+radius_session_options('Class', [H|T], Attrs) ->
+    [{?Class, H}|radius_session_options('Class', T, Attrs)];
+radius_session_options('State', State, Attrs) ->
     [{?State, State}|Attrs];
 radius_session_options(_Key, _Value, Attrs) ->
     Attrs.
@@ -607,8 +607,8 @@ handle_eap_msg(_, Session) ->
 process_radius_attrs(#radius_request{attrs = Attrs}) ->
     lists:foldr(fun to_session_opts/2, #{}, Attrs).
 
-session_opt_append(Key, Opt, SOpts) ->
-    attr_append(Key, Opt, SOpts).
+repeated(Key, Value, Opts) ->
+    maps:update_with(Key, fun(X) -> X ++ [Value] end, [Value], Opts).
 
 to_session_opts({#attribute{name = "TP-" ++ Name} = Attr, Value}, SOpts) ->
     to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
@@ -640,17 +640,17 @@ to_session_opts(_Attr, 'Framed-Protocol', Value, _SOpts) ->
 
 %% Alc-Primary-Dns
 to_session_opts(_Attr, 'Alc-Primary-DNS', DNS, SOpts) ->
-    session_opt_append('DNS', DNS, SOpts);
+    repeated('DNS', DNS, SOpts);
 %% Alc-Secondary-Dns
 to_session_opts(_Attr, 'Alc-Secondary-DNS', DNS, SOpts) ->
-    session_opt_append('DNS', DNS, SOpts);
+    repeated('DNS', DNS, SOpts);
 
 %% Travelping Extensions
 
 %% TP-Access-Rule
 to_session_opts(_Attr, 'Access-Rule', Value, SOpts) ->
     Rule = list_to_tuple([binary_to_list(V) || V <- binary:split(Value, <<":">>, [global])]),
-    session_opt_append('Access-Rules', Rule, SOpts);
+    repeated('Access-Rules', Rule, SOpts);
 
 to_session_opts(_Attr, Key, Value, SOpts)
   when
@@ -659,9 +659,12 @@ to_session_opts(_Attr, Key, Value, SOpts)
     SOpts#{Key => ergw_aaa_3gpp_dict:decode(Key, Value)};
 
 to_session_opts(_Attr, Key, Value, SOpts)
+  when Key =:= 'Class' ->
+    repeated(Key, Value, SOpts);
+
+to_session_opts(_Attr, Key, Value, SOpts)
   when
       %% Generic Attributes
-      Key =:= 'Class';
       Key =:= 'State';
       Key =:= 'Username';
       Key =:= 'Acct-Interim-Interval';

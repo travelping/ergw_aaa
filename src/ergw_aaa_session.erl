@@ -25,10 +25,7 @@
 	 request/4, response/4]).
 
 %% Session Object API
--export([attr_get/2, attr_get/3, attr_set/3,
-	 attr_append/3, attr_fold/3,
-	 merge/2, to_session/1,
-	 native_to_seconds/1]).
+-export([to_session/1, native_to_seconds/1]).
 
 -include_lib("kernel/include/logger.hrl").
 -include("include/ergw_aaa_session.hrl").
@@ -327,25 +324,6 @@ to_session(Session) when is_list(Session) ->
     maps:from_list(Session);
 to_session(Session) when is_map(Session) ->
     Session.
-
--spec attr_get(Key :: term(), Session :: map()) -> {ok, Value :: any()} | error.
-attr_get(Key, Session) ->
-    maps:find(Key, Session).
-
-attr_get(Key, Session, Default) ->
-    maps:get(Key, Session, Default).
-
-attr_set(Key, Value, Session) ->
-    maps:put(Key, Value, Session).
-
-attr_append(Key, Value, Session) ->
-    maps:put(Key, Value, Session).
-
-attr_fold(Fun, Acc, Session) ->
-    maps:fold(Fun, Acc, Session).
-
-merge(S1, S2) ->
-    maps:merge(S1, S2).
 
 %%===================================================================
 %% internal helpers
