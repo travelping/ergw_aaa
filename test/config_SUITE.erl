@@ -243,6 +243,9 @@ config(_Config)  ->
     ?error_set([handlers, ergw_aaa_nasreq, accounting], []),
     ?ok_set([handlers, ergw_aaa_nasreq, accounting], split),
     ?ok_set([handlers, ergw_aaa_nasreq, accounting], coupled),
+    ?ok_set([handlers, ergw_aaa_nasreq, send_pool_in_AAR], true),
+    ?ok_set([handlers, ergw_aaa_nasreq, send_pool_in_AAR], false),
+    ?error_set([handlers, ergw_aaa_nasreq, send_pool_in_AAR], undefined),
 
     ?error_set([services, 'DIAMETER-Service', handler], invalid_handler),
 
