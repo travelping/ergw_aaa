@@ -286,6 +286,10 @@ validate_option(accounting, coupled = Value) ->
     Value;
 validate_option(accounting, split = Value) ->
     Value;
+validate_option(send_pool_in_AAR, true) ->
+    true;
+validate_option(send_pool_in_AAR, false) ->
+    false;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Host', [Value]) when is_binary(Value) ->
@@ -490,14 +494,18 @@ from_session(_Key, _Value, M) -> M.
 from_session(Session, Avps) ->
     maps:fold(fun from_session/3, Avps, Session).
 
-create_AAR(Type, Session, Opts) ->
-    Username = maps:get('Username', Session, <<>>),
-    Password = maps:get('Password', Session, <<>>),
+create_AAR(Type, Session0, Opts) ->
+    Username = maps:get('Username', Session0, <<>>),
+    Password = maps:get('Password', Session0, <<>>),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Request-Type' => Type,
 		   'User-Name' => Username,
 		   'User-Password' => Password,
 		   'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'},
+    Session = case maps:get(send_pool_in_AAR, Opts, false) of
+	    false -> maps:without(['Framed-Pool', 'Framed-IPv6-Pool'], Session0);
+	    _ -> Session0
+	end,
     Avps = from_session(Session, Avps1),
     ['AAR' | Avps].
 
