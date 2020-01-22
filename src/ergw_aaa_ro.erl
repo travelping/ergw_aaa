@@ -209,8 +209,8 @@ prepare_request(Pkt0, SvcName, {_PeerRef, _} = Peer, CallOpts) ->
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer).
 
 %% prepare_retransmit/4
-prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
-    prepare_request(Pkt, SvcName, Peer, CallOpts).
+prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
+    false.
 
 %% handle_answer/5
 handle_answer(#diameter_packet{msg = [_ | #{'Result-Code' := Code}]},
@@ -231,11 +231,14 @@ handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     maybe_retry(Reason, SvcName, Peer, CallOpts).
 
-maybe_retry(Reason, SvcName, Peer,
-	    #diam_call{opts = #{'CC-Session-Failover' := supported}} = CallOpts) ->
-    ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts);
-maybe_retry(Reason, _SvcName, _Peer, _CallOpts) ->
-    {error, Reason}.
+maybe_retry(Reason, SvcName, Peer, CallOpts) ->
+    ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts).
+
+%% maybe_retry(Reason, SvcName, Peer,
+%% 	    #diam_call{opts = #{'CC-Session-Failover' := supported}} = CallOpts) ->
+%%     ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts);
+%% maybe_retry(Reason, _SvcName, _Peer, _CallOpts) ->
+%%     {error, Reason}.
 
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->

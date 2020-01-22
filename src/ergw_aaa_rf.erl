@@ -198,8 +198,8 @@ prepare_request(Pkt0, SvcName, {_PeerRef, _} = Peer, CallOpts) ->
     ergw_aaa_diameter_srv:start_request(Pkt, SvcName, Peer).
 
 %% prepare_retransmit/4
-prepare_retransmit(Pkt, SvcName, Peer, CallOpts) ->
-    prepare_request(Pkt, SvcName, Peer, CallOpts).
+prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
+    false.
 
 %% handle_answer/5
 handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
