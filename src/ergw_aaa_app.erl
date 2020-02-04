@@ -20,6 +20,7 @@ start(_StartType, _StartArgs) ->
     case ergw_aaa_sup:start_link() of
 	{ok, _} = Ret ->
 	    Config = ergw_aaa_config:load_config(),
+		ergw_aaa_prometheus:declare(),
 	    SrvSupSpecs0 = initialize_handlers(Config, []),
 	    SrvSupSpecs1 = initialize_services(Config, SrvSupSpecs0),
 	    SrvSupSpecs = initialize_functions(Config, SrvSupSpecs1),

@@ -127,6 +127,7 @@ invoke(_Service, {_, Procedure}, Session, Events, Opts,
        Procedure =:= 'CCR-Terminate' ->
     case SessState of
 	ocs_hold ->
+        prometheus_counter:inc(ocs_hold_session_end, []),
 	    handle_cca({error, ocs_hold_end}, Session, Events, Opts, State);
 	peer_down ->
 	    handle_cca({error, no_connection}, Session, Events, Opts, State);
@@ -640,6 +641,7 @@ apply_answer_config(Answer, Answers, State) ->
     apply_answer_config(maps:get(Answer, Answers, undefined), State).
 
 apply_answer_config({ocs_hold, GCUs}, State) ->
+    prometheus_counter:inc(ocs_hold_session_start, []),
     GCUs1 = lists:map(
 	      fun (#{'Granted-Service-Unit' :=
 			 [#{'CC-Time-Min' := [MinTime],

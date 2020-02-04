@@ -594,6 +594,9 @@ ocs_hold_initial_timeout(Config) ->
     {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
 
+	prometheus_counter:reset(ocs_hold_session_start, []),
+	prometheus_counter:reset(ocs_hold_session_end, []),
+
     {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,
 	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
@@ -613,6 +616,9 @@ ocs_hold_initial_timeout(Config) ->
 	   ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [])),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+
+	?equal(1, prometheus_counter:value(ocs_hold_session_start, [])),
+	?equal(1, prometheus_counter:value(ocs_hold_session_end, [])),
 
     %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats1)),
@@ -637,6 +643,9 @@ ocs_hold_update_timeout(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
+
+	prometheus_counter:reset(ocs_hold_session_start, []),
+	prometheus_counter:reset(ocs_hold_session_end, []),
 
     %% Send CCR-I
     Stats0 = get_stats(?SERVICE),
@@ -670,6 +679,9 @@ ocs_hold_update_timeout(Config) ->
     {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
 
     Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
+
+	?equal(1, prometheus_counter:value(ocs_hold_session_start, [])),
+	?equal(1, prometheus_counter:value(ocs_hold_session_end, [])),
 
     %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
