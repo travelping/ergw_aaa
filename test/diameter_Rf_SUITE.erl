@@ -11,8 +11,10 @@
 -compile([export_all, nowarn_export_all]).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("../include/diameter_3gpp_ts32_299.hrl").
+-include("../include/diameter_3gpp_ts32_299_rf.hrl").
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
@@ -81,7 +83,7 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, multi_event_session, async].
+    [simple_session, multi_event_session, async, secondary_rat_usage_data_report].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -109,11 +111,18 @@ end_per_suite(Config) ->
     diameter_test_server:stop(),
     ok.
 
-init_per_testcase(Config) ->
+init_per_testcase(secondary_rat_usage_data_report, Config) ->
+    meck_reset(Config),
+    meck:new(diameter_test_server, [passthrough, no_link]),
+    Config;
+init_per_testcase(_, Config) ->
     meck_reset(Config),
     Config.
 
-end_per_testcase(_Config) ->
+end_per_testcase(secondary_rat_usage_data_report, _Config) ->
+    meck:unload(diameter_test_server),
+    ok;
+end_per_testcase(_, _Config) ->
     ok.
 
 %%%===================================================================
@@ -346,4 +355,135 @@ async(Config) ->
 
     %% make sure nothing crashed
     meck_validate(Config),
+    ok.
+
+secondary_rat_usage_data_report() ->
+    [{doc, "Rf session with RAN-Secondary-RAT-Usage-Report"}].
+secondary_rat_usage_data_report(Config) ->
+    Session = init_session(#{}, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    SecRatReport0 =
+	#{'RAN-Secondary-RAT-Usage-Report' =>
+	      [#{'3GPP-Charging-Id' => [3779765295],
+		 'Accounting-Input-Octets' => [1],
+		 'Accounting-Output-Octets' => [2],
+		 'RAN-Start-Timestamp' => [{{2020,1,1}, {0, 0,0}}],
+		 'RAN-End-Timestamp' =>   [{{2020,1,1}, {0, 5,0}}],
+		 'Secondary-RAT-Type' => [<<0>>]
+		},
+	       #{'3GPP-Charging-Id' => [3779765295],
+		 'Accounting-Input-Octets' => [1],
+		 'Accounting-Output-Octets' => [2],
+		 'RAN-Start-Timestamp' => [{{2020,1,1}, {0, 5,0}}],
+		 'RAN-End-Timestamp' =>   [{{2020,1,1}, {0,10,0}}],
+		 'Secondary-RAT-Type' => [<<0>>]
+		},
+	       #{'3GPP-Charging-Id' => [3779765295],
+		 'Accounting-Input-Octets' => [1],
+		 'Accounting-Output-Octets' => [2],
+		 'RAN-Start-Timestamp' => [{{2020,1,1}, {0,10,0}}],
+		 'RAN-End-Timestamp' =>   [{{2020,1,1}, {0,15,0}}],
+		 'Secondary-RAT-Type' => [<<0>>]
+		}]},
+    ergw_aaa_session:invoke(SId, SecRatReport0, {rf, 'Update'}, SOpts#{async => false}),
+
+    SecRatReport1 =
+	#{'RAN-Secondary-RAT-Usage-Report' =>
+	      [#{'3GPP-Charging-Id' => [3779765295],
+		 'Accounting-Input-Octets' => [1],
+		 'Accounting-Output-Octets' => [2],
+		 'RAN-Start-Timestamp' => [{{2020,1,1}, {0,15,0}}],
+		 'RAN-End-Timestamp' =>   [{{2020,1,1}, {0,20,0}}],
+		 'Secondary-RAT-Type' => [<<0>>]
+		},
+	       #{'3GPP-Charging-Id' => [3779765295],
+		 'Accounting-Input-Octets' => [1],
+		 'Accounting-Output-Octets' => [2],
+		 'RAN-Start-Timestamp' => [{{2020,1,1}, {0,20,0}}],
+		 'RAN-End-Timestamp' =>   [{{2020,1,1}, {0,25,0}}],
+		 'Secondary-RAT-Type' => [<<0>>]
+		},
+	       #{'3GPP-Charging-Id' => [3779765295],
+		 'Accounting-Input-Octets' => [1],
+		 'Accounting-Output-Octets' => [2],
+		 'RAN-Start-Timestamp' => [{{2020,1,1}, {0,30,0}}],
+		 'RAN-End-Timestamp' =>   [{{2020,1,1}, {0,35,0}}],
+		 'Secondary-RAT-Type' => [<<0>>]
+		}]},
+    ergw_aaa_session:invoke(SId, SecRatReport1, {rf, 'Update'}, SOpts#{async => false}),
+
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    {ok, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    DReqs = lists:foldr(
+	      fun({_, {_, handle_request,
+		       [#diameter_packet{
+			   msg = ['ACR' |
+				  #{'Accounting-Record-Type' := Type} = Msg]}, _, _, _]
+		      }, _}, A) ->
+		      maps:update_with(Type, fun(X) -> [Msg|X] end, [Msg], A);
+		 (_, A) -> A
+	      end, #{}, meck:history(diameter_test_server)),
+    ?equal(true, maps:is_key(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD', DReqs)),
+    ?equal(false, maps:is_key(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD', DReqs)),
+    ?equal(true, maps:is_key(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD', DReqs)),
+
+    #{?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD' := [StartR],
+      ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD' := [StopR]} = DReqs,
+
+    DiamGet = fun DiamGet([K|T], [V]) when is_map(V) ->
+		      DiamGet(T, maps:get(K, V, undefined));
+		  DiamGet([K|T], V) when is_map(V) ->
+		      DiamGet(T, maps:get(K, V, undefined));
+		  DiamGet(_, V) -> V
+	      end,
+    RANKey = ['Service-Information', 'PS-Information', 'RAN-Secondary-RAT-Usage-Report'],
+
+    ?match(undefined, DiamGet(RANKey, StartR)),
+    SecRatR = DiamGet(RANKey, StopR),
+    ?equal(6, length(SecRatR)),
+    ?match(#{'3GPP-Charging-Id' := [3779765295],
+	     'Accounting-Input-Octets' := [1],
+	     'Accounting-Output-Octets' := [2],
+	     'RAN-End-Timestamp'   := [{{2020,1,1},{0,_,0}}],
+	     'RAN-Start-Timestamp' := [{{2020,1,1},{0,_,0}}],
+	     'Secondary-RAT-Type' := [<<0>>]}, hd(SecRatR)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+
     ok.
