@@ -61,7 +61,8 @@
 		state = init        :: atom(),
 		record_number = 0   :: integer(),
 		seq_number = 1      :: integer(),
-		sdc = []            :: list()
+		sdc = []            :: list(),
+		sec_rat_reports = [] :: list()
 	       }).
 
 %%===================================================================
@@ -99,7 +100,8 @@ invoke(_Service, init, Session, Events, _Opts, _State) ->
 invoke(_Service, {_, 'Initial'}, Session0, Events, Opts,
        #state{state = stopped} = State0) ->
     State1 = State0#state{state = started},
-    Keys = ['service_data', 'InPackets', 'OutPackets',
+    Keys = ['service_data', 'RAN-Secondary-RAT-Usage-Report',
+	    'InPackets', 'OutPackets',
 	    'InOctets', 'OutOctets', 'Acct-Session-Time'],
     Session = maps:without(Keys, Session0),
     RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD',
@@ -110,23 +112,25 @@ invoke(_Service, {_, 'Initial'}, Session0, Events, Opts,
 invoke(_Service, {_, 'Update'}, Session0, Events, Opts,
        #state{state = SessState} = State0) ->
     State1 = close_service_data_containers(Session0, State0),
-    Session = maps:without([service_data], Session0),
+    State2 = process_secondary_rat_usage_data_reports(Session0, State1),
+    Session = maps:without([service_data, 'RAN-Secondary-RAT-Usage-Report'], Session0),
     case {SessState, maps:get(gy_event, Opts, interim)} of
 	{started, cdr_closure} ->
 	    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD',
-	    {Request, State} = create_ACR(RecType, Session, Opts, State1),
+	    {Request, State} = create_ACR(RecType, Session, Opts, State2),
 	    await_response(send_request(Request, Opts), Session, Events, State, Opts);
 	_ ->
-	    {ok, Session, Events, State1}
+	    {ok, Session, Events, State2}
     end;
 
 invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts,
        #state{state = started} = State0) ->
     ?LOG(debug, "Session Stop: ~p", [Session0]),
     State1 = close_service_data_containers(Session0, State0#state{state = stopped}),
-    Session = maps:without([service_data], Session0),
+    State2 = process_secondary_rat_usage_data_reports(Session0, State1),
+    Session = maps:without([service_data, 'RAN-Secondary-RAT-Usage-Report'], Session0),
     RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
-    {Request, State} = create_ACR(RecType, Session, Opts, State1),
+    {Request, State} = create_ACR(RecType, Session, Opts, State2),
     await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
 invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
@@ -328,6 +332,12 @@ close_service_data_containers(#{service_data := SDC},
 close_service_data_containers(_Session, State) ->
     State.
 
+process_secondary_rat_usage_data_reports(#{'RAN-Secondary-RAT-Usage-Report' := Reports},
+					 #state{sec_rat_reports = SecRatRs} = State) ->
+    State#state{sec_rat_reports = SecRatRs ++ Reports};
+process_secondary_rat_usage_data_reports(_, State) ->
+    State.
+
 dynamic_address_flag(Key, {0,0,0,0}, Avps) ->
     optional(Key, 1, Avps);
 dynamic_address_flag(Key, {{0,0,0,0,0,0,0,0},_}, Avps) ->
@@ -395,6 +405,13 @@ service_data(Avps0, #state{sdc = SDC} = State) when length(SDC) /= 0 ->
     Avps = assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0),
     {Avps, State#state{sdc = []}};
 service_data(Avps, State) ->
+    {Avps, State}.
+
+ran_secondary_rat_usage_report(Avps0, #state{sec_rat_reports = Reports} = State)
+  when length(Reports) /= 0 ->
+    Avps = assign([?SI_PSI, 'RAN-Secondary-RAT-Usage-Report'], Reports, Avps0),
+    {Avps, State#state{sec_rat_reports = []}};
+ran_secondary_rat_usage_report(Avps, State) ->
     {Avps, State}.
 
 monitors_from_session('IP-CAN', #{?MODULE := Monitor}, Avps) ->
@@ -605,5 +622,6 @@ create_ACR(Type, Session, #{now := Now} = Opts, #state{record_number = RecNumber
 			      [#{'PDP-Context-Type' => 0}]}]
 		  },
     Avps2 = stop_indicator(Type, Avps1),
-    {Avps, State} = service_data(Avps2, State0),
+    {Avps3, State1} = service_data(Avps2, State0),
+    {Avps, State} = ran_secondary_rat_usage_report(Avps3, State1),
     {['ACR' | from_session(Session, Avps)], State#state{record_number = RecNumber + 1}}.

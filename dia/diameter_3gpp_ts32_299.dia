@@ -303,9 +303,9 @@
    Radio-Parameter-Set-Info                                     3463          Grouped     MV
    Radio-Parameter-Set-Values                                   3464      OctetString     MV
    Radio-Resources-Indicator                                    3465        Integer32     MV
-   RAN-End-Time                                                 1301             Time      V
+   RAN-End-Timestamp                                            1301             Time      V
    RAN-Secondary-RAT-Usage-Report                               1302          Grouped      V
-   RAN-Start-Time                                               1303             Time      V
+   RAN-Start-Timestamp                                          1303             Time      V
    Rate-Control-Max-Message-Size                                3937       Unsigned32     MV
    Rate-Control-Max-Rate                                        3938       Unsigned32     MV
    Rate-Control-Time-Unit                                       3939       Unsigned32     MV
@@ -1049,10 +1049,11 @@
    RAN-Secondary-RAT-Usage-Report ::= < AVP Header: 1302>
 
            [ Secondary-RAT-Type ]
-;;         [ RAN-Start-Timestamp ]
-;;         [ RAN-End-Timestamp ]
+           [ RAN-Start-Timestamp ]
+           [ RAN-End-Timestamp ]
            [ Accounting-Input-Octets ]
            [ Accounting-Output-Octets ]
+           [ 3GPP-Charging-Id ]
 
    Rate-Element ::= < AVP Header: 2058 >
 
