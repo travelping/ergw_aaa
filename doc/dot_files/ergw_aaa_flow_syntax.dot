@@ -1,0 +1,105 @@
+﻿/* Version: 0.0.1, Date:2019-02-10, Status: Always Draft */
+/* Master file of entire ergw_aaa to produce smaller feature diagrams */
+/* Download graphwiz, and run dot cmd  below minus the quotes-> */
+/* ' dot -Tsvg ergw_aaa_flow_syntax.dot -o ergw_aaa_flow_syntax.svg ' */
+digraph ergw_aaa_flow_syntax {
+{
+node [shape=oval style=filled]
+diameter_3gpp_base [fillcolor=yellow]
+diameter_3gpp_ts29_061_gmb [fillcolor=khaki]
+diameter_3gpp_ts29_061_sgi [fillcolor=khaki]
+diameter_3gpp_ts29_212 [fillcolor=beige]
+diameter_3gpp_ts29_214 [fillcolor=beige]
+diameter_3gpp_ts29_229 [fillcolor=beige]
+diameter_3gpp_ts29_329 [fillcolor=beige]
+diameter_3gpp_ts32_299 [fillcolor=aquamarine]
+diameter_3gpp_ts32_299_rf [fillcolor=aquamarine]
+diameter_3gpp_ts32_299_ro [fillcolor=aquamarine]
+diameter_etsi_es283_034 [fillcolor=cyan]
+diameter_rfc4005_nasreq [fillcolor=plum]
+diameter_rfc4006_cc [fillcolor=plum]
+diameter_rfc7155_nasreq [fillcolor=plum]
+ergw_aaa_app [fillcolor=tomato]
+ergw_aaa_config [fillcolor=tomato]
+ergw_aaa_diameter [fillcolor=moccasin]
+ergw_aaa_diameter_srv [fillcolor=yellowgreen]
+ergw_aaa [fillcolor=tomato]
+ergw_aaa_gx [fillcolor=tomato]
+ergw_aaa_nasreq [fillcolor=lavenderblush]
+ergw_aaa_radius [fillcolor=lavenderblush]
+ergw_aaa_radius_handler [fillcolor=lavenderblush]
+ergw_aaa_rf [fillcolor=lavenderblush]
+ergw_aaa_ro [fillcolor=lavenderblush]
+ergw_aaa_session [fillcolor=moccasin]
+ergw_aaa_session_reg [fillcolor=tomato]
+ergw_aaa_session_seq [fillcolor=tomato]
+ergw_aaa_session_sup[fillcolor=azure]
+ergw_aaa_static [fillcolor=tomato]
+ergw_aaa_sup [fillcolor=azure]
+/* Standard erlang diameter_gen_base_rfc6733 module ergw_aaa */
+diameter_gen_base_rfc6733 [fillcolor=mediumseagreen]
+/* behaviours */
+ergw_aaa [fillcolor=cyan2]
+eradius_server [fillcolor=cyan2]
+regine_server [fillcolor=cyan3]
+application [fillcolor=cyan4]
+supervisor [fillcolor=cyan4]
+gen_server [fillcolor=cyan4]
+gen_statem [fillcolor=cyan4]
+}
+
+/* No outgoing calls for diameter_3gpp_base */
+diameter_3gpp_ts29_061_gmb -> diameter_3gpp_base
+diameter_3gpp_ts29_061_gmb -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_3gpp_ts29_061_sgi -> {diameter_3gpp_base diameter_rfc4005_nasreq diameter_rfc4006_cc}
+diameter_3gpp_ts29_061_sgi -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_3gpp_ts29_212 -> {diameter_3gpp_base diameter_3gpp_ts29_061_gmb diameter_3gpp_ts29_214 diameter_3gpp_ts29_229 diameter_etsi_es283_034 diameter_rfc4005_nasreq diameter_rfc4006_cc}
+diameter_3gpp_ts29_212 -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_3gpp_ts29_214 -> diameter_rfc4006_cc
+diameter_3gpp_ts29_214 -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_3gpp_ts29_229 -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+/* No outgoing calls for diameter_3gpp_ts29_329 */
+diameter_3gpp_ts32_299 -> {diameter_3gpp_base diameter_3gpp_ts29_061_gmb diameter_3gpp_ts29_212 diameter_3gpp_ts29_214 diameter_3gpp_ts29_329 diameter_etsi_es283_034 diameter_rfc4006_cc diameter_rfc7155_nasreq}
+diameter_3gpp_ts32_299 -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_3gpp_ts32_299_rf -> {diameter_3gpp_base diameter_3gpp_ts29_061_gmb diameter_3gpp_ts29_212 diameter_3gpp_ts29_214 diameter_3gpp_ts29_329 diameter_3gpp_ts32_299 diameter_etsi_es283_034 diameter_rfc4006_cc diameter_rfc7155_nasreq}
+diameter_3gpp_ts32_299_rf -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_3gpp_ts32_299_ro -> {diameter_3gpp_base diameter_3gpp_ts29_061_gmb diameter_3gpp_ts29_212 diameter_3gpp_ts29_214 diameter_3gpp_ts29_329 diameter_3gpp_ts32_299 diameter_rfc7155_nasreq diameter_etsi_es283_034}
+diameter_3gpp_ts32_299_ro -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_etsi_es283_034 -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_rfc4005_nasreq -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_rfc4006_cc -> diameter_rfc4005_nasreq
+diameter_rfc4006_cc -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+diameter_rfc7155_nasreq -> diameter_gen_base_rfc6733 [style="dashed" color="darkorchid"]
+ergw_aaa_app -> ergw_aaa_config
+ergw_aaa_app -> ergw_aaa_sup [style="dotted" color="magenta"]
+ergw_aaa_app -> application [style="dotted" color="blue"]
+/* No outgoing calls for diameter_rfc4005_nasreq */
+/* No outgoing calls for ergw_aaa_config */
+ergw_aaa_diameter -> {ergw_aaa_config ergw_aaa_diameter_srv}
+ergw_aaa_diameter_srv -> ergw_aaa_session
+ergw_aaa_diameter_srv -> gen_server [style="dotted" color="blue"]
+/* No outgoing calls for ergw_aaa */
+ergw_aaa_gx -> {diameter_3gpp_base diameter_3gpp_ts29_212 ergw_aaa_config ergw_aaa_diameter
+ergw_aaa_session ergw_aaa_diameter_srv ergw_aaa_session_reg}
+ergw_aaa_gx -> ergw_aaa [style="dotted" color="blue"]
+ergw_aaa_nasreq -> {diameter_3gpp_ts29_061_sgi ergw_aaa_config ergw_aaa_diameter ergw_aaa_diameter_srv ergw_aaa_session}
+ergw_aaa_nasreq -> ergw_aaa [style="dotted" color="blue"]
+ergw_aaa_radius -> {ergw_aaa_config ergw_aaa_session}
+ergw_aaa_radius -> ergw_aaa [style="dotted" color="blue"]
+ergw_aaa_radius_handler -> eradius_server [style="dotted" color="blue"]
+ergw_aaa_rf -> {diameter_3gpp_ts32_299 diameter_3gpp_ts32_299_rf ergw_aaa_config ergw_aaa_diameter ergw_aaa_diameter_srv ergw_aaa_session}
+ergw_aaa_rf -> ergw_aaa [style="dotted" color="blue"]
+ergw_aaa_ro -> {diameter_3gpp_ts32_299 diameter_3gpp_ts32_299_ro ergw_aaa_config ergw_aaa_diameter ergw_aaa_diameter_srv ergw_aaa_session ergw_aaa_session_reg}
+ergw_aaa_ro -> ergw_aaa [style="dotted" color="blue"]
+ergw_aaa_session -> {ergw_aaa_config ergw_aaa_session_reg ergw_aaa_session_seq}
+ergw_aaa_session -> {ergw_aaa_gx ergw_aaa_nasreq ergw_aaa_radius ergw_aaa_rf ergw_aaa_ro} [style="bold" arrowhead="vee" color="coral"]
+ergw_aaa_session -> gen_statem [style="dotted" color="blue"]
+ergw_aaa_session_reg -> regine_server [style="dotted" color="blue"]
+ergw_aaa_session_seq -> gen_server [style="dotted" color="blue"]
+ergw_aaa_session_sup -> supervisor [style="dotted" color="blue"]
+ergw_aaa_static -> {ergw_aaa_config ergw_aaa_gx ergw_aaa_rf ergw_aaa_ro, ergw_aaa_session}
+ergw_aaa_static -> ergw_aaa [style="dotted" color="blue"]
+ergw_aaa_session_sup -> ergw_aaa_session [style="dotted" color="magenta"]
+ergw_aaa_sup -> {ergw_aaa_diameter_srv ergw_aaa_session_reg ergw_aaa_session_sup ergw_aaa_session_seq} [style="dotted" color="magenta"]
+ergw_aaa_sup -> supervisor [style="dotted" color="blue"]
+}
