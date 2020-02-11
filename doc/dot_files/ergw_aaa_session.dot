@@ -1,0 +1,37 @@
+﻿/* Version: 0.0.1, Date:2019-02-10, Status: Always Draft */
+/* ergw_aaa session tree */
+/* Download graphwiz, and run dot cmd  below minus the quotes-> */
+/* ' dot -Tsvg ergw_aaa_session.dot -o ergw_aaa_session.svg ' */
+digraph ergw_aaa_session {
+{
+node [shape=oval style=filled]
+diameter_3gpp_base [fillcolor=yellow]
+diameter_3gpp_ts29_061_sgi [fillcolor=khaki]
+diameter_3gpp_ts29_212 [fillcolor=beige]
+diameter_3gpp_ts32_299 [fillcolor=aquamarine]
+diameter_3gpp_ts32_299_rf [fillcolor=aquamarine]
+diameter_3gpp_ts32_299_ro [fillcolor=aquamarine]
+ergw_aaa_config [fillcolor=tomato]
+ergw_aaa_diameter [fillcolor=moccasin]
+ergw_aaa_diameter_srv [fillcolor=yellowgreen]
+ergw_aaa_gx [fillcolor=tomato]
+ergw_aaa_nasreq [fillcolor=lavenderblush]
+ergw_aaa_radius [fillcolor=lavenderblush]
+ergw_aaa_rf [fillcolor=lavenderblush]
+ergw_aaa_ro [fillcolor=lavenderblush]
+ergw_aaa_session [fillcolor=moccasin]
+ergw_aaa_session_reg [fillcolor=tomato]
+ergw_aaa_session_seq [fillcolor=tomato]
+ergw_aaa_static [fillcolor=tomato]
+}
+ergw_aaa_diameter_srv -> ergw_aaa_session
+ergw_aaa_gx -> {diameter_3gpp_base diameter_3gpp_ts29_212 ergw_aaa_config ergw_aaa_diameter 
+ergw_aaa_session ergw_aaa_diameter_srv ergw_aaa_session_reg}
+ergw_aaa_nasreq -> {diameter_3gpp_ts29_061_sgi ergw_aaa_config ergw_aaa_diameter ergw_aaa_diameter_srv ergw_aaa_session}
+ergw_aaa_radius -> {ergw_aaa_config ergw_aaa_session}
+ergw_aaa_rf -> {diameter_3gpp_ts32_299 diameter_3gpp_ts32_299_rf ergw_aaa_config ergw_aaa_diameter ergw_aaa_diameter_srv ergw_aaa_session}
+ergw_aaa_ro -> {diameter_3gpp_ts32_299 diameter_3gpp_ts32_299_ro ergw_aaa_config ergw_aaa_diameter ergw_aaa_diameter_srv ergw_aaa_session ergw_aaa_session_reg}
+ergw_aaa_session -> {ergw_aaa_config ergw_aaa_session_reg ergw_aaa_session_seq}
+ergw_aaa_session -> {ergw_aaa_gx ergw_aaa_nasreq ergw_aaa_radius ergw_aaa_rf ergw_aaa_ro} [style="bold" arrowhead="vee" color="coral"]
+ergw_aaa_static -> {ergw_aaa_config ergw_aaa_gx ergw_aaa_rf ergw_aaa_ro, ergw_aaa_session}
+}
