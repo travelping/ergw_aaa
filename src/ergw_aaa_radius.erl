@@ -101,7 +101,7 @@ invoke(_Service, authenticate = Procedure, Session0, Events0, #{now := Now} = Op
 	    {Verdict, Session, Events, State#{'Authentication-Result' => Verdict}}
     end;
 
-invoke(_Service, authorize,Session, Events, _,
+invoke(_Service, authorize, Session, Events, _,
        #{'Authentication-Result' := success} = State) ->
     {ok, Session, Events, State};
 
@@ -195,7 +195,9 @@ validate_option(Opt, Value) ->
 to_session(Procedure, {Session0, Events0}, Avps) ->
     {Session, Events, _} =
 	maps:fold(to_session(Procedure, _, _, _), {Session0, Events0, #{}}, Avps),
-    {Session, Events}.
+    {Session, Events};
+to_session(Procedure, {_Session, _Events, _State} = Iter, Avps) ->
+    maps:fold(to_session(Procedure, _, _, _), Iter, Avps).
 
 %% to_session/4
 to_session(_, 'Acct-Interim-Interval', Interim, {Session, Events, State}) ->
@@ -209,7 +211,7 @@ when Key =:= 'Session-Timeout';
 
 to_session(_, Key, Value, {Session, Events, State})
   when Key =:= 'Class';
-       Key =:= 'State';
+       Key =:= 'RADIUS-State';
        Key =:= 'Username' ->
     {Session, Events, maps:put(Key, Value, State)};
 to_session(_, _, _, SessEvSt) ->
@@ -250,7 +252,7 @@ radius_session_options('Class', [], Attrs) ->
     Attrs;
 radius_session_options('Class', [H|T], Attrs) ->
     [{?Class, H}|radius_session_options('Class', T, Attrs)];
-radius_session_options('State', State, Attrs) ->
+radius_session_options('RADIUS-State', State, Attrs) ->
     [{?State, State}|Attrs];
 radius_session_options(_Key, _Value, Attrs) ->
     Attrs.
@@ -578,7 +580,7 @@ radius_reply(Procedure, #radius_request{cmd = accept} = Reply, Session0, Events0
 	{Session1, Events, State} = to_session(Procedure, {Session0, Events0, State0}, SOpts),
 	Session2 = Session1#{'Acct-Authentic' => 'RADIUS'},
 	Session = handle_eap_msg(Reply, Session2),
-	{ok, Session, Events, State}
+	{success, Session, Events, State}
     catch
 	throw:#aaa_err{} = _CtxErr ->
 	    {fail, Session0, Events0, State0}
@@ -590,7 +592,7 @@ radius_reply(Procedure, #radius_request{cmd = challenge} = Reply, Session0, Even
 	SOpts = process_radius_attrs(Reply),
 	{Session1, Events, State} = to_session(Procedure, {Session0, Events0, State0}, SOpts),
 	Session = handle_eap_msg(Reply, Session1),
-	{ok, Session, Events, State}
+	{challenge, Session, Events, State}
     catch
 	throw:#aaa_err{} = _CtxErr ->
 	    {fail, Session0, Events0, State0}
@@ -671,10 +673,13 @@ to_session_opts(_Attr, Key, Value, SOpts)
        Key =:= 'DNS-Server-IPv6-Address' ->
     repeated(Key, Value, SOpts);
 
+to_session_opts(_Attr, 'State', Value, SOpts) ->
+    SOpts#{'RADIUS-State' => Value};
+
 to_session_opts(_Attr, Key, Value, SOpts)
   when
       %% Generic Attributes
-      Key =:= 'State';
+      Key =:= 'RADIUS-State';
       Key =:= 'Username';
       Key =:= 'Acct-Interim-Interval';
       Key =:= 'Session-Timeout';
