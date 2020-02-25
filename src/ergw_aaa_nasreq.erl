@@ -325,6 +325,9 @@ handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts, State)
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
     {Result, Session, Events, State}.
 
+% Ignore STR sending errors
+handle_sta({error, _}, Session, Events, _Opts, State) ->
+    {ok, Session, Events, State};
 handle_sta(['STA' | _Avps], Session, Events, _Opts, State) ->
     {ok, Session, Events, State}.
 
