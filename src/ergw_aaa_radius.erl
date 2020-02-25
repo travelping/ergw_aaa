@@ -15,6 +15,7 @@
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3]).
+-export([get_state_atom/1]).
 
 -include("ergw_aaa_internal.hrl").
 -include("include/ergw_aaa_session.hrl").
@@ -755,3 +756,6 @@ send_request(Req, Session, #{server := NAS, retries := Retries, timeout := Timeo
 			{retries, Retries},
 			{timeout, Timeout}],
     eradius_client:send_request(NAS, Req, RadiusClientOpts).
+
+get_state_atom(#{'State' := State}) ->
+    State.

@@ -20,6 +20,7 @@ start(_StartType, _StartArgs) ->
     case ergw_aaa_sup:start_link() of
 	{ok, _} = Ret ->
 	    Config = ergw_aaa_config:load_config(),
+		prometheus_declare(),
 	    SrvSupSpecs0 = initialize_handlers(Config, []),
 	    SrvSupSpecs1 = initialize_services(Config, SrvSupSpecs0),
 	    SrvSupSpecs = initialize_functions(Config, SrvSupSpecs1),
@@ -53,3 +54,10 @@ initialize_services(#{services := Services}, SupSpecs) ->
 		      {ok, SupSpec} = Handler:initialize_service(ServiceId, Opts),
 		      Specs ++ SupSpec
 	      end, SupSpecs, Services).
+
+prometheus_declare() ->
+    prometheus_gauge:declare([
+        {name, aaa_sessions_total},
+        {labels, [handler, state]},
+        {help, "AAA sessions"}]).
+

@@ -115,10 +115,12 @@ end_per_suite(Config) ->
     ok.
 
 init_per_testcase(secondary_rat_usage_data_report, Config) ->
+    reset_session_stats(),
     meck_reset(Config),
     meck:new(diameter_test_server, [passthrough, no_link]),
     Config;
 init_per_testcase(_, Config) ->
+    reset_session_stats(),
     meck_reset(Config),
     Config.
 
@@ -200,6 +202,8 @@ simple_session(Config) ->
 	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
     ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
 
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
     SDC =
 	[#{'Rating-Group'             => 3000,
 	   'Accounting-Input-Octets'  => 1092,
@@ -227,6 +231,8 @@ simple_session(Config) ->
     {ok, _Session2, _} =
 	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
 
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
+
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ct:pal("Stats: ~p~n", [Stats1]),
     ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
@@ -247,6 +253,8 @@ multi_event_session(Config) ->
     {ok, _Session1, _} =
 	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
     ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     SDC =
 	[#{'Rating-Group'             => 3000,
@@ -287,6 +295,9 @@ multi_event_session(Config) ->
     {ok, _, _} =
 	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
     {ok, _, _} =
 	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
@@ -298,11 +309,15 @@ multi_event_session(Config) ->
 	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
 
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
     RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       service_data => SDC, traffic_data => TD},
     ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
     {ok, _Session2, _} =
 	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ct:pal("Stats: ~p~n", [Stats1]),
@@ -325,6 +340,8 @@ async(Config) ->
     {ok, _Session1, _} =
 	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
     ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     SDC =
 	[#{'Rating-Group'             => 3000,
@@ -362,12 +379,16 @@ async(Config) ->
 	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
 				AsyncSOpts#{'gy_event' => container_closure})),
 
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
     RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       service_data => SDC},
     ergw_aaa_session:invoke(SId, #{}, stop, AsyncSOpts),
     {ok, _Session2} =
 	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, AsyncSOpts),
     ct:sleep(100),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
@@ -388,6 +409,8 @@ secondary_rat_usage_data_report(Config) ->
     {ok, _Session1, _} =
 	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
     ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     SecRatReport0 =
 	#{'RAN-Secondary-RAT-Usage-Report' =>
@@ -439,6 +462,8 @@ secondary_rat_usage_data_report(Config) ->
 		}]},
     ergw_aaa_session:invoke(SId, SecRatReport1, {rf, 'Update'}, SOpts#{async => false}),
 
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
     SDC =
 	[#{'Rating-Group'             => 3000,
 	   'Accounting-Input-Octets'  => 1092,
@@ -465,6 +490,8 @@ secondary_rat_usage_data_report(Config) ->
     ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
     {ok, _Session2, _} =
 	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
@@ -521,6 +548,8 @@ handle_failure(Config) ->
     ?match({{fail, 3001}, _, _},
 	   ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts)),
 
+    ?equal([], get_session_stats()),
+
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
     % check that client has sent CCR
@@ -543,6 +572,8 @@ handle_answer_error(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     ?match({{error, 3007}, _, _},
 	   ergw_aaa_session:invoke(SId, SOpts, {rf, 'Initial'}, [])),
+
+    ?equal([], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),

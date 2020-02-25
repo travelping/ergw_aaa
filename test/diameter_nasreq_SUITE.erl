@@ -115,16 +115,18 @@ init_per_group(Group, Config) ->
 
 end_per_group(_Group, Config) ->
     meck_unload(Config),
+    application:stop(prometheus),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
     diameter_test_server:stop(),
     ok.
 
-init_per_testcase(Config) ->
+init_per_testcase(_, Config) ->
+    reset_session_stats(),
     meck_reset(Config),
     Config.
 
-end_per_testcase(_Config) ->
+end_per_testcase(_, _Config) ->
     ok.
 
 %%%===================================================================
@@ -173,9 +175,15 @@ simple(Config) ->
 	   Events),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
     TermOpts = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -199,8 +207,16 @@ accounting(Config) ->
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -223,6 +239,8 @@ acct_interim_interval(Config) ->
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
     StartRes = ergw_aaa_session:start(Session, #{}, []),
     ?match({ok, _, _}, StartRes),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
 
     {_, SessionOpts, Ev} = StartRes,
     ?match(#{'Session-Id' := _,
@@ -275,6 +293,8 @@ attrs_3gpp(Config) ->
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(1, stats({'ACA', 2001}, Config, Stats1)),
 
@@ -289,7 +309,12 @@ handle_failure(Config) ->
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), SOpts),
 
     ?match({{fail, 3007}, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
     ?match({{fail, 3007}, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
@@ -302,7 +327,12 @@ handle_answer_error(Config) ->
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), SOpts),
 
     ?match({{error, 3007}, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
     ?match({{error, 3007}, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),

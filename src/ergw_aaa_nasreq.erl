@@ -27,7 +27,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
-
+-export([get_state_atom/1]).
 %%
 %% diameter callbacks
 -export([peer_up/3,
@@ -532,3 +532,6 @@ create_STR(Session, Opts) ->
 		   'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'},
     Avps = from_session(Session, Avps1),
     ['STR' | Avps].
+
+get_state_atom(#state{state = State}) ->
+    State.

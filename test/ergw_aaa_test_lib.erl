@@ -12,6 +12,7 @@
 -export([meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1]).
 -export([set_cfg_value/3, get_cfg_value/2]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
+-export([get_session_stats/0, reset_session_stats/0]).
 -export([outstanding_reqs/0]).
 
 -include("ergw_aaa_test_lib.hrl").
@@ -160,3 +161,15 @@ diff_stats(S1, S2) ->
 outstanding_reqs() ->
     lists:foldl(
       fun({_, O, _, _, _, _, _}, S) -> S + O end, 0, ergw_aaa_diameter_srv:peers()).
+
+
+get_session_stats() ->
+    lists:sort([{Handler, State, Value} || 
+     {[{"handler", Handler}, {"state", State}], Value} <- 
+     prometheus_gauge:values(default, aaa_sessions_total)]).
+
+reset_session_stats() ->
+    %% there seems to be no easier way doing this ...
+    [prometheus_gauge:remove(default, aaa_sessions_total, [Handler, State]) ||
+     {[{"handler", Handler}, {"state", State}], _} <- 
+     prometheus_gauge:values(default, aaa_sessions_total)].

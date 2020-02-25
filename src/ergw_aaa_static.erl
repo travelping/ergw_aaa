@@ -13,6 +13,8 @@
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 
+-export([get_state_atom/1]).
+
 -import(ergw_aaa_session, [to_session/1]).
 
 -include_lib("kernel/include/logger.hrl").
@@ -88,3 +90,6 @@ handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
 handle_response(_Procedure, Response, Session, Events, State) ->
     ?LOG(error, "Response: ~p", [Response]),
     {Response, Session, Events, State}.
+
+get_state_atom(_) ->
+    stopped.

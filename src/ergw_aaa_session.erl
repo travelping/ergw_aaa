@@ -438,5 +438,30 @@ step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
     State = maps:get(Handler, HandlersS, undefined),
     {Result, SessOut, EvsOut, StateOut} =
 	Handler:invoke(Service, Procedure, Session, Events, StepOpts, State),
+    aaa_state_stats(Handler, State, StateOut),
     {Result, Data#data{handlers = maps:put(Handler, StateOut, HandlersS),
 		       session = SessOut}, EvsOut}.
+
+aaa_state_stats(Handler, CurrentState, NewState) ->
+    CS = get_handler_state(Handler, CurrentState),
+    NS = get_handler_state(Handler, NewState),
+    case {CS, NS} of
+	{S, S} ->
+	    ok;
+    {undefined, stopped} ->
+        ok;
+	{_, stopped} ->
+	    prometheus_gauge:dec(aaa_sessions_total, [Handler, CS]);
+    {undefined, _} ->
+        prometheus_gauge:inc(aaa_sessions_total, [Handler, NS]);
+    {stopped, _} ->
+        prometheus_gauge:inc(aaa_sessions_total, [Handler, NS]);
+	{_, _} ->
+	    prometheus_gauge:dec(aaa_sessions_total, [Handler, CS]),
+	    prometheus_gauge:inc(aaa_sessions_total, [Handler, NS])
+    end.
+
+get_handler_state(_, undefined) ->
+    undefined;
+get_handler_state(Handler, State) ->
+    Handler:get_state_atom(State).

@@ -23,6 +23,7 @@
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3, from_session/2]).
+-export([get_state_atom/1]).
 
 %% diameter callbacks
 -export([peer_up/3,
@@ -333,7 +334,7 @@ handle_cca({error, rate_limit}, Session, Events,
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
 handle_cca({error, _} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
-    {Result, Session, [stop | Events], State}.
+    {Result, Session, [stop | Events], State#state{state = stopped}}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
     {Result, ReplyAvps0} =
@@ -789,3 +790,6 @@ make_CCR(Type, Session, #{now := Now} = Opts, #state{request_number = ReqNumber}
 	   end,
     Avps = Avps2#{'Multiple-Services-Credit-Control' => maps:values(MSCC)},
     ['CCR' | Avps ].
+
+get_state_atom(#state{state = State}) ->
+    State.
