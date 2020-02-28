@@ -248,40 +248,54 @@ multi_event_session(Config) ->
 	[#{'Rating-Group'             => 3000,
 	   'Accounting-Input-Octets'  => 1092,
 	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
 	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
 	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
 	   'Time-Usage'               => 60},
 	 #{'Rating-Group'             => 2000,
 	   'Accounting-Input-Octets'  => 0,
 	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
 	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
 	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
 	   'Time-Usage'               => 60},
 	 #{'Rating-Group'             => 1000,
 	   'Accounting-Input-Octets'  => 0,
 	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
 	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
 	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
 	   'Time-Usage'               => 60}
 	],
 
-    RfUpd = #{service_data => SDC},
+    TD =
+	[#{'3GPP-Charging-Id' => [123456],
+	   'Accounting-Input-Octets' => [1],
+	   'Accounting-Output-Octets' => [2],
+	   'Change-Condition' => [4],
+	   'Change-Time'      => [{{2020,2,20},{13,34,00}}]}],
+
+    RfUpdCont = #{service_data => SDC},
+    RfUpdCDR  = #{service_data => SDC, traffic_data => TD},
     {ok, _, _} =
-	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
     {ok, _, _} =
-	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
     {ok, _, _} =
-	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+	ergw_aaa_session:invoke(SId, RfUpdCDR, {rf, 'Update'},
 				SOpts#{'gy_event' => cdr_closure}),
 
     {ok, _, _} =
-	ergw_aaa_session:invoke(SId, RfUpd, {rf, 'Update'},
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
 
     RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
-	       service_data => SDC},
+	       service_data => SDC, traffic_data => TD},
     ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
     {ok, _Session2, _} =
 	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
