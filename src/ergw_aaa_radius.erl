@@ -184,6 +184,14 @@ validate_option(Opt, Value)
   when (Opt =:= server_name orelse Opt =:= client_name)
        andalso is_binary(Value) ->
     Value;
+validate_option(timeout, Value)
+  when (is_integer(Value) andalso Value > 0) ->
+    Value;
+validate_option(retries, Value)
+  when (is_integer(Value) andalso Value > 0) ->
+    Value;
+validate_option(async, Value) when (Value =:= true) ->
+    Value;
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
@@ -740,5 +748,7 @@ radius_accounting_opts() ->
 send_request(Req, Session, #{server := NAS} = Opts) ->
     Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
     RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
-			{server_name, maps:get(server_name, Opts, Id)}],
+			{server_name, maps:get(server_name, Opts, Id)},
+			{retries, maps:get(retries, Opts, 3)}, 
+			{timeout, maps:get(timeout, Opts, 5000)}],
     eradius_client:send_request(NAS, Req, RadiusClientOpts).
