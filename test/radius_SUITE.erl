@@ -166,7 +166,7 @@ accounting_async(Config) ->
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
-    
+
     %% make sure nothing crashed
     meck_validate(Config),
     application:set_env(ergw_aaa, apps, OrigApps),
