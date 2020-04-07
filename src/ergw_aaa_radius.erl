@@ -32,7 +32,9 @@
 -include_lib("eradius/include/dictionary_microsoft.hrl").
 -include_lib("eradius/include/dictionary_travelping.hrl").
 
--define(DefaultOptions, [{server, undefined}
+-define(DefaultOptions, [{server, undefined},
+                         {timeout, 5000},
+                         {retries, 3}
 			]).
 
 %%===================================================================
@@ -745,10 +747,10 @@ radius_accounting_opts() ->
 		       ?Acct_Status_Type,
 		       ?Event_Timestamp]).
 
-send_request(Req, Session, #{server := NAS} = Opts) ->
+send_request(Req, Session, #{server := NAS, retries := Retries,
+			     timeout := Timeout} = Opts) when is_tuple(NAS)->
     Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
     RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
-			{server_name, maps:get(server_name, Opts, Id)},
-			{retries, maps:get(retries, Opts, 3)}, 
-			{timeout, maps:get(timeout, Opts, 5000)}],
-    eradius_client:send_request(NAS, Req, RadiusClientOpts).
+			{server_name, maps:get(server_name, Opts, Id)}],
+    eradius_client:send_request(NAS, Req, RadiusClientOpts ++ 
+				    [{retries, Retries}, {timeout, Timeout}]).

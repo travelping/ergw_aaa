@@ -32,9 +32,11 @@
 	 {'Service-Type',          'Framed-User'}]).
 
 -define(RADIUS_AUTH_CONFIG,
-	[{server, {{127,0,0,1}, 1812, <<"secret">>}}]).
+	[{server, {{127,0,0,1}, 1812, <<"secret">>}},
+	 {retries, 3}, {timeout, 5000}]).
 -define(RADIUS_ACCT_CONFIG,
-	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}}]).
+	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}},
+	 {retries, 3}, {timeout, 5000}]).
 -define(RADIUS_SERVICE_OPTS, []).
 
 -define(DIAMETER_TRANSPORT,

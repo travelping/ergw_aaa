@@ -159,18 +159,19 @@ accounting_async() ->
     [{doc, "Check that Start / Stop msg work in async mode"}].
 accounting_async(Config) ->
     eradius_test_handler:ready(),
-    set_async_mode(),
+    OrigApps = set_service_pars([{async, true}, {retries, 1}, {timeout, 5000}]),
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
-
+    
     %% make sure nothing crashed
     meck_validate(Config),
+    application:set_env(ergw_aaa, apps, OrigApps),
     ok.
-
+    
 attrs_3gpp() ->
     [{doc, "Check encoding of 3GPP attributes"}].
 attrs_3gpp(Config) ->
@@ -216,18 +217,18 @@ attrs_3gpp(Config) ->
 %%% Helpers
 %%%===================================================================
 %% set async modes and config eradius retries and timeouts for start / stop
-set_async_mode() ->
+set_service_pars(NewOpts) ->
     {ok, Apps} = application:get_env(ergw_aaa, apps),
     Default = maps:get(default, Apps),
     Procedures = maps:get(procedures, Default),
-    NewOpts = [{async, true}, {retries, 1}, {timeout, 5000}],
     Start = add_opts(maps:get(start, Procedures), NewOpts),
     Stop = add_opts(maps:get(stop, Procedures), NewOpts),
     Procedures1 = maps:put(start, Start, Procedures),
     Procedures2 = maps:put(stop, Stop, Procedures1),
     Default1 = maps:put(procedures, Procedures2, Default),
     Apps1 = maps:put(default, Default1, Apps),
-    application:set_env(ergw_aaa, apps, Apps1).
+    application:set_env(ergw_aaa, apps, Apps1),
+    Apps.
 
 add_opts(Map, []) ->
     Map;
