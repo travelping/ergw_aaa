@@ -751,6 +751,6 @@ send_request(Req, Session, #{server := NAS, retries := Retries,
 			     timeout := Timeout} = Opts) when is_tuple(NAS)->
     Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
     RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
-			{server_name, maps:get(server_name, Opts, Id)}],
-    eradius_client:send_request(NAS, Req, RadiusClientOpts ++ 
-				    [{retries, Retries}, {timeout, Timeout}]).
+            {server_name, maps:get(server_name, Opts, Id)},
+            {retries, Retries}, {timeout, Timeout}],
+    eradius_client:send_request(NAS, Req, RadiusClientOpts).
