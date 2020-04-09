@@ -188,10 +188,16 @@ config(_Config)  ->
     ?error_set([handlers, ergw_aaa_radius, server],
 	       {{127,0,0,1},invalid_port,<<"secret">>}),
     ?error_set([handlers, ergw_aaa_radius, server],
-	       {{127,0,0,1},1812,invalid_secret}),
+		   {{127,0,0,1},1812,invalid_secret}),
+    ?error_set([handlers, ergw_aaa_radius, async], invalid),
+    ?error_set([handlers, ergw_aaa_radius, retries], invalid),
+    ?error_set([handlers, ergw_aaa_radius, timeout], invalid),
 
     ?ok_set([handlers, ergw_aaa_radius, server],
-	    {"localhost",1812,<<"secret">>}),
+		{"localhost",1812,<<"secret">>}),
+    ?ok_set([handlers, ergw_aaa_radius, async], true),
+    ?ok_set([handlers, ergw_aaa_radius, retries], 1),
+    ?ok_set([handlers, ergw_aaa_radius, timeout], 1000),
 
     ?error_set([services, 'RADIUS-Service', handler], invalid_handler),
 
