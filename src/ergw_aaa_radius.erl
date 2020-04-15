@@ -33,8 +33,8 @@
 -include_lib("eradius/include/dictionary_travelping.hrl").
 
 -define(DefaultOptions, [{server, undefined},
-                         {timeout, 5000},
-                         {retries, 3}
+			 {timeout, 5000},
+			 {retries, 3}
 			]).
 
 %%===================================================================
@@ -187,12 +187,12 @@ validate_option(Opt, Value)
        andalso is_binary(Value) ->
     Value;
 validate_option(timeout, Value)
-  when (is_integer(Value) andalso Value > 0) ->
+  when is_integer(Value) andalso Value > 0 ->
     Value;
 validate_option(retries, Value)
-  when (is_integer(Value) andalso Value > 0) ->
+  when is_integer(Value) andalso Value > 0 ->
     Value;
-validate_option(async, Value) when (Value =:= true) ->
+validate_option(async, Value) when is_boolean(Value) ->
     Value;
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
@@ -747,10 +747,11 @@ radius_accounting_opts() ->
 		       ?Acct_Status_Type,
 		       ?Event_Timestamp]).
 
-send_request(Req, Session, #{server := NAS, retries := Retries,
-			     timeout := Timeout} = Opts) when is_tuple(NAS)->
+send_request(Req, Session, #{server := NAS, retries := Retries, timeout := Timeout} = Opts)
+  when is_tuple(NAS)->
     Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
     RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
-            {server_name, maps:get(server_name, Opts, Id)},
-            {retries, Retries}, {timeout, Timeout}],
+			{server_name, maps:get(server_name, Opts, Id)},
+			{retries, Retries},
+			{timeout, Timeout}],
     eradius_client:send_request(NAS, Req, RadiusClientOpts).
