@@ -32,9 +32,11 @@
 	 {'Service-Type',          'Framed-User'}]).
 
 -define(RADIUS_AUTH_CONFIG,
-	[{server, {{127,0,0,1}, 1812, <<"secret">>}}]).
+	[{server, {{127,0,0,1}, 1812, <<"secret">>}},
+	 {retries, 3}, {timeout, 5000}]).
 -define(RADIUS_ACCT_CONFIG,
-	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}}]).
+	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}},
+	 {retries, 3}, {timeout, 5000}]).
 -define(RADIUS_SERVICE_OPTS, []).
 
 -define(DIAMETER_TRANSPORT,
@@ -187,9 +189,16 @@ config(_Config)  ->
 	       {{127,0,0,1},invalid_port,<<"secret">>}),
     ?error_set([handlers, ergw_aaa_radius, server],
 	       {{127,0,0,1},1812,invalid_secret}),
+    ?error_set([handlers, ergw_aaa_radius, async], invalid),
+    ?error_set([handlers, ergw_aaa_radius, retries], invalid),
+    ?error_set([handlers, ergw_aaa_radius, timeout], invalid),
 
     ?ok_set([handlers, ergw_aaa_radius, server],
 	    {"localhost",1812,<<"secret">>}),
+    ?ok_set([handlers, ergw_aaa_radius, async], true),
+    ?ok_set([handlers, ergw_aaa_radius, async], false),
+    ?ok_set([handlers, ergw_aaa_radius, retries], 1),
+    ?ok_set([handlers, ergw_aaa_radius, timeout], 1000),
 
     ?error_set([services, 'RADIUS-Service', handler], invalid_handler),
 

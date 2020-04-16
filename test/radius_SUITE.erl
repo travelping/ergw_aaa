@@ -11,6 +11,7 @@
 -compile([export_all, nowarn_export_all]).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
@@ -66,6 +67,7 @@ all() ->
     [compat,
      simple,
      accounting,
+     accounting_async,
      attrs_3gpp].
 
 init_per_suite(Config0) ->
@@ -85,11 +87,18 @@ end_per_suite(Config) ->
     application:unload(ergw_aaa),
     ok.
 
-init_per_testcase(Config) ->
+init_per_testcase(accounting_async, Config) ->
+    meck_reset(Config),
+    meck:new(eradius_client, [passthrough, no_link]),
+    Config;
+init_per_testcase(_, Config) ->
     meck_reset(Config),
     Config.
 
-end_per_testcase(_Config) ->
+end_per_testcase(accounting_async, _Config) ->
+    meck:unload(eradius_client),
+    ok;
+end_per_testcase(_, _Config) ->
     ok.
 
 %%%===================================================================
@@ -154,6 +163,37 @@ accounting(Config) ->
     meck_validate(Config),
     ok.
 
+accounting_async() ->
+    [{doc, "Check that Start / Stop msg work in async mode"}].
+accounting_async(Config) ->
+    eradius_test_handler:ready(),
+    OrigApps = set_service_pars([{async, true}, {retries, 1}, {timeout, 1000}]),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
+						     #{'Framed-IP-Address' => {10,10,10,10}}),
+    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+    ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+    ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
+    ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    %% wait for async requests
+    ct:sleep(5000),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    SR = lists:filter(
+	   fun({_, {eradius_client, send_request,
+		    [_,  #radius_request{cmd = accreq}, Opts]}, _}) ->
+		   ?match(
+		      #{retries := 1, timeout := 1000}, maps:from_list(Opts)),
+		   true;
+	      (_) -> false
+	   end, meck:history(eradius_client)),
+    ?equal(3, length(SR)),
+
+    application:set_env(ergw_aaa, apps, OrigApps),
+    ok.
+
 attrs_3gpp() ->
     [{doc, "Check encoding of 3GPP attributes"}].
 attrs_3gpp(Config) ->
@@ -198,3 +238,23 @@ attrs_3gpp(Config) ->
 %%%===================================================================
 %%% Helpers
 %%%===================================================================
+%% set async modes and config eradius retries and timeouts for start / stop
+set_service_pars(NewOpts) ->
+    {ok, Apps0} = application:get_env(ergw_aaa, apps),
+    Upd = fun(M) -> add_opts(M, NewOpts) end,
+    Apps1 = maps_update_with([default, procedures, start], Upd, Apps0),
+    Apps2 = maps_update_with([default, procedures, interim], Upd, Apps1),
+    Apps = maps_update_with([default, procedures, stop], Upd, Apps2),
+    application:set_env(ergw_aaa, apps, Apps),
+    Apps0.
+
+maps_update_with([Key], Fun, Map) ->
+    maps:update_with(Key, Fun, Map);
+maps_update_with([H|T], Fun, Map) ->
+    maps:update_with(H, fun(M) -> maps_update_with(T, Fun, M) end, Map).
+
+add_opts(Map, []) ->
+    Map;
+add_opts(Map, [{Par, Val}| T]) ->
+    Map1 = lists:keymap(fun(X) -> maps:put(Par, Val, X) end, 2, Map),
+    add_opts(Map1, T).
