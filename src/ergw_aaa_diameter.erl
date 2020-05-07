@@ -16,6 +16,7 @@
 -export([encode_ipv6prefix/1, decode_ipv6prefix/1]).
 
 -include_lib("kernel/include/inet.hrl").
+-include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").

@@ -12,9 +12,6 @@
 -include_lib("common_test/include/ct.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--import(ergw_aaa_test_lib,
-	[set_cfg_value/3, get_cfg_value/2]).
-
 -define(error_option(Config),
 	?match({error,{_, _}}, (catch ergw_aaa_config:validate_config(Config)))).
 	%% ?match({error,{options, _}}, (catch ergw_aaa_config:validate_config(Config)))).

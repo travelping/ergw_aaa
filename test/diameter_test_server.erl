@@ -205,6 +205,27 @@ handle_answer(#diameter_packet{msg = Msg}, _Request, _SvcName, _Peer, _Extra) ->
 handle_error(_Reason, _Request, _SvcName, _Peer, _Extra) ->
     ?UNEXPECTED.
 
+handle_request(#diameter_packet{
+		  msg = [_ | #{'Called-Station-Id' := [<<"FAIL", _/binary>> = How]}]
+		 } = Pkt, _SvcName, _, _Extra) ->
+    fail_answer(How, Pkt);
+
+handle_request(#diameter_packet{
+		  msg = [_ |
+			 #{'Subscription-Id' :=
+			       [#{'Subscription-Id-Data' := <<"FAIL", _/binary>> = How}|_]}]
+		 } = Pkt, _SvcName, _, _Extra) ->
+    fail_answer(How, Pkt);
+
+handle_request(#diameter_packet{
+		  msg = [_ |
+			 #{'Service-Information' :=
+			       [#{'Subscription-Id' :=
+				      [#{'Subscription-Id-Data' :=
+					     <<"FAIL", _/binary>> = How}|_]}]}]
+		 } = Pkt, _SvcName, _, _Extra) ->
+    fail_answer(How, Pkt);
+
 handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
     InterimAccounting = 1,
@@ -270,13 +291,6 @@ handle_request(#diameter_packet{msg = ['STR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	     'Origin-Realm' => OR},
     {reply, ['STA' | STA]};
 
-
-handle_request(#diameter_packet{
-		  msg = ['CCR' |
-			 #{'Subscription-Id' :=
-			       [#{'Subscription-Id-Data' := <<"FAIL">>}|_]}]},
-	       _SvcName, _, _Extra) ->
-    {answer_message, 3001};  %% DIAMETER_COMMAND_UNSUPPORTED
 
 handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, gx) ->
     #diameter_caps{origin_host = {OH, _},
@@ -549,3 +563,55 @@ default_transport() ->
 			  {reuseaddr, true},
 			  {ip, {127,0,0,1}}]}
      ]].
+
+fail_answer(<<"FAIL-BROKEN-ANSWER">>, Pkt) ->
+    broken_answer(Pkt);
+fail_answer(<<"FAIL-RC-", RC/binary>>, _Pkt) ->
+    {answer_message, binary_to_integer(RC)};
+fail_answer(_How, _Pkt) ->
+    {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
+
+broken_answer(#diameter_packet{header = Hdr0, avps = ReqAVPs}) ->
+    OH = get_avp_data('Destination-Host', ReqAVPs, <<"diameter.erlang.org">>),
+    OR = get_avp_data('Destination-Realm', ReqAVPs, <<"erlang.org">>),
+    SId = get_avp_data('Session-Id', ReqAVPs, <<"diameter.erlang.org;123;456">>),
+
+    %% construct a message in raw (packet) form that is invalid
+    %% by using the header/msg fields, we can bybass the syntax checks
+    Hdr = Hdr0#diameter_header{
+	    is_request = false,
+	    is_error = true,
+	    is_retransmitted = false},
+    AVPs = avp([{263, SId},			%% Session-Id
+		{268, <<3007:32>>},		%% Result-Code
+		{264, OH},			%% Origin-Host
+		{296, OR},			%% Origin-Realm
+		{256, true, <<1:32>>}		%% Unassigned, used to trigger a decoder error
+	       ]),
+    {reply, #diameter_packet{header = Hdr, msg = ['answer-message' | AVPs]}}.
+
+avp({{Code, Vendor}, Mandatory, Data}) ->
+    #diameter_avp{code = Code, vendor_id = Vendor, is_mandatory = Mandatory, data = avp(Data)};
+
+avp({Code, Data}) ->
+    avp({Code, false, Data});
+
+avp({Code, Mandatory, Data}) when is_integer(Code) ->
+    avp({{Code, undefined}, Mandatory, Data});
+
+avp(#diameter_avp{} = A) ->
+    A;
+
+avp(Avps) when is_list(Avps) ->
+    lists:map(fun avp/1, Avps);
+
+avp(V) when is_binary(V) ->
+    V.
+
+get_avp_data(Key, AVPs, Default) when is_list(AVPs) ->
+    case lists:keyfind(Key, #diameter_avp.name, AVPs) of
+	#diameter_avp{data = Data} -> Data;
+	_                          -> Default
+    end;
+get_avp_data(_, _, Default) ->
+    Default.

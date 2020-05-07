@@ -1,4 +1,4 @@
-%% Copyright 2017,2018, Travelping GmbH <info@travelping.com>
+%% Copyright 2017-2020, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -7,9 +7,12 @@
 
 -module(ergw_aaa_test_lib).
 
+-define(ERGW_AAA_NO_IMPORTS, true).
+
 -export([meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1]).
 -export([set_cfg_value/3, get_cfg_value/2]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
+-export([outstanding_reqs/0]).
 
 -include("ergw_aaa_test_lib.hrl").
 
@@ -153,3 +156,7 @@ diff_stats(S1, S2) ->
 		  end
 	  end, S2, S1),
     Stats ++ Rest.
+
+outstanding_reqs() ->
+    lists:foldl(
+      fun({_, O, _, _, _, _, _}, S) -> S + O end, 0, ergw_aaa_diameter_srv:peers()).

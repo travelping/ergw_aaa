@@ -34,6 +34,10 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
+-ifdef(TEST).
+-export([peers/0]).
+-endif.
+
 -include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include("include/ergw_aaa_session.hrl").
@@ -105,6 +109,11 @@ start_request(Msg, SvcName, Peer) ->
 finish_request(SvcName, Peer) ->
     gen_server:call(?SERVER, {finish_request, SvcName, Peer}).
 
+-ifdef(TEST).
+peers() ->
+    gen_server:call(?SERVER, '$peers').
+-endif.
+
 %%%===================================================================
 %%% diameter:call wrapper
 %%%===================================================================
@@ -141,7 +150,7 @@ handle_plain_error(Module, Error, Request, SvcName, CallOpts)
 handle_plain_error([Module | Extra], Error, Request, SvcName, CallOpts)
   when is_atom(Module) ->
     erlang:apply(Module, handle_error,
-		 [Error, Request, SvcName, undefined] ++ Extra ++[CallOpts]).
+		 [Error, Request, SvcName, undefined] ++ Extra ++ [CallOpts]).
 %% we don't currently use #diameter_callback{}
 
 handle_plain_error(Error, _Request, _SvcName, _App, _CallOpts, []) ->
@@ -215,6 +224,13 @@ handle_call({get_services, Service}, _From, #state{handlers = H} = State) ->
 		{ok, V} -> V;
 		_       -> []
 	    end,
+    {reply, Reply, State};
+
+handle_call('$peers', _From, #state{peers = Peers} = State) ->
+    Reply = maps:fold(
+	      fun(K, #peer{} = P, A) -> [setelement(1, P, K)|A];
+		 (_, _, A)           -> A
+	      end, [], Peers),
     {reply, Reply, State};
 
 handle_call({pick_peer, Candidates, SvcName}, _From, #state{peers = Peers} = State) ->

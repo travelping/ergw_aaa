@@ -1,4 +1,4 @@
-%% Copyright 2017-2019, Travelping GmbH <info@travelping.com>
+%% Copyright 2017-2020, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -13,10 +13,6 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("ergw_aaa_test_lib.hrl").
-
--import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
-			    set_cfg_value/3,
-			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
 
 -define(HUT, ergw_aaa_nasreq).
 -define(SERVICE, 'diam-test').
@@ -76,7 +72,9 @@ common() ->
      simple,
      accounting,
      acct_interim_interval,
-     attrs_3gpp].
+     attrs_3gpp,
+     handle_failure,
+     handle_answer_error].
 
 groups() ->
     [{coupled, [], common()},
@@ -153,6 +151,7 @@ compat(Config) ->
 	{Cnt, Msg} <- [{3, 'ACR'}, {3, {'ACA', 2001}}]],
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -186,6 +185,8 @@ simple(Config) ->
 		       {3, 'ACR'}, {3, {'ACA', 2001}},
 		       {1, 'STR'}, {1, {'STA', 2001}}
 		      ]],
+
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -209,6 +210,7 @@ accounting(Config) ->
 	{Cnt, Msg} <- [{3, 'ACR'}, {3, {'ACA', 2001}}]],
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -232,6 +234,7 @@ acct_interim_interval(Config) ->
 		   {periodic, 'IP-CAN', 1, _}}}], Ev),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -276,6 +279,33 @@ attrs_3gpp(Config) ->
     ?equal(1, stats({'ACA', 2001}, Config, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_failure(Config) ->
+    SOpts = #{'Called-Station-Id' => <<"FAIL-RC-3007">>,
+	      'Framed-IP-Address' => {10,10,10,10}},
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(), SOpts),
+
+    ?match({{fail, 3007}, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+    ?match({{fail, 3007}, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_answer_error(Config) ->
+    SOpts = #{'Called-Station-Id' => <<"FAIL-BROKEN-ANSWER">>,
+	      'Framed-IP-Address' => {10,10,10,10}},
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(), SOpts),
+
+    ?match({{error, 3007}, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+    ?match({{error, 3007}, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 

@@ -15,10 +15,6 @@
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
-			    set_cfg_value/3,
-			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
-
 -define(HUT, ergw_aaa_radius).
 -define(SERVICE, 'aaa-test').
 
