@@ -17,9 +17,6 @@
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
-			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
-
 -define(HUT, ergw_aaa_ro).
 -define(SERVICE, 'diam-test').
 -define(SET_TC_INFO(Name, Value), set_test_info(?FUNCTION_NAME, Name, Value)).
@@ -124,7 +121,9 @@ all() ->
      ocs_hold_initial_timeout, ocs_hold_update_timeout,
      ccr_retry,
      %% ccr_t_rate_limit
-     rate_limit
+     rate_limit,
+     handle_failure,
+     handle_answer_error
     ].
 
 init_per_suite(Config0) ->
@@ -280,6 +279,7 @@ simple_session(Config) ->
     ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -342,6 +342,7 @@ simple_session_async(Config) ->
     ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -413,6 +414,7 @@ abort_session_request(Config) ->
     ?equal(1, proplists:get_value({{4, 274, 0}, recv, {'Result-Code',2001}}, StatsTestSrv)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -461,6 +463,7 @@ tarif_time_change(Config) ->
     ?equal(3, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -509,6 +512,7 @@ ccr_retry(Config) ->
     ?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ?CLEAR_TC_INFO(),
     ok.
@@ -544,6 +548,9 @@ rate_limit(_Config) ->
 		  LimitT /= 0 andalso
 		  OkayT + LimitT =:= 60,
 	   CollectFun('CCR-Terminate', SRefs, #{})),
+
+    %% make sure to refill the token buckets, so that the following tests don't fail
+    ct:sleep(1100),
     ok.
 
 ccr_t_rate_limit() ->
@@ -581,6 +588,7 @@ ccr_t_rate_limit(Config) ->
     %% all 50 requests were either rate limited or ok (no other error)
     ?equal(50, Ok + RateLimited),
 
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ?CLEAR_TC_INFO(),
     ok.
@@ -618,6 +626,7 @@ ocs_hold_initial_timeout(Config) ->
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ?CLEAR_TC_INFO(),
     ok.
@@ -675,8 +684,61 @@ ocs_hold_update_timeout(Config) ->
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ?CLEAR_TC_INFO(),
+    ok.
+
+handle_failure(Config) ->
+    Session = init_session(#{}, Config),
+    GyOpts =
+	#{'3GPP-IMSI' => <<"FAIL">>,
+	  '3GPP-MSISDN' => <<"FAIL">>,
+	  credits =>
+	      #{1000 => empty,
+		2000 => empty,
+		3000 => empty
+	       }
+	 },
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    %% the retry logic causes this to be reported as error instead of fail
+    ?match({{error, 3001}, _, _},
+	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [])),
+
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    % check that client has sent CCR
+    ?equal(3, proplists:get_value({{4, 272, 1}, send}, Statistics)),
+    % check that client has received CCA
+    ?equal(3, proplists:get_value({{4, 272, 0}, recv, {'Result-Code', 3001}}, Statistics)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_answer_error(Config) ->
+    Session = init_session(#{}, Config),
+    GyOpts =
+	#{'3GPP-IMSI' => <<"FAIL-BROKEN-ANSWER">>,
+	  '3GPP-MSISDN' => <<"FAIL-BROKEN-ANSWER">>,
+	  credits =>
+	      #{1000 => empty,
+		2000 => empty,
+		3000 => empty
+	       }
+	 },
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{error, 3007}, _, _},
+	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
     ok.
 
 %%%======================================================================

@@ -23,9 +23,6 @@
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
-			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
-
 -define(HUT, ergw_aaa_gx).
 -define(SERVICE, ergw_aaa_gx).
 
@@ -93,6 +90,7 @@ all() ->
      simple_session,
      abort_session_request,
      handle_failure,
+     handle_answer_error,
      re_auth_request
     ].
 
@@ -216,6 +214,7 @@ simple_session(Config) ->
     ?equal(2, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',2001}}, Statistics)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -262,6 +261,7 @@ abort_session_request(Config) ->
 				  StatsTestSrv)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -285,6 +285,22 @@ handle_failure(Config) ->
     ?equal(1, proplists:get_value({{16777238, 272, 0}, recv, {'Result-Code',3001}}, Statistics)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_answer_error(Config) ->
+    Session = init_session(#{}, Config),
+    GxOpts =
+	#{'3GPP-IMSI' => <<"FAIL-BROKEN-ANSWER">>,
+	  '3GPP-MSISDN' => <<"FAIL-BROKEN-ANSWER">>},
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{error, 3007}, _, _},
+	   ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -341,6 +357,9 @@ re_auth_request(Config) ->
     {ok, _Session2, _Events2} =
 	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
 
+    %% make sure all async requests are finished
+    ct:sleep(100),
+
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
 
@@ -358,6 +377,7 @@ re_auth_request(Config) ->
     ?equal(3, proplists:get_value({{1, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 

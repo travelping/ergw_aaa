@@ -17,9 +17,6 @@
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
-			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
-
 -define(HUT, ergw_aaa_static).
 
 -define(STATIC_CONFIG,

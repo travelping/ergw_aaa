@@ -75,6 +75,7 @@ initialize_service(_ServiceId, #{function := Function}) ->
 		  'Vendor-Id'           = ?VENDOR_ID_3GPP,
 		  'Auth-Application-Id' = [?DIAMETER_APP_ID_GX]}],
 	  application => [{alias, ?APP},
+			  {answer_errors, callback},
 			  {dictionary, ?DIAMETER_DICT_GX},
 			  {module, ?MODULE}]},
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
@@ -202,6 +203,16 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
     false.
 
 %% handle_answer/5
+handle_answer(#diameter_packet{msg = Msg, errors = Errors},
+	      _Request, SvcName, Peer, _CallOpts)
+  when length(Errors) /= 0 ->
+    ?LOG(error, "~p: decode of answer from ~p failed, errors ~p", [SvcName, Peer, Errors]),
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    case Msg of
+	[_ | #{'Result-Code' := RC}] -> {error, RC};	%% try to handle gracefully
+	_                            -> {error, failed}
+    end;
+
 handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.

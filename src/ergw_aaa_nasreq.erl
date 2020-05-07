@@ -85,6 +85,7 @@ initialize_service(_ServiceId, #{function := Function, accounting := AcctModel})
 	case AcctModel of
 	    split   ->
 		AcctAppl = [[{alias, ?BASE_ACC_APP},
+			     {answer_errors, callback},
 			     {dictionary, ?DIAMETER_DICT_NASREQ_BASE_ACC},
 			     {module, ?MODULE}]],
 		{?DIAMETER_APP_ID_BASE_ACC, AcctAppl};
@@ -95,6 +96,7 @@ initialize_service(_ServiceId, #{function := Function, accounting := AcctModel})
 	#{'Auth-Application-Id' => ?DIAMETER_APP_ID_NASREQ,
 	  'Acct-Application-Id' => AcctId,
 	  application => [[{alias, ?APP},
+			   {answer_errors, callback},
 			   {dictionary, ?DIAMETER_DICT_NASREQ},
 			   {module, ?MODULE}]
 			  | Appl]},
@@ -262,7 +264,17 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
     false.
 
 %% handle_answer/5
-handle_answer(#diameter_packet{msg = Msg}, _Request, SvcName, Peer, _CallOpts) ->
+handle_answer(#diameter_packet{msg = Msg, errors = Errors},
+	      _Request, SvcName, Peer, _CallOpts)
+  when length(Errors) /= 0 ->
+    ?LOG(error, "~p: decode of answer from ~p failed, errors ~p", [SvcName, Peer, Errors]),
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    case Msg of
+	[_ | #{'Result-Code' := RC}] -> {error, RC};	%% try to handle gracefully
+	_                            -> {error, failed}
+    end;
+
+handle_answer(#diameter_packet{msg = Msg, errors = []}, _Request, SvcName, Peer, _CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Msg.
 

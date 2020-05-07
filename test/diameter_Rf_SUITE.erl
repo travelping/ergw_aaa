@@ -18,9 +18,6 @@
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
-			    get_stats/1, diff_stats/2, wait_for_diameter/2]).
-
 -define(HUT, ergw_aaa_rf).
 -define(SERVICE, 'diam-test').
 
@@ -83,7 +80,13 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, multi_event_session, async, secondary_rat_usage_data_report].
+    [simple_session,
+     multi_event_session,
+     async,
+     secondary_rat_usage_data_report,
+     handle_failure,
+     handle_answer_error
+    ].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -229,6 +232,7 @@ simple_session(Config) ->
     ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -305,6 +309,7 @@ multi_event_session(Config) ->
     ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -368,6 +373,7 @@ async(Config) ->
     ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
 
@@ -498,6 +504,47 @@ secondary_rat_usage_data_report(Config) ->
 	     'Secondary-RAT-Type' := [<<0>>]}, hd(SecRatR)),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
     meck_validate(Config),
+    ok.
 
+handle_failure(Config) ->
+    SOpts =
+	#{now => erlang:monotonic_time(),
+	  '3GPP-IMSI' => <<"FAIL">>,
+	  '3GPP-MSISDN' => <<"FAIL">>},
+    Session = init_session(SOpts, Config),
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{fail, 3001}, _, _},
+	   ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts)),
+
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    % check that client has sent CCR
+    ?equal(1, proplists:get_value({{3, 271, 1}, send}, Statistics)),
+    % check that client has received CCA
+    ?equal(1, proplists:get_value({{3, 271, 0}, recv, {'Result-Code', 3001}}, Statistics)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_answer_error(Config) ->
+    SOpts =
+	#{now => erlang:monotonic_time(),
+	  '3GPP-IMSI' => <<"FAIL-BROKEN-ANSWER">>,
+	  '3GPP-MSISDN' => <<"FAIL-BROKEN-ANSWER">>},
+    Session = init_session(SOpts, Config),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{error, 3007}, _, _},
+	   ergw_aaa_session:invoke(SId, SOpts, {rf, 'Initial'}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
     ok.

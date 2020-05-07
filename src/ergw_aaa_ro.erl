@@ -80,6 +80,7 @@ initialize_service(_ServiceId, #{function := Function}) ->
 		  'Vendor-Id'           = ?VENDOR_ID_3GPP,
 		  'Auth-Application-Id' = [?DIAMETER_APP_ID_RO]}],
 	  application => [{alias, ?APP},
+			  {answer_errors, callback},
 			  {dictionary, ?DIAMETER_DICT_RO},
 			  {module, ?MODULE}]},
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
@@ -213,10 +214,25 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
     false.
 
 %% handle_answer/5
+handle_answer(#diameter_packet{msg = Msg, errors = Errors},
+	      _Request, SvcName, Peer, CallOpts)
+  when length(Errors) /= 0 ->
+    ?LOG(error, "~p: decode of answer from ~p failed, errors ~p", [SvcName, Peer, Errors]),
+    ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
+    Code =
+	case Msg of
+	    [_ | #{'Result-Code' := RC}] -> RC;	%% try to handle gracefully
+	    _                            -> failed
+	end,
+    if Code >= 3000 ->
+	    maybe_retry(Code, SvcName, Peer, CallOpts);
+       true ->
+	    {error, Code}
+    end;
+
 handle_answer(#diameter_packet{msg = [_ | #{'Result-Code' := Code}]},
 	      _, SvcName, Peer, CallOpts)
-  when Code =:= ?'DIAMETER_BASE_RESULT-CODE_TOO_BUSY';
-       Code =:= ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_DELIVER' ->
+  when Code >= 3000 ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     maybe_retry(Code, SvcName, Peer, CallOpts);
 
