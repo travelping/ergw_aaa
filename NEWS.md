@@ -3,6 +3,23 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.4.0 - 11 May 2020
+---------------------------
+
+* switch from eradius modernize branch to released 1.0.0
+* fix accounting of outstanding requests for load calculation
+* add async mode to RADIUS accounting msgs
+* add Traffic-Data-Volumes to Rf
+* handle NASREQ STR sending errors
+* implement RAN-Secondary-RAT-Usage-Report on Rf
+* disable OTP Diameter built-in re-transmit handling, replace with
+  load based control logic
+* add missing IPv6 attributes in NASREQ and RADOIS
+* fix use of repeated attributes in RADIUS handler
+* strip X_ prefix from 3GPP attributes
+* fix 3GPP-IPv6-DNS-Servers atom
+* replace lager with Erlang logger
+
 Version 3.3.0 - 26 Nov 2019
 ---------------------------
 
