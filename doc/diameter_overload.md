@@ -1,5 +1,5 @@
-DIAMTER request limits and retry
-================================
+DIAMETER request limits and retry
+=================================
 
 Support for limiting the outgoing request rate and outstanding requests, and the client
 controlled failover is currently implemented in all DIAMETER client handlers, and can be

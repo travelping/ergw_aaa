@@ -190,13 +190,15 @@ retry_request(_, _, Peer, #diam_call{tries = Tries, peers_tried = PeersTried} = 
 			       peers_tried = [Peer | PeersTried]}}.
 
 %% prepare_request/4
-prepare_request(#diameter_packet{header = Hdr0} = Packet, _SvcName, _Peer,
-		#diam_call{peers_tried = PeersTried, seqno = SeqNo}) ->
+prepare_request(#diameter_packet{header = Hdr0, msg = [Message | AVPs0]} = Packet, _SvcName, _Peer,
+		#diam_call{peers_tried = PeersTried, seqno = SeqNo, opts = Config}) ->
+    Filter = maps:get(avp_filter, Config, []),
+    AVPs = filter_avps(AVPs0, Filter),
     Hdr = Hdr0#diameter_header{
 	    is_retransmitted =
 		Hdr0#diameter_header.is_retransmitted =:= true orelse PeersTried /= [],
 	    end_to_end_id = SeqNo},
-    Packet#diameter_packet{header = Hdr}.
+    Packet#diameter_packet{header = Hdr, msg = [Message | AVPs]}.
 
 %%%===================================================================
 %% gen_server callbacks
@@ -370,3 +372,50 @@ finish_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Pe
 	_ ->
 	    {{error, underflow}, Peers1#{OH => Peer}}
     end.
+
+%% AVP filtering
+%% See /docs/diameter_avp_filter.md in the source tree for functionality
+filter_avps(AVPs, [AVPPath | Rest]) when is_list(AVPPath) ->
+    filter_avps(filter_avp(AVPs, AVPPath), Rest);
+filter_avps(AVPs, []) ->
+    AVPs.
+
+%% When conditions are the last element of the path, and we're filtering a
+%% list of AVP structures. Delete all structures matching the conditions
+filter_avp([#{}| _] = AVPs, [Conditions]) when is_list(Conditions) ->
+    [M || M <- AVPs, not check_avp_conditions(M, Conditions)];
+%% When conditions are not the last element of the path and we're filtering
+%% a list of AVP structures. Return all non-matching and continue filtering
+%% the matches.
+filter_avp([#{}| _] = AVPs, AVPPath) ->
+    [filter_avp(M, AVPPath) || M <- AVPs];
+%% When AVP name is the last element of the path, and we're filtering a
+%% single AVP structure, delete the key if present
+filter_avp(#{} = AVPs, [Target]) when is_map_key(Target, AVPs) ->
+    maps:without([Target], AVPs);
+%% When the path element is an AVP name, there is more in the path and we
+%% are filtering a single AVP structure, go a level down to continue filtering
+filter_avp(#{} = AVPs, [Next | Rest]) when is_map_key(Next, AVPs) ->
+    AVPs#{Next => filter_avp(maps:get(Next, AVPs), Rest)};
+%% When conditions are not the last element of the path and we're filtering
+%% a sigle AVP structure. Follow the path to filter if the conditions are
+%% met, otherwise return the structure
+filter_avp(#{} = AVPs, [Conditions, Next | Rest]) when is_list(Conditions) ->
+    case check_avp_conditions(AVPs, Conditions) of
+	true when is_map_key(Next, AVPs) ->
+	    AVPs#{Next => filter_avp(maps:get(Next, AVPs), Rest)};
+	false ->
+	    AVPs
+    end;
+filter_avp(AVPs, _) ->
+    AVPs.
+
+check_avp_conditions(AVPs, [{AVP, Value} | Rest]) when is_map_key(AVP, AVPs) ->
+    case maps:get(AVP, AVPs) of
+	Value -> check_avp_conditions(AVPs, Rest);
+	_ -> false
+    end;
+check_avp_conditions(_, []) ->
+    true;
+check_avp_conditions(_, _) ->
+    false.
