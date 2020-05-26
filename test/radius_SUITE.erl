@@ -92,6 +92,7 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(accounting_async, _Config) ->
+    reset_session_stats(),
     meck:unload(eradius_client),
     ok;
 end_per_testcase(_, _Config) ->
@@ -132,13 +133,20 @@ simple(Config) ->
 
     {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
 
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+
     ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
 	   Events),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
     TermOpts = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
 
     meck_validate(Config),
     ok.
@@ -151,9 +159,20 @@ accounting(Config) ->
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
 
     %% make sure nothing crashed
     meck_validate(Config),
@@ -168,9 +187,20 @@ accounting_async(Config) ->
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
 
     %% wait for async requests
     ct:sleep(5000),
@@ -226,6 +256,8 @@ attrs_3gpp(Config) ->
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), Attrs),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
 
     %% make sure nothing crashed
     meck_validate(Config),
