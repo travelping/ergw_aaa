@@ -123,6 +123,7 @@ all() ->
      ocs_hold_initial_timeout,
      ocs_hold_update_timeout,
      ccr_retry,
+     %% ccr_t_rate_limit,
      rate_limit,
      handle_failure,
      handle_answer_error].
@@ -587,6 +588,45 @@ rate_limit(_Config) ->
 
     %% make sure to refill the token buckets, so that the following tests don't fail
     ct:sleep(1100),
+    ok.
+ccr_t_rate_limit() ->
+    [{doc, "older version of the rate limit test, does not work, keep for reference"}].
+ccr_t_rate_limit(Config) ->
+    %% this test is somewhat trickier : we need to generate sessions with a rate independent
+    %% from separate processes to avoid dependency on rate limiter settings. Also it should
+    %% work on dev and CI machines with different performance
+
+    %% spawning 50 sessions, with the jobs config above (2 s max time and 10 req/s) this should
+    %% send around 20 requests (give and take some computing noise)
+    [spawn_link(fun basic_session/0) || _ <- lists:seq(1,50)],
+
+    %% wait a little to make sure all CCR-I messages are done
+    timer:sleep(500),
+
+    %% collect stats for CCR-Ts
+    ReceivedRate = stat_check(diameter_test_server, 1000, {{4, 272, 1},recv}, 3),
+
+    %% collect the CCR-T results
+    ResCnt = ets:new(resultcount, [ordered_set]),
+    [ets:update_counter(ResCnt, Result, 1, {Result, 0}) || {{_, _}, Result} <- ?LIST_TC_INFO()],
+    ResList = ets:tab2list(ResCnt),
+    ct:pal("ResList: ~p", [ResList]),
+    Ok = proplists:get_value(ok, ResList, 0),
+    RateLimited = proplists:get_value(rate_limit, ResList, 0),
+
+    ct:pal("ReceivedRate: ~p", [ReceivedRate]),
+    %% no received rate sample is greatet than 10 req/s as defined in the rate limit config
+    ?equal([], lists:filter(fun(Recv_s) -> Recv_s > 10 end, ReceivedRate)),
+
+    %% same amount of requests returned ok (i.e. not rate limited), as received on the other side
+    ?equal(Ok, lists:sum(ReceivedRate)),
+
+    %% all 50 requests were either rate limited or ok (no other error)
+    ?equal(50, Ok + RateLimited),
+
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ?CLEAR_TC_INFO(),
     ok.
 
 ocs_hold_initial_timeout(Config) ->

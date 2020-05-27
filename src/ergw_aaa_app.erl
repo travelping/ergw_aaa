@@ -56,8 +56,7 @@ initialize_services(#{services := Services}, SupSpecs) ->
 	      end, SupSpecs, Services).
 
 prometheus_declare() ->
-    prometheus_gauge:declare([
-        {name, aaa_sessions_total},
-        {labels, [handler, state]},
-        {help, "AAA sessions"}]).
+    prometheus_gauge:declare([{name, aaa_sessions_total},
+			      {labels, [handler, state]},
+			      {help, "AAA sessions"}]).
 

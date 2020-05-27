@@ -279,7 +279,7 @@ handle_cca({error, no_connection}, Session, Events,
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State#state{state = peer_down});
-handle_cca({error, timeout}, Session, Events,
+handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts, State) ->
     Avps = maps:get(Answer, Answers, #{'Result-Code' =>
 					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),

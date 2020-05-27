@@ -115,7 +115,7 @@ init_per_suite(Config0) ->
 
 end_per_suite(Config) ->
     meck_unload(Config),
-	application:stop(prometheus),
+    application:stop(prometheus),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
     diameter_test_server:stop(),
@@ -199,7 +199,9 @@ simple_session(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
-	?equal([], prometheus_gauge:values(default, aaa_sessions_total)),
+
+    ?equal([], get_session_stats()),
+
     {ok, _Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
 

@@ -164,12 +164,12 @@ outstanding_reqs() ->
 
 
 get_session_stats() ->
-    lists:sort([{Handler, State, Value} || 
-     {[{"handler", Handler}, {"state", State}], Value} <- 
+    lists:sort([{Handler, State, Value} ||
+     {[{"handler", Handler}, {"state", State}], Value} <-
      prometheus_gauge:values(default, aaa_sessions_total)]).
 
 reset_session_stats() ->
     %% there seems to be no easier way doing this ...
     [prometheus_gauge:remove(default, aaa_sessions_total, [Handler, State]) ||
-     {[{"handler", Handler}, {"state", State}], _} <- 
+     {[{"handler", Handler}, {"state", State}], _} <-
      prometheus_gauge:values(default, aaa_sessions_total)].
