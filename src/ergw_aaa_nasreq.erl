@@ -364,7 +364,7 @@ to_session(Procedure, {Session0, Events0}, Avps) ->
 %% to_session/4
 to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
   when is_integer(Interim), Interim > 0 ->
-    Trigger = ergw_aaa_session:trigger(?MODULE, 'IP-CAN', periodic, Interim),
+    Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
     {Session#{'Acct-Interim-Interval' => Interim}, ergw_aaa_session:ev_set(Trigger, Events)};
 
 to_session(_, 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->

@@ -169,7 +169,7 @@ simple(Config) ->
 			'Framed-IPv6-Pool' => <<"pool-A">>}),
 
     {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
-    ?match([{set, {{ergw_aaa_nasreq, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
+    ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
 	   Events),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
@@ -230,7 +230,7 @@ acct_interim_interval(Config) ->
 	     'Service-Type' := 'Framed-User',
 	     'Framed-Protocol' := 'PPP'
 	    }, SessionOpts),
-    ?match([{set, {{ergw_aaa_nasreq, 'IP-CAN', periodic},
+    ?match([{set, {{accounting, 'IP-CAN', periodic},
 		   {periodic, 'IP-CAN', 1, _}}}], Ev),
 
     %% make sure nothing crashed
