@@ -103,7 +103,8 @@
 all() -> [default_filter,
 	  simple_root,
 	  simple_path,
-	  conditional_instance].
+	  conditional_instance,
+	  ignore_single_condition_path].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -199,6 +200,23 @@ simple_path(_Config) ->
 %%====================================================================
 conditional_instance(_Config) ->
     Filter = [
+	['Subscription-Id', [{'Subscription-Id-Type', 1}]]
+    ],
+    {Before, After} = do_filter_test(Filter),
+
+    ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
+    ?equal(2, length(maps:get('Subscription-Id', Before))),
+    
+    ?match(#{'3GPP-IMSI' := [_], 'Subscription-Id' := [#{'Subscription-Id-Type' := 0}]}, After),
+    ok.
+
+%%====================================================================
+%% Ignore single element path with matching condition list in the root 
+%% AVP structure. i.e. send the message with the other paths filtered
+%%====================================================================
+ignore_single_condition_path(_Config) ->
+    Filter = [
+	[{'3GPP-NSAPI', 5}],
 	['Subscription-Id', [{'Subscription-Id-Type', 1}]]
     ],
     {Before, After} = do_filter_test(Filter),

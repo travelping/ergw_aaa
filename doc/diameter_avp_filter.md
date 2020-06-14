@@ -3,7 +3,7 @@ DIAMETER AVP Filter
 
 Diameter is a very flexible protocol allowing vendor/service specific customisations of AVPs compared to standards. Also the AVPs may change with different versions of the standards. This results in the requirement of some level of customisation of the AVPs the ERGW uses to communicate with external systems implementing different versions of the standards or vendor/service specific quirks.
 
-This implementation uses the simple approach of including all extra AVPs that can possibly be used, and with a configurable filter deletes the ones we don't want to use in a deployment on a specific interface.
+This implementation uses the approach of including all extra AVPs that can possibly be used, and with a configurable filter deletes the ones we don't want to use in a deployment on a specific interface.
 
 The filtering functionality is implemented for all AAA diameter handlers (Ro/Gy - `ergw_aaa_ro`, Rf - `ergw_aaa_rf`, Gx - `ergw_aaa_gx`, NASREQ - `ergw_aaa_nasreq`) and can be configured for these.
 
