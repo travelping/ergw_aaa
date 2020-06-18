@@ -16,13 +16,14 @@
 	 terminate/2, code_change/3]).
 
 %% Session Process API
--export([start_link/2, invoke/4,
+-export([start_link/2, start_link/3, invoke/4,
 	 authenticate/2, authorize/2,
 	 start/2, start/3,
 	 interim/2, interim/3,
 	 stop/2, stop/3,
 	 terminate/1, get/1, get/2, get/3, set/2, set/3, unset/2,
-	 request/4, response/4]).
+	 request/4, response/4,
+	 save/1]).
 
 %% Session Object API
 -export([to_session/1, native_to_seconds/1]).
@@ -83,6 +84,11 @@ start_link(Owner, SessionData) ->
     Opts = [{hibernate_after, 500},
 	    {spawn_opt,[{fullsweep_after, 0}]}],
     gen_statem:start_link(?MODULE, [Owner, SessionData], Opts).
+
+start_link(Action, Owner, SessionData) ->
+    Opts = [{hibernate_after, 500},
+	    {spawn_opt,[{fullsweep_after, 0}]}],
+    gen_statem:start_link(?MODULE, [Action, Owner, SessionData], Opts).
 
 invoke_compat_async(Session, SessionOpts, Procedure) ->
     case invoke(Session, SessionOpts, Procedure, #{async => true}) of
@@ -161,12 +167,29 @@ unset(Session, Options) when is_list(Options) ->
 unset(Session, Option) when is_atom(Option) ->
     gen_statem:call(Session, {unset, [Option]}).
 
+save(Session) ->
+    gen_statem:call(Session, save).
+
 %%===================================================================
 %% gen_statem callbacks
 %%===================================================================
 
 %% callback_mode() -> [handle_event_function, state_enter].
 callback_mode() -> handle_event_function.
+
+init([Owner, {'$session_v1', State, #data{session = Session} = Data0}]) ->
+    process_flag(trap_exit, true),
+
+    ergw_aaa_session_reg:register(maps:get('Session-Id', Session)),
+    ergw_aaa_session_reg:register(maps:get('Diameter-Session-Id', Session)),
+
+    MonRef = erlang:monitor(process, Owner),
+    Data =
+	Data0#data{owner         = Owner,
+		   owner_monitor = MonRef},
+
+    %% TBD: reinit handler modules ????
+    {ok, State, Data};
 
 init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
@@ -200,6 +223,12 @@ init([Owner, SessionOpts]) ->
     State = #state{},
     {Reply, DataOut, _Events} = exec(init, SessionOpts, #{}, Data),
     {Reply, State, DataOut}.
+
+handle_event({call, From}, save, State, Data0) ->
+    Data = Data0#data{owner = undefined,
+		      owner_monitor = undefined},
+    Reply = {'$session_v1', State, Data},
+    {stop_and_reply, normal, [{reply, From, Reply}], Data};
 
 handle_event({call, From}, get, _State, Data) ->
     {keep_state_and_data, [{reply, From, Data#data.session}]};
