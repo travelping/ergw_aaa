@@ -400,10 +400,10 @@ filter_avp(#{} = AVPs, [Next | Rest]) when is_map_key(Next, AVPs) ->
 %% When conditions are not the last element of the path and we're filtering
 %% a sigle AVP structure. Follow the path to filter if the conditions are
 %% met, otherwise return the structure
-filter_avp(#{} = AVPs, [Conditions, Next | Rest]) when is_list(Conditions) ->
+filter_avp(#{} = AVPs, [Conditions, Rest]) when is_list(Conditions) ->
     case check_avp_conditions(AVPs, Conditions) of
-	true when is_map_key(Next, AVPs) ->
-	    AVPs#{Next => filter_avp(maps:get(Next, AVPs), Rest)};
+	true ->
+	    filter_avp(AVPs, Rest);
 	false ->
 	    AVPs
     end;
