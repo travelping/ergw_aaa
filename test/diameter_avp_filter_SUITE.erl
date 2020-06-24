@@ -188,7 +188,7 @@ simple_path(_Config) ->
     ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
 
     #{'Service-Information' := [#{'PS-Information' := [PSInfoAfter]}]} = After,
-    ?equal(false, is_map_key('3GPP-MS-TimeZone', PSInfoAfter)),
+    ?equal(undefined, maps:get('3GPP-MS-TimeZone', PSInfoAfter, undefined)),
     ?equal(undefined, maps:get('3GPP-IMSI', After, undefined)),
     ok.
     
