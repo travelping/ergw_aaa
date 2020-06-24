@@ -11,15 +11,10 @@
 -compile([export_all, nowarn_export_all]).
 
 -include_lib("common_test/include/ct.hrl").
-
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
-
 -include_lib("diameter/include/diameter.hrl").
-
 -include("../include/diameter_3gpp_ts32_299.hrl").
-
 -include("../include/ergw_aaa_session.hrl").
-
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_ro).
