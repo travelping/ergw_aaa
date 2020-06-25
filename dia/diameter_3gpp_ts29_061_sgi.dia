@@ -65,6 +65,8 @@
               [ Framed-IP-Netmask ]
               [ Framed-MTU ]
               [ Framed-Protocol ]
+              [ Framed-Pool ]
+              [ Framed-IPv6-Pool ]
               [ ARAP-Password ]
               [ ARAP-Security ]
             * [ ARAP-Security-Data ]

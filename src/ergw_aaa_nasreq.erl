@@ -61,7 +61,8 @@
 
 -define(DefaultOptions, [{function, "undefined"},
 			 {accounting, coupled},
-			 {'Destination-Realm', undefined}]).
+			 {'Destination-Realm', undefined},
+			 {avp_filter, [['Framed-Pool'], ['Framed-IPv6-Pool']]}]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
@@ -303,6 +304,8 @@ validate_option('Destination-Host', Value) when is_binary(Value) ->
 validate_option('Destination-Host', [Value]) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Realm', Value) when is_binary(Value) ->
+    Value;
+validate_option(avp_filter, Value) when is_list(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).

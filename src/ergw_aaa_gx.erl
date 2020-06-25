@@ -249,6 +249,8 @@ validate_option(answer_if_down, Value) when is_atom(Value) ->
     Value;
 validate_option(answer_if_timeout, Value) when is_atom(Value) ->
     Value;
+validate_option(avp_filter, Value) when is_list(Value) ->
+    Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 

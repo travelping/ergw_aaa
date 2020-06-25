@@ -54,7 +54,8 @@
 			 {'CC-Session-Failover', supported},
 			 {'Credit-Control-Failure-Handling', terminate},
 			 {answer_if_down, reject},
-			 {answer_if_timeout, reject}]).
+			 {answer_if_timeout, reject},
+			 {avp_filter, [['3GPP-IMSI']]}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -287,8 +288,6 @@ validate_option('Credit-Control-Failure-Handling', Value)
     Value;
 validate_option(answers, Value) when is_map(Value) ->
     Value;
-validate_option(diameter_flavour, Value) when is_atom(Value) ->
-    Value;
 validate_option(answer_if_down, Value) when is_atom(Value) ->
     Value;
 validate_option(answer_if_timeout, Value) when is_atom(Value) ->
@@ -298,6 +297,8 @@ validate_option(answer_if_rate_limit, Value) when is_atom(Value) ->
 validate_option(tx_timeout, Value) when is_integer(Value) ->
     Value;
 validate_option(max_retries, Value) when is_integer(Value) ->
+    Value;
+validate_option(avp_filter, Value) when is_list(Value) ->
     Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
@@ -483,10 +484,13 @@ from_session(Key, Value, Avps)
        Key =:= '3GPP-RAT-Type' ->
     optional([?SI_PSI, Key], ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps);
 
+%% Add '3GPP-IMSI' to both places commonly used : in the AVP root (e.g. Nokia) and in 
+%% 'Subscription-Id' (3GPP) then filter out the one you don't need with AVP filter
 from_session('3GPP-IMSI', IMSI, Avps) ->
     SI = #{'Subscription-Id-Type' => ?'DIAMETER_RO_SUBSCRIPTION-ID-TYPE_END_USER_IMSI',
 	   'Subscription-Id-Data' => IMSI},
-    repeated(['Subscription-Id'], SI, Avps);
+    Avps1 = repeated(['Subscription-Id'], SI, Avps),
+    optional('3GPP-IMSI', IMSI, Avps1);
 from_session('3GPP-MSISDN', MSISDN, Avps) ->
     SI = #{'Subscription-Id-Type' => ?'DIAMETER_RO_SUBSCRIPTION-ID-TYPE_END_USER_E164',
 	   'Subscription-Id-Data' => MSISDN},
@@ -504,12 +508,9 @@ from_session('Framed-IPv6-Prefix', {IP, PrefixLen}, Avps0) ->
     Avps = repeated([?SI_PSI, 'PDP-Address'], IP, Avps0),
     optional([?SI_PSI, 'PDP-Address-Prefix-Length'], PrefixLen, Avps);
 
-%%
-%% some OCSs don't like this attribute on Gy, disable it for now
-%%
 %% 'QoS-Information'
-%% from_session('QoS-Information' = Key, Value, Avps) ->
-%%     optional([?SI_PSI, Key], ergw_aaa_diameter:qos_from_session(Value), Avps);
+from_session('QoS-Information' = Key, Value, Avps) ->
+    optional([?SI_PSI, Key], ergw_aaa_diameter:qos_from_session(Value), Avps);
 
 %% 'SGSN-Address'
 from_session(Key, IP, Avps)
@@ -627,27 +628,13 @@ from_session('OutOctets', Value, Avps) ->
 from_session(_Key, _Value, M) ->
     M.
 
-% The custom 1 diameter flavour is for those who want IMSI in the 3GPP-IMSI in
-% the 3GPP-IMSI AVP in the CCR root
-from_session_custom1('3GPP-IMSI', IMSI, Avps) ->
-    optional(['3GPP-IMSI'], IMSI, Avps);
-from_session_custom1(Key, Value, Avps) ->
-    from_session(Key, Value, Avps).
-
 %% from_session/2
 from_session(Session, Avps0) ->
-    from_session_opts(Session, Avps0, #{}).
-
-from_session_opts(Session, Avps0, Opts) ->
     Avps1 = optional([?SI_PSI, 'Charging-Characteristics-Selection-Mode'],
 		     ?'DIAMETER_RO_CHARGING-CHARACTERISTICS-SELECTION-MODE_HOME-DEFAULT',
 		     Avps0),
     Avps = dynamic_address_flag(Session, Avps1),
-    Fun =
-	case maps:get(diameter_flavour, Opts, standard) of
-	    custom1 -> fun from_session_custom1/3;
-	    _ -> fun from_session/3
-	end,
+    Fun = fun from_session/3,
     maps:fold(Fun, Avps, Session).
 
 %% ------------------------------------------------------------------
@@ -775,7 +762,7 @@ make_CCR(Type, Session, #{now := Now} = Opts, #state{request_number = ReqNumber}
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)],
 		   'Multiple-Services-Indicator' =>
 		       [?'DIAMETER_RO_MULTIPLE-SERVICES-INDICATOR_SUPPORTED']},
-    Avps2 = from_session_opts(Session, Avps1, Opts),
+    Avps2 = from_session(Session, Avps1),
     MSCC = case Type of
 	       ?'DIAMETER_RO_CC-REQUEST-TYPE_INITIAL_REQUEST' ->
 		   request_credits(Session, #{});

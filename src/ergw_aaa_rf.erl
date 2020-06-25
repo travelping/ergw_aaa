@@ -250,6 +250,8 @@ validate_option('Destination-Host', [Value]) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
+validate_option(avp_filter, Value) when is_list(Value) ->
+    Value;
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 

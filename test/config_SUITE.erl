@@ -241,8 +241,10 @@ config(_Config)  ->
     ?error_set([handlers, ergw_aaa_nasreq], []),
     ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),
     ?error_set([handlers, ergw_aaa_nasreq, accounting], []),
+    ?error_set([handlers, ergw_aaa_nasreq, avp_filter], invalid),
     ?ok_set([handlers, ergw_aaa_nasreq, accounting], split),
     ?ok_set([handlers, ergw_aaa_nasreq, accounting], coupled),
+    ?ok_set([handlers, ergw_aaa_nasreq, avp_filter], ['3GPP-IMSI', ['3GPP-MSISDN']]),
 
     ?error_set([services, 'DIAMETER-Service', handler], invalid_handler),
 
