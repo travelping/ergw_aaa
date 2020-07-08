@@ -383,6 +383,9 @@ session_options('Acct-Authentic', 'Remote', Attrs) ->
 session_options('Acct-Authentic', 'Diameter', Attrs) ->
     [{?Acct_Authentic, 4}|Attrs];
 
+session_options('Termination-Cause', Value, Attrs) ->
+    [{?Acct_Terminate_Cause, Value} | Attrs];
+
 %% 3GPP TS 29.061 Attributes
 session_options('3GPP-IMSI', Value, Attrs) ->
     [{?X_3GPP_IMSI, Value}|Attrs];
