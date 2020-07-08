@@ -209,7 +209,8 @@ init_session(Session, _Config) ->
 	  '3GPP-GPRS-Negotiated-QoS-Profile' =>   <<11,146,31,147,150,64,64,255,
 						    255,255,255,17,1,1,64,64>>,
 	  '3GPP-Allocation-Retention-Priority' => 2,
-	  '3GPP-Charging-Characteristics' =>  <<8,0>>
+	  '3GPP-Charging-Characteristics' =>  <<8,0>>,
+	  'Termination-Cause' => 1
 
 	      %%
 	      %% some OCSs don't like this attribute on Gy, disable it for now
