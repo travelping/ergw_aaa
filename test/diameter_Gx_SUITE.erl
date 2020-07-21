@@ -115,16 +115,18 @@ init_per_suite(Config0) ->
 
 end_per_suite(Config) ->
     meck_unload(Config),
+    application:stop(prometheus),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
     diameter_test_server:stop(),
     ok.
 
-init_per_testcase(Config) ->
+init_per_testcase(_, Config) ->
+    reset_session_stats(),
     meck_reset(Config),
     Config.
 
-end_per_testcase(_Config) ->
+end_per_testcase(_, _Config) ->
     ok.
 
 %%%===================================================================
@@ -197,14 +199,22 @@ simple_session(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
+    ?equal([], get_session_stats()),
+
     {ok, _Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
+
     ?match([{pcc, install, [_|_]}], Events1),
 
     GxTerm =
 	#{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     {ok, _Session2, _Events2} =
 	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
+
+    ?equal([{ergw_aaa_gx, started, 0}], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -229,12 +239,18 @@ abort_session_request(Config) ->
     StatsTestSrv0 = get_stats(diameter_test_server),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
+
     ?match([{pcc, install, [_|_]}], Events1),
 
     SessionId = maps:get('Diameter-Session-Id', Session1),
     ?equal(ok, diameter_test_server:abort_session_request(gx, SessionId, ?'Origin-Host', ?'Origin-Realm')),
+
+    ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
 
     receive
 	#aaa_request{procedure = {_, 'ASR'}} = Request ->
@@ -246,6 +262,8 @@ abort_session_request(Config) ->
     GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
     {ok, _Session2, _Events2} =
 	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
+
+    ?equal([{ergw_aaa_gx, started, 0}], get_session_stats()),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),
@@ -274,8 +292,11 @@ handle_failure(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     ?match({{fail, 3001}, _, _},
 	   ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [])),
+
+    ?equal([], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -299,6 +320,8 @@ handle_answer_error(Config) ->
     ?match({{error, 3007}, _, _},
 	   ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, [])),
 
+    ?equal([], get_session_stats()),
+
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
@@ -315,9 +338,12 @@ re_auth_request(Config) ->
     StatsTestSrv0 = get_stats(diameter_test_server),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
     ?match([{pcc, install, [_|_]}], Events1),
+
+    ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
 
     RAROpts =
 	#{'Charging-Rule-Remove' => [],
@@ -334,8 +360,10 @@ re_auth_request(Config) ->
 		   Events),
 	    ergw_aaa_session:response(Request, ok, #{}, #{})
     after 1000 ->
-	    ct:fail("no ASR")
+	    ct:fail("no RAR")
     end,
+
+    ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
 
     ?equal(ok, diameter_test_server:re_auth_request(gx, SessionId,
 						    ?'Origin-Host', ?'Origin-Realm',
@@ -346,11 +374,20 @@ re_auth_request(Config) ->
 		   Evs2),
 	    %% check that the session is not blocked for other DIAMETER Apps
 	    ?match({ok, _}, ergw_aaa_session:start(SId, #{}, #{async => true})),
+
+	    ?equal([{ergw_aaa_gx, started, 1}, {ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
 	    ?match({ok, _}, ergw_aaa_session:interim(SId, #{}, #{async => true})),
+
+	    ?equal([{ergw_aaa_gx, started, 1}, {ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
 	    ?match({ok, _}, ergw_aaa_session:stop(SId, #{}, #{async => true})),
+
+	    ?equal([{ergw_aaa_gx, started, 1}, {ergw_aaa_nasreq, started, 0}], get_session_stats()),
+
 	    ergw_aaa_session:response(Req2, ok, #{}, #{})
     after 1000 ->
-	    ct:fail("no ASR")
+	    ct:fail("no RAR")
     end,
 
     GxTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
@@ -359,6 +396,8 @@ re_auth_request(Config) ->
 
     %% make sure all async requests are finished
     ct:sleep(100),
+
+    ?equal([{ergw_aaa_gx, started, 0}, {ergw_aaa_nasreq, started, 0}], get_session_stats()),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     StatsTestSrv = diff_stats(StatsTestSrv0, get_stats(diameter_test_server)),

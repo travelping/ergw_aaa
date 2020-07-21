@@ -11,6 +11,7 @@
 		  setup,
 		  regine,
 		  eradius,
+		  prometheus,
 		  diameter
 		 ]},
   {mod, { ergw_aaa_app, []}},

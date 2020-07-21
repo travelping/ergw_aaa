@@ -63,7 +63,7 @@
 
 -define(CONFIG,
 	[{rate_limits,
-	  [{default, [{outstanding_requests, 10}, {rate, 10}]}]},
+	  [{default, [{outstanding_requests, 1}, {rate, 10}]}]},
 	 {functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
@@ -116,15 +116,17 @@
 %%%===================================================================
 
 all() ->
-    [simple_session, simple_session_async,
-     abort_session_request, tarif_time_change,
-     ocs_hold_initial_timeout, ocs_hold_update_timeout,
+    [simple_session,
+     simple_session_async,
+     abort_session_request,
+     tarif_time_change,
+     ocs_hold_initial_timeout,
+     ocs_hold_update_timeout,
      ccr_retry,
-     %% ccr_t_rate_limit
+     %% ccr_t_rate_limit,
      rate_limit,
      handle_failure,
-     handle_answer_error
-    ].
+     handle_answer_error].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -156,16 +158,18 @@ init_per_suite(Config0) ->
 
 end_per_suite(Config) ->
     meck_unload(Config),
+    application:stop(prometheus),
     application:stop(ergw_aaa),
     application:unload(ergw_aaa),
     diameter_test_server:stop(),
     ok.
 
-init_per_testcase(Config) ->
+init_per_testcase(_, Config) ->
+    reset_session_stats(),
     meck_reset(Config),
     Config.
 
-end_per_testcase(_Config) ->
+end_per_testcase(_, _Config) ->
     ok.
 
 %%%===================================================================
@@ -246,8 +250,12 @@ simple_session(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
     ?match([{update_credits,[_,_,_]}], Events1),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
@@ -272,11 +280,14 @@ simple_session(Config) ->
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+
     ?match([{update_credits,[_,_,_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(2, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    ?equal([{ergw_aaa_ro, started, 0}], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
@@ -299,8 +310,12 @@ simple_session_async(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     {ok, Session1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
     Events1 =
 	receive
 	    {update_session, _, Ev1} -> Ev1
@@ -330,6 +345,9 @@ simple_session_async(Config) ->
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_ro, started, 0}], get_session_stats()),
+
     Events2 =
 	receive
 	    {update_session, _, Ev2} -> Ev2
@@ -362,10 +380,13 @@ abort_session_request(Config) ->
     StatsTestSrv0 = get_stats(diameter_test_server),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     ?match([{update_credits,[_,_,_]}], Events1),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
+
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
 
     SessionId = maps:get('Diameter-Session-Id', Session1),
     ?equal(ok, diameter_test_server:abort_session_request(gy, SessionId, ?'Origin-Host', ?'Origin-Realm')),
@@ -398,6 +419,9 @@ abort_session_request(Config) ->
 	       used_credits => maps:to_list(UsedCredits)},
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+
+    ?equal([{ergw_aaa_ro, started, 0}], get_session_stats()),
+
     ?match([{update_credits,[_,_,_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
@@ -427,8 +451,12 @@ tarif_time_change(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
     {ok, Session1, Events1} =
 	ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
     ?match([{update_credits,[_]}], Events1),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session1)),
 
@@ -452,10 +480,15 @@ tarif_time_change(Config) ->
     {ok, _, _} =
 	ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, []),
 
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
     {ok, Session2, Events2} =
 	ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+
+    ?equal([{ergw_aaa_ro, started, 0}], get_session_stats()),
+
     ?match([{update_credits,[_]}], Events2),
     ?equal(false, maps:is_key('Multiple-Services-Credit-Control', Session2)),
 
@@ -492,7 +525,11 @@ ccr_retry(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
     set_diameter_session_handler(DiameterSId, DTRA),
+
     {ok, _Session1, _Events1} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
     RequestsInfo = ?GET_TC_INFO(ccr_i_retries),
 
     %% last 2 requests have retry flag set, the 1st not
@@ -501,14 +538,14 @@ ccr_retry(Config) ->
     %% all requests have the same end to end id
     ?equal(1, length(lists:usort([E2EId || {_, _, E2EId, _} <- RequestsInfo]))),
 
-    %% each requests has different hop by hop id
+    %% each request has different hop by hop id
     ?equal(3, length(lists:usort([H2HId || {_, _, _, H2HId} <- RequestsInfo]))),
 
-    %% each requests came on different peer
+    %% each request came on different peer
     ?equal(3, length(lists:usort([PeerRef || {PeerRef, _, _, _} <- RequestsInfo]))),
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
 
-    %% diameter discards the for the timeout, so will be counting only 1
+    %% diameter discards the timeout, so will be counting only 1
     ?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
     %% make sure nothing crashed
@@ -552,7 +589,6 @@ rate_limit(_Config) ->
     %% make sure to refill the token buckets, so that the following tests don't fail
     ct:sleep(1100),
     ok.
-
 ccr_t_rate_limit() ->
     [{doc, "older version of the rate limit test, does not work, keep for reference"}].
 ccr_t_rate_limit(Config) ->
@@ -603,6 +639,9 @@ ocs_hold_initial_timeout(Config) ->
     set_diameter_session_handler(DiameterSId, DTRA),
 
     {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_ro, ocs_hold, 1}], get_session_stats()),
+
     ?match([{update_credits,
 	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
 	   ] when Time > 1800 andalso Time =< 1900, Events),
@@ -652,6 +691,8 @@ ocs_hold_update_timeout(Config) ->
 
     {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
 
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
     %% Check if the data is coming from the test server
     ?match([{update_credits, [#{'Volume-Quota-Threshold' := [1048576]}]}], Events),
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
@@ -671,12 +712,16 @@ ocs_hold_update_timeout(Config) ->
 	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
 	   ] when Time > 1800 andalso Time =< 1900, Events2),
 
+    ?equal([{ergw_aaa_ro, ocs_hold, 1}, {ergw_aaa_ro, started, 0}], get_session_stats()),
+
     %% Invoke Terminate and check if the session is terminated, while not sending CCR-T
     Stats2 = get_stats(?SERVICE),
 
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
     {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+
+    ?equal([{ergw_aaa_ro, ocs_hold, 0}, {ergw_aaa_ro, started, 0}], get_session_stats()),
 
     Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
 
@@ -707,6 +752,8 @@ handle_failure(Config) ->
     %% the retry logic causes this to be reported as error instead of fail
     ?match({{error, 3001}, _, _},
 	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [])),
+
+    ?equal([], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 

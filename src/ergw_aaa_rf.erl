@@ -23,6 +23,7 @@
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3]).
+-export([get_state_atom/1]).
 
 %%
 %% diameter callbacks
@@ -269,10 +270,10 @@ handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = A
     {ok, Session, Events, State};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events, State};
+    {{fail, Code}, Session, Events, State#state{state = stopped}};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "ACR failed with: ~p", [Result]),
-    {Result, Session, Events, State}.
+    {Result, Session, Events, State#state{state = stopped}}.
 
 %% to_session/3
 to_session(Procedure, {Session0, Events0}, Avps) ->
@@ -658,3 +659,6 @@ create_ACR(Type, Session, #{now := Now} = Opts, #state{record_number = RecNumber
     {Avps4, State2} = traffic_data(Avps3, State1),
     {Avps, State} = ran_secondary_rat_usage_report(Avps4, State2),
     {['ACR' | from_session(Session, Avps)], State#state{record_number = RecNumber + 1}}.
+
+get_state_atom(#state{state = State}) ->
+    State.

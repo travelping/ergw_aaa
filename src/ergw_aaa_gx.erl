@@ -24,6 +24,8 @@
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([to_session/3, from_session/2]).
 
+-export([get_state_atom/1]).
+
 %% diameter callbacks
 -export([peer_up/3,
 	 peer_down/3,
@@ -286,16 +288,16 @@ handle_cca({error, no_connection}, Session, Events,
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
 handle_cca(Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
-    {Result, Session, [stop | Events], State}.
+    {Result, Session, [stop | Events], State#state{state = stopped}}.
 
-%% handle_cca/6
+%% handle_cca/7
 handle_cca('CCA', RC, AVPs, Session0, Events0, _Opts, State)
   when RC < 3000 ->
     {Session, Events} = to_session({gy, 'CCA'}, {Session0, Events0}, AVPs),
     {ok, Session, Events, State};
 handle_cca(Answer, RC, _AVPs, Session, Events, _Opts, State)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
-    {{fail, RC}, Session, [stop | Events], State}.
+    {{fail, RC}, Session, [stop | Events], State#state{state = stopped}}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
     {Result, ReplyAvps0} =
@@ -618,3 +620,6 @@ make_CCR(Type, Session, Opts, #state{request_number = ReqNumber}) ->
 		   'CC-Request-Number'   => ReqNumber},
     Avps = from_session(Session, Avps1),
     ['CCR' | Avps ].
+
+get_state_atom(#state{state = State}) ->
+    State.
