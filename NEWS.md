@@ -3,6 +3,14 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.5.0 - 29 July 2020
+----------------------------
+
+* add AAA handler session state stats
+* add diameter avp filter
+* Use of the same accounting trigger for nasreq accounting as
+  radius to fix the missing volume report AVPs
+
 Version 3.4.0 - 11 May 2020
 ---------------------------
 
