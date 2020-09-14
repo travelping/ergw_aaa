@@ -56,7 +56,7 @@
 			 {'Credit-Control-Failure-Handling', terminate},
 			 {answer_if_down, reject},
 			 {answer_if_timeout, reject},
-			 {avp_filter, [['3GPP-IMSI']]}]).
+			 {avp_filter, [['3GPP-IMSI'], ['Service-Information', 'PS-Information', 'QoS-Information']]}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 

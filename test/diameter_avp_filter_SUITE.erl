@@ -141,15 +141,22 @@ end_per_testcase(Config) ->
 %%%===================================================================
 
 %%====================================================================
-%% Default filter (for ro it is ['3GPP-IMSI'])
-%% override default filter with empty list and check if before we have
-%% '3GPP-IMSI' filtered out by the default filter, then present after
-%% empty filter is applied
+%% Default filter (for ro it is [['3GPP-IMSI'], ['Service-Information',
+%% 'PS-Information', 'QoS-Information']]), override default filter with 
+%% empty list and check if before we have '3GPP-IMSI' and 'QoS-Information'
+%% filtered out by the default filter, then present after empty filter 
+%% is applied
 %%====================================================================
 default_filter(_Config) ->
     {Before, After} = do_filter_test([]),
+    
     ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
+    #{'Service-Information' := [#{'PS-Information' := [PSInfoBefore]}]} = Before,
+    ?equal(undefined, maps:get('QoS-Information', PSInfoBefore, undefined)),
+
     ?match([_], maps:get('3GPP-IMSI', After)),
+    ?match(#{'Service-Information' := [#{'PS-Information' := [#{'QoS-Information' := _ }]}]}, After),
+
     ok.
 
 %%====================================================================
