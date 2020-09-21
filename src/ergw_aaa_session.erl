@@ -21,7 +21,7 @@
 	 start/2, start/3,
 	 interim/2, interim/3,
 	 stop/2, stop/3,
-	 terminate/1, get/1, get/2, set/2, set/3, unset/2,
+	 terminate/1, get/1, get/2, get/3, set/2, set/3, unset/2,
 	 request/4, response/4]).
 
 %% Session Object API
@@ -147,6 +147,9 @@ get(Session) ->
 get(Session, Option) ->
     gen_statem:call(Session, {get, Option}).
 
+get(Session, Option, Default) ->
+    gen_statem:call(Session, {get, Option, Default}).
+
 set(Session, Option, Value) ->
     gen_statem:call(Session, {set, Option, Value}).
 
@@ -203,6 +206,9 @@ handle_event({call, From}, get, _State, Data) ->
 
 handle_event({call, From}, {get, Opt}, _State, Data) ->
     {keep_state_and_data, [{reply, From, maps:find(Opt, Data#data.session)}]};
+
+handle_event({call, From}, {get, Opt, Default}, _State, Data) ->
+    {keep_state_and_data, [{reply, From, maps:get(Opt, Data#data.session, Default)}]};
 
 handle_event({call, From}, {set, Opt, Value}, _State, Data = #data{session = Session}) ->
     {keep_state, Data#data{session = maps:put(Opt, Value, Session)}, [{reply, From, ok}]};
