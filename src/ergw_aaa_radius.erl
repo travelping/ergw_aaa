@@ -223,8 +223,9 @@ when Key =:= 'Session-Timeout';
 to_session(_, Key, Value, {Session, Events, State})
   when Key =:= 'Class';
        Key =:= 'RADIUS-State';
-       Key =:= 'Username' ->
-    {Session, Events, maps:put(Key, Value, State)};
+       Key =:= 'Username';
+       Key =:= 'TLS-Pre-Shared-Key' ->
+   {Session, Events, maps:put(Key, Value, State)};
 to_session(_, _, _, SessEvSt) ->
     SessEvSt.
 
