@@ -77,6 +77,8 @@ to_session({gx, _} = Procedure, SessEvs, Avps) ->
     ergw_aaa_gx:to_session(Procedure, SessEvs, Avps);
 to_session({gy, _} = Procedure, SessEvs, Avps) ->
     ergw_aaa_ro:to_session(Procedure, SessEvs, Avps);
+to_session(Procedure, SessEvs, #{handler := Handler} = Avps) ->
+    Handler:to_session(Procedure, SessEvs, maps:remove(handler, Avps));
 to_session(_Procedure, {Session, Events}, Avps) ->
     {maps:merge(Session, Avps), Events}.
 
