@@ -7,6 +7,7 @@
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
+-include_lib("eradius/include/dictionary_ituma.hrl").
 
 start() ->
     application:stop(eradius),
@@ -40,6 +41,13 @@ radius_request(#radius_request{cmd = request, attrs = Attrs} = _Req, _Nasprop, _
 	    case maps:is_key(?Framed_IPv6_Pool, AttrsMap) of
 		true ->  {reply, #radius_request{cmd = reject, attrs = []}};
 		false -> {reply, #radius_request{cmd = accept, attrs = []}}
+	    end;
+	#{?User_Name := <<"Vendor-Dicts">>} ->
+	    case AttrsMap of
+		#{?IM_SSID := _, ?IM_Wifi_Connect_Type := _, ?IM_LI_Location := _} ->
+		    {reply, #radius_request{cmd = accept, attrs = []}};
+		_ ->
+		    {reply, #radius_request{cmd = reject, attrs = []}}
 	    end;
 	_ ->
 	    IEs = [{?Acct_Interim_Interval, 1800}],
