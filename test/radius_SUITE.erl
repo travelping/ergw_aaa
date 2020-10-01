@@ -12,6 +12,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
+-include_lib("eradius/include/dictionary.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
@@ -64,7 +65,8 @@ all() ->
      simple,
      accounting,
      accounting_async,
-     attrs_3gpp].
+     attrs_3gpp,
+     avp_filter].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -263,6 +265,31 @@ attrs_3gpp(Config) ->
     meck_validate(Config),
     ok.
 
+avp_filter() ->
+    [{doc, "AVP filter"}].
+avp_filter(Config) ->
+    eradius_test_handler:ready(),
+
+    %% turn avp_filter into internal format...
+    Opts = ergw_aaa_radius:validate_procedure(default, all, all,
+					      [{avp_filter, [?Framed_IPv6_Pool ]}], #{}),
+    OrigApps = set_service_pars(Opts),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Username' => <<"AVP-Filter">>,
+			'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>}),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authenticate, [])),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, stop, [])),
+
+    meck_validate(Config),
+    application:set_env(ergw_aaa, apps, OrigApps),
+    ok.
+
 %%%===================================================================
 %%% Helpers
 %%%===================================================================
@@ -270,9 +297,11 @@ attrs_3gpp(Config) ->
 set_service_pars(NewOpts) ->
     {ok, Apps0} = application:get_env(ergw_aaa, apps),
     Upd = fun(M) -> add_opts(M, NewOpts) end,
-    Apps1 = maps_update_with([default, procedures, start], Upd, Apps0),
-    Apps2 = maps_update_with([default, procedures, interim], Upd, Apps1),
-    Apps = maps_update_with([default, procedures, stop], Upd, Apps2),
+    Apps =
+	lists:foldl(
+	  fun(P, A) ->
+		  maps_update_with([default, procedures, P], Upd, A)
+	  end, Apps0, [authenticate, start, interim, stop]),
     application:set_env(ergw_aaa, apps, Apps),
     Apps0.
 
@@ -281,6 +310,8 @@ maps_update_with([Key], Fun, Map) ->
 maps_update_with([H|T], Fun, Map) ->
     maps:update_with(H, fun(M) -> maps_update_with(T, Fun, M) end, Map).
 
+add_opts(Map, Opts) when is_map(Opts) ->
+    lists:keymap(fun(X) -> maps:merge(X, Opts) end, 2, Map);
 add_opts(Map, []) ->
     Map;
 add_opts(Map, [{Par, Val}| T]) ->

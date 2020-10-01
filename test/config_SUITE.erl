@@ -30,10 +30,12 @@
 
 -define(RADIUS_AUTH_CONFIG,
 	[{server, {{127,0,0,1}, 1812, <<"secret">>}},
-	 {retries, 3}, {timeout, 5000}]).
+	 {retries, 3}, {timeout, 5000},
+	 {vendor_dicts, []}, {avp_filter, #{}}]).
 -define(RADIUS_ACCT_CONFIG,
 	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}},
-	 {retries, 3}, {timeout, 5000}]).
+	 {retries, 3}, {timeout, 5000},
+	 {vendor_dicts, []}, {avp_filter, #{}}]).
 -define(RADIUS_SERVICE_OPTS, []).
 
 -define(DIAMETER_TRANSPORT,
