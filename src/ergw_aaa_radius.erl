@@ -35,7 +35,9 @@
 
 -define(DefaultOptions, [{server, undefined},
 			 {timeout, 5000},
-			 {retries, 3}
+			 {retries, 3},
+			 {avp_filter, []},
+			 {vendor_dicts, []}
 			]).
 
 %%===================================================================
@@ -84,7 +86,9 @@ invoke(_Service, authenticate = Procedure, Session0, Events0, #{now := Now} = Op
 	       maps:get('Authentication-Method', Session0, 'PAP'), Session0, Attrs0),
     Attrs2 = radius_session_options(State0, Attrs1),
     Attrs3 = session_options(Session0, Attrs2),
-    Attrs = remove_accounting_attrs(Attrs3),
+    Attrs4 = vendor_dicts(Opts, Session0, Attrs3),
+    Attrs5 = remove_accounting_attrs(Attrs4),
+    Attrs = avp_filters(Opts, Attrs5),
 
     Req = #radius_request{
 	     cmd = request,
@@ -135,11 +139,14 @@ accounting(Type, Attrs0, Session, Events, #{now := Now} = Opts, State) ->
 
     Attrs1 = radius_session_options(State, Attrs0),
     Attrs2 = session_options(Session, Attrs1),
-    Attrs = [{?RStatus_Type,   Type},
+    Attrs3 = vendor_dicts(Opts, Session, Attrs2),
+    Attrs4 = [{?RStatus_Type,   Type},
 	     {?User_Name,      UserName},
 	     {?Event_Timestamp,
 	      system_time_to_universal_time(Now + erlang:time_offset(), native)}
-	     | Attrs2],
+	     | Attrs3],
+    Attrs = avp_filters(Opts, Attrs4),
+
     Req = #radius_request{cmd = accreq, attrs = Attrs, msg_hmac = false},
     case Opts of
 	#{async := true} ->
@@ -181,6 +188,31 @@ validate_server_spec(Opt, {IP, Port, Secret} = Value)
 validate_server_spec(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
+validate_avp_filters(Id, M)
+  when is_integer(Id), Id > 0, Id < 256 ->
+    M#{Id => true};
+validate_avp_filters({Vendor, Id} = Attr, M)
+  when is_integer(Vendor), is_integer(Id),
+       Vendor > 0, Vendor =< 16#ffffffff,
+       Id > 0, Id < 256  ->
+    M#{Attr => true};
+validate_avp_filters({vendor, Vendor} = Attr, M)
+  when is_integer(Vendor), Vendor > 0, Vendor =< 16#ffffffff ->
+    M#{Attr => true};
+validate_avp_filters(Value, _) ->
+    throw({error, {options, {avp_filter, Value}}}).
+
+validate_vendor(Vendor)
+  when is_integer(Vendor), Vendor > 0, Vendor =< 16#ffffffff ->
+    case eradius_dict:lookup(vendor, Vendor) of
+	false ->
+	    throw({error, {options, {vendor_dicts, Vendor}}});
+	_ ->
+	    Vendor
+    end;
+validate_vendor(Vendor) ->
+    throw({error, {options, {vendor_dicts, Vendor}}}).
+
 validate_option(server, Value) ->
     validate_server_spec(server, Value);
 validate_option(Opt, Value)
@@ -195,6 +227,12 @@ validate_option(retries, Value)
     Value;
 validate_option(async, Value) when is_boolean(Value) ->
     Value;
+validate_option(avp_filter, Value) when is_map(Value) ->
+    Value;
+validate_option(avp_filter, Value) when is_list(Value) ->
+    lists:foldl(fun validate_avp_filters/2, #{}, Value);
+validate_option(vendor_dicts, Value) when is_list(Value) ->
+    lists:map(fun validate_vendor/1, Value);
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
@@ -255,6 +293,21 @@ gethostbyname(Name) ->
 	Other ->
 	    Other
     end.
+
+avp_filters(#{avp_filter := Filters}, Attrs) ->
+    lists:filter(
+      fun({{Vendor, _} = Id, _}) ->
+	      (not maps:is_key(Id, Filters)) orelse
+	      (not maps:is_key({vendor, Vendor}, Filters));
+	 ({Id, _}) ->
+	      not maps:is_key(Id, Filters)
+      end, Attrs).
+
+vendor_dicts(#{vendor_dicts := Vendors}, Session, Attrs) ->
+    lists:foldl(fun(Vendor, A) -> vendor_dict(Vendor, Session, A) end, Attrs, Vendors).
+
+vendor_dict(_, _, Attrs) ->
+    Attrs.
 
 %% radius_session_options/2
 radius_session_options(RadiusSession, Attrs) ->

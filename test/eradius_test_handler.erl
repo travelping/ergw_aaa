@@ -31,9 +31,20 @@ send_request(IP) ->
     #radius_request{cmd = Cmd} = eradius_lib:decode_request(R, <<"secret">>, A),
     Cmd.
 
-radius_request(#radius_request{cmd = request} = _Req, _Nasprop, _Args) ->
-    IEs = [{?Acct_Interim_Interval, 1800}],
-    {reply, #radius_request{cmd = accept, attrs = IEs}};
+radius_request(#radius_request{cmd = request, attrs = Attrs} = _Req, _Nasprop, _Args) ->
+    AttrsMap =
+	lists:foldl(fun({#attribute{id = Id}, V}, M) -> M#{Id => V} end, #{}, Attrs),
+    ct:pal("Req: ~p", [AttrsMap]),
+    case AttrsMap of
+	#{?User_Name := <<"AVP-Filter">>} ->
+	    case maps:is_key(?Framed_IPv6_Pool, AttrsMap) of
+		true ->  {reply, #radius_request{cmd = reject, attrs = []}};
+		false -> {reply, #radius_request{cmd = accept, attrs = []}}
+	    end;
+	_ ->
+	    IEs = [{?Acct_Interim_Interval, 1800}],
+	    {reply, #radius_request{cmd = accept, attrs = IEs}}
+	end;
 radius_request(#radius_request{cmd = accreq} = _Req, _Nasprop, _Args) ->
     {reply, #radius_request{cmd = accresp}};
 radius_request(_Req, _Nasprop, _Args) ->
