@@ -26,6 +26,7 @@
 -include_lib("eradius/include/eradius_dict.hrl").
 -include_lib("eradius/include/dictionary.hrl").
 -include_lib("eradius/include/dictionary_3gpp.hrl").
+-include_lib("eradius/include/dictionary_ituma.hrl").
 -include_lib("eradius/include/dictionary_tunnel.hrl").
 -include_lib("eradius/include/dictionary_rfc4679.hrl").
 -include_lib("eradius/include/dictionary_rfc6911.hrl").
@@ -47,6 +48,7 @@
 initialize_handler(_Opts) ->
     eradius_dict:load_tables([dictionary,
 			      dictionary_3gpp,
+			      dictionary_ituma,
 			      dictionary_tunnel,
 			      dictionary_rfc4679,
 			      dictionary_alcatel_sr,
@@ -306,7 +308,33 @@ avp_filters(#{avp_filter := Filters}, Attrs) ->
 vendor_dicts(#{vendor_dicts := Vendors}, Session, Attrs) ->
     lists:foldl(fun(Vendor, A) -> vendor_dict(Vendor, Session, A) end, Attrs, Vendors).
 
+vendor_dict(?'Ituma', Session, Attrs) ->
+    IEs = ['WLAN-Station-RSSI ', 'WLAN-AP-RSSI', 'LI-Location', 'Wifi-Connect-Typ', 'SSID',
+	   'Called-Station-Id'],
+    lists:foldl(fun(IE, A) -> vendor_ituma(IE, Session, A) end, Attrs, IEs);
 vendor_dict(_, _, Attrs) ->
+    Attrs.
+
+vendor_ituma('WLAN-Station-RSSI ', #{'WLAN-Station-RSSI' := Value}, Attrs) ->
+    [{?'IM_UE_Sta_RSSI', Value}|Attrs];
+vendor_ituma('WLAN-AP-RSSI', #{'WLAN-AP-RSSI' := Value}, Attrs) ->
+    [{?'IM_UE_Wwan_RSSI', Value}|Attrs];
+vendor_ituma('LI-Location', #{'CAPWAP-GPS-Latitude' := Latitude,
+			      'CAPWAP-GPS-Longitude' := Longitude}, Attrs) ->
+    Lat = pos_to_decimal(gps_read_pos(Latitude)),
+    Long = pos_to_decimal(gps_read_pos(Longitude)),
+    Loc = iolist_to_binary(io_lib:format("lat:~f;lon:~f", [Lat, Long])),
+    [{?'IM_LI_Location', Loc}|Attrs];
+vendor_ituma('Wifi-Connect-Typ', #{'WLAN-Authentication-Mode' := secured}, Attrs) ->
+    [{?'IM_Wifi_Connect_Type', <<"s">>}|Attrs];
+vendor_ituma('Wifi-Connect-Typ', #{'WLAN-Authentication-Mode' := open}, Attrs) ->
+    [{?'IM_Wifi_Connect_Type', <<"o">>}|Attrs];
+vendor_ituma('SSID', #{'SSID' := SSID}, Attrs) ->
+    [{?'IM_SSID', SSID}|Attrs];
+vendor_ituma('Called-Station-Id', #{'SSID' := SSID, 'BSSID' := BSSID}, Attrs) ->
+    Id = lists:flatten(lists:join($;, [BSSID, SSID])),
+    lists:keystore(?Called_Station_Id, 1, Attrs, {?Called_Station_Id, Id});
+vendor_ituma(_, _, Attrs) ->
     Attrs.
 
 %% radius_session_options/2
@@ -590,6 +618,17 @@ session_options('TP-Trace-Id', Value, Acc) ->
 
 session_options(_Key, _Value, Attrs) ->
     Attrs.
+
+gps_read_pos(Str) ->
+    {PosStr, [Direction]} = lists:split(length(Str) - 1, Str),
+    Pos = list_to_float(PosStr),
+    {trunc(Pos / 100), math:fmod(Pos, 100), Direction}.
+
+pos_to_decimal({Deg, Min, Direction}) ->
+    V = Deg + Min/60,
+    if Direction == $E; Direction == $N ->  V;
+       Direction == $W; Direction == $S -> -V
+    end.
 
 port_type(pppoe_eth)  -> 32;
 port_type(pppoe_vlan) -> 33;

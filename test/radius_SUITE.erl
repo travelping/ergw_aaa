@@ -13,6 +13,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eradius/include/eradius_lib.hrl").
 -include_lib("eradius/include/dictionary.hrl").
+-include_lib("eradius/include/dictionary_ituma.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
@@ -66,7 +67,8 @@ all() ->
      accounting,
      accounting_async,
      attrs_3gpp,
-     avp_filter].
+     avp_filter,
+     vendor_dicts].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -282,6 +284,49 @@ avp_filter(Config) ->
 			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
 			'Framed-Pool' => <<"pool-A">>,
 			'Framed-IPv6-Pool' => <<"pool-A">>}),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authenticate, [])),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, stop, [])),
+
+    meck_validate(Config),
+    application:set_env(ergw_aaa, apps, OrigApps),
+    ok.
+
+vendor_dicts() ->
+    [{doc, "Vendor Dicts"}].
+vendor_dicts(Config) ->
+    eradius_test_handler:ready(),
+
+    %% turn avp_filter into internal format...
+    Opts = ergw_aaa_radius:validate_procedure(default, all, all,
+					      [{vendor_dicts, [?'Ituma']}], #{}),
+    OrigApps = set_service_pars(Opts),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Username' => <<"Vendor-Dicts">>,
+			'BSSID' => "08-08-08-08-08-08",
+			'CAPWAP-GPS-Altitude' => "62.4",
+			'CAPWAP-GPS-Hdop' => "0.7",
+			'CAPWAP-GPS-Latitude' => "5207.6688N",
+			'CAPWAP-GPS-Longitude' => "01137.8028E",
+			'CAPWAP-GPS-Timestamp' => "2014-09-03T15:47:50.000Z",
+			'CAPWAP-Session-Id' =>
+			    <<143,196,99,94,218,207,226,25,122,187,116,116,38,124,132,10>>,
+			'Calling-Station-Id' => "01-02-03-04-05-06",
+			'Framed-Protocol' => 'TP-CAPWAP',
+			'Location-Id' => <<"The Fridge">>,
+			'MAC' => <<1,2,3,4,5,6>>,
+			'SSID' => <<"DEV CAPWAP WIFI">>,
+			'Service-Type' => 'TP-CAPWAP-STA',
+			'Tunnel-Client-Endpoint' => <<"127.0.0.1">>,
+			'Tunnel-Medium-Type' => 'IPv4',
+			'Tunnel-Type' => 'CAPWAP',
+			'WLAN-AKM-Suite' => 'PSK',
+			'WLAN-Authentication-Mode' => secured,
+			'WLAN-Group-Cipher' => 'CCMP',
+			'WLAN-Group-Mgmt-Cipher' => undefined,
+			'WLAN-Pairwise-Cipher' => 'CCMP'}),
 
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authenticate, [])),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, stop, [])),
