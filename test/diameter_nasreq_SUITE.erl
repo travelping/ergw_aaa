@@ -70,6 +70,7 @@
 common() ->
     [compat,
      simple,
+     simple_normal_terminate,
      accounting,
      acct_interim_interval,
      attrs_3gpp,
@@ -161,42 +162,13 @@ simple() ->
     [{doc, "Simple NASREQ session"}].
 
 simple(Config) ->
-    Stats0 = get_stats(?SERVICE),
+    simple(Config, #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'}).
 
-    {ok, Session} = ergw_aaa_session_sup:new_session(
-		      self(),
-		      #{'Framed-IP-Address' => {10,10,10,10},
-			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
-			'Framed-Pool' => <<"pool-A">>,
-			'Framed-IPv6-Pool' => <<"pool-A">>}),
+simple_normal_terminate() ->
+    [{doc, "Simple terminate NASREQ session with `normal` atom"}].
 
-    {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
-    ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
-	   Events),
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
-
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
-
-    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
-
-    TermOpts = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
-
-    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
-
-    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
-
-    ct:pal("Statistics: ~p", [Statistics]),
-    [?equal(Cnt, stats(Msg, Config, Statistics)) ||
-	{Cnt, Msg} <- [{1, 'AAR'}, {1, {'AAA', 2001}},
-		       {3, 'ACR'}, {3, {'ACA', 2001}},
-		       {1, 'STR'}, {1, {'STA', 2001}}
-		      ]],
-
-    ?match(0, outstanding_reqs()),
-    meck_validate(Config),
-    ok.
+simple_normal_terminate(Config) ->
+    simple(Config, #{'Termination-Cause' => normal}).
 
 accounting() ->
     [{doc, "Check that we can successfully send ACR's and get ACA's"}].
@@ -367,3 +339,40 @@ stats({'ACA', RC}, Config, Stats) ->
 	    _     -> 1
 	end,
     proplists:get_value({{AccAppId, 271, 0}, recv, {'Result-Code', RC}}, Stats).
+
+simple(Config, TermOpts) ->
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>}),
+
+    {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+    ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
+	   Events),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
+
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    ct:pal("Statistics: ~p", [Statistics]),
+    [?equal(Cnt, stats(Msg, Config, Statistics)) ||
+	{Cnt, Msg} <- [{1, 'AAR'}, {1, {'AAA', 2001}},
+		       {3, 'ACR'}, {3, {'ACA', 2001}},
+		       {1, 'STR'}, {1, {'STA', 2001}}
+		      ]],
+
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.

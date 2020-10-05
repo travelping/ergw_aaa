@@ -62,6 +62,7 @@
 all() ->
     [compat,
      simple,
+     simple_normal_terminate,
      accounting,
      accounting_async,
      attrs_3gpp].
@@ -122,34 +123,13 @@ simple() ->
     [{doc, "Simple NASREQ session"}].
 
 simple(Config) ->
-    eradius_test_handler:ready(),
+    simple(Config, #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'}).
 
-    {ok, Session} = ergw_aaa_session_sup:new_session(
-		      self(),
-		      #{'Framed-IP-Address' => {10,10,10,10},
-			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
-			'Framed-Pool' => <<"pool-A">>,
-			'Framed-IPv6-Pool' => <<"pool-A">>}),
+simple_normal_terminate() ->
+    [{doc, "Simple terminate NASREQ session with `normal` atom"}].
 
-    {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
-
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
-
-    ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
-	   Events),
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
-
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
-
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
-    TermOpts = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'},
-    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
-
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
-
-    meck_validate(Config),
-    ok.
+simple_normal_terminate(Config) ->
+    simple(Config, #{'Termination-Cause' => "User Request"}).
 
 accounting() ->
     [{doc, "Check that we can successfully send ACR's and get ACA's"}].
@@ -286,3 +266,33 @@ add_opts(Map, []) ->
 add_opts(Map, [{Par, Val}| T]) ->
     Map1 = lists:keymap(fun(X) -> maps:put(Par, Val, X) end, 2, Map),
     add_opts(Map1, T).
+
+simple(Config, Opts) ->
+    eradius_test_handler:ready(),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>}),
+
+    {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+
+    ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
+	   Events),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
+    TermOpts = #{'Termination-Cause' => maps:get(reason, Opts, ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT')},
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
+
+    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+
+    meck_validate(Config),
+    ok.
