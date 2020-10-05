@@ -14,12 +14,24 @@
 	 initialize_function/2]).
 -export(['3gpp_from_session'/2, qos_from_session/1]).
 -export([encode_ipv6prefix/1, decode_ipv6prefix/1]).
+-export([validate_termination_cause_mapping/1]).
 
 -include_lib("kernel/include/inet.hrl").
 -include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
+
+%% RFC: https://tools.ietf.org/html/rfc3588#section-8.15
+-define(DEFAULT_TERMINATION_CAUSE_MAPPING, [
+    {normal, 1},              % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {administrative, 4},      % ?'DIAMETER_BASE_TERMINATION-CAUSE_ADMINISTRATIVE'
+    {link_broken, 5},         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LINK_BROKEN'
+    {upf_failure, 5},         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LINK_BROKEN'
+    {session_error, 1},       % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {inactivity_timeout, 1},  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {path_failure, 1}         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+]).
 
 -define(VENDOR_ID_3GPP, 10415).
 -define(VENDOR_ID_ETSI, 13019).
@@ -149,6 +161,16 @@ validate_transport(Opt, Value) ->
 
 validate_transport_error(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
+
+validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING, map);
+validate_termination_cause_mapping(Opts) ->
+    throw({error, {termination_cause_mapping, Opts}}).
+
+validate_termination_cause_mapping(Opt, Value) when is_atom(Opt), is_integer(Value) ->
+    Value;
+validate_termination_cause_mapping(Opt, Value) ->
+    throw({error, {termination_cause_mapping, {Opt, Value}}}).
 
 %%===================================================================
 %% internal helpers

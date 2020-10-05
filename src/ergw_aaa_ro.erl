@@ -56,7 +56,8 @@
 			 {'Credit-Control-Failure-Handling', terminate},
 			 {answer_if_down, reject},
 			 {answer_if_timeout, reject},
-			 {avp_filter, [['3GPP-IMSI']]}]).
+			 {avp_filter, [['3GPP-IMSI']]},
+			 {termination_cause_mapping, []}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -301,6 +302,9 @@ validate_option(max_retries, Value) when is_integer(Value) ->
     Value;
 validate_option(avp_filter, Value) when is_list(Value) ->
     Value;
+validate_option(termination_cause_mapping, Value) ->
+    ergw_aaa_diameter:validate_termination_cause_mapping(Value);
+
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 

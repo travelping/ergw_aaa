@@ -28,14 +28,38 @@
 	 {'Framed-Protocol',       'PPP'},
 	 {'Service-Type',          'Framed-User'}]).
 
+-define(RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING, #{
+   "User Request" => 1,
+   "Lost Carrier" => 2,
+   "Lost Service" => 3,
+   "Idle Timeout" => 4,
+   "Session Timeout" => 5,
+   "Admin Reset" => 6,
+   "Admin Reboot" => 7,
+   "Port Error" => 8,
+   "NAS Error" => 9,
+   "NAS Request" => 10,
+   "NAS Reboot" => 11,
+   "Port Unneeded" => 12,
+   "Port Preempted" => 13,
+   "Port Suspended" => 14,
+   "Service Unavailable" => 15,
+   "Callback" => 16,
+   "User Error" => 17,
+   "Host Request" => 18
+}).
+
 -define(RADIUS_AUTH_CONFIG,
 	[{server, {{127,0,0,1}, 1812, <<"secret">>}},
 	 {retries, 3}, {timeout, 5000},
-	 {vendor_dicts, []}, {avp_filter, #{}}]).
+	 {vendor_dicts, []}, {avp_filter, #{}},
+	 {termination_cause_mapping, ?RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING}]).
 -define(RADIUS_ACCT_CONFIG,
 	[{server,    {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>}},
 	 {retries, 3}, {timeout, 5000},
-	 {vendor_dicts, []}, {avp_filter, #{}}]).
+	 {vendor_dicts, []}, {avp_filter, #{}},
+	 {termination_cause_mapping, ?RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING}
+	 ]).
 -define(RADIUS_SERVICE_OPTS, []).
 
 -define(DIAMETER_TRANSPORT,
@@ -265,4 +289,13 @@ config(_Config)  ->
     ?error_set([handlers, ergw_aaa_rf], []),
     ?error_set([handlers, ergw_aaa_rf, invalid_option], []),
 
+    % termination cause mapping tests config
+    ?ok_set([handlers, ergw_aaa_nasreq, termination_cause_mapping], [{normal, 1}]),
+    ?error_set([handlers, ergw_aaa_nasreq, termination_cause_mapping], invalid),
+    ?ok_set([handlers, ergw_aaa_radius, termination_cause_mapping], [{"User Request", 1}]),
+    ?error_set([handlers, ergw_aaa_radius, termination_cause_mapping], invalid),
+    ?ok_set([handlers, ergw_aaa_rf, termination_cause_mapping], [{normal, 1}]),
+    ?error_set([handlers, ergw_aaa_rf, termination_cause_mapping], invalid),
+    ?ok_set([handlers, ergw_aaa_ro, termination_cause_mapping], [{normal, 1}]),
+    ?error_set([handlers, ergw_aaa_ro, termination_cause_mapping], invalid),
     ok.

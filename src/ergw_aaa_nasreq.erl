@@ -62,7 +62,8 @@
 -define(DefaultOptions, [{function, "undefined"},
 			 {accounting, coupled},
 			 {'Destination-Realm', undefined},
-			 {avp_filter, [['Framed-Pool'], ['Framed-IPv6-Pool']]}]).
+			 {avp_filter, [['Framed-Pool'], ['Framed-IPv6-Pool']]},
+			 {termination_cause_mapping, []}]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
@@ -307,6 +308,8 @@ validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(avp_filter, Value) when is_list(Value) ->
     Value;
+validate_option(termination_cause_mapping, Value) ->
+    ergw_aaa_diameter:validate_termination_cause_mapping(Value);
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
