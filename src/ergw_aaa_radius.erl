@@ -34,11 +34,34 @@
 -include_lib("eradius/include/dictionary_microsoft.hrl").
 -include_lib("eradius/include/dictionary_travelping.hrl").
 
+%% RFC: https://tools.ietf.org/html/rfc2866#section-5.10
+-define(DEFAULT_TERMINATION_CAUSE_MAPPING, [
+    {"User Request", 1},
+    {"Lost Carrier", 2},
+    {"Lost Service", 3},
+    {"Idle Timeout", 4},
+    {"Session Timeout", 5},
+    {"Admin Reset", 6},
+    {"Admin Reboot", 7},
+    {"Port Error", 8},
+    {"NAS Error", 9},
+    {"NAS Request", 10},
+    {"NAS Reboot", 11},
+    {"Port Unneeded", 12},
+    {"Port Preempted", 13},
+    {"Port Suspended", 14},
+    {"Service Unavailable", 15},
+    {"Callback", 16},
+    {"User Error", 17},
+    {"Host Request", 18}
+]).
+
 -define(DefaultOptions, [{server, undefined},
 			 {timeout, 5000},
 			 {retries, 3},
 			 {avp_filter, []},
-			 {vendor_dicts, []}
+			 {vendor_dicts, []},
+			 {termination_cause_mapping, []}
 			]).
 
 %%===================================================================
@@ -236,8 +259,20 @@ validate_option(avp_filter, Value) when is_list(Value) ->
     lists:foldl(fun validate_avp_filters/2, #{}, Value);
 validate_option(vendor_dicts, Value) when is_list(Value) ->
     lists:map(fun validate_vendor/1, Value);
+validate_option(termination_cause_mapping, Value) ->
+    validate_termination_cause_mapping(Value);
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
+
+validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING, map);
+validate_termination_cause_mapping(Opts) ->
+    throw({error, {termination_cause_mapping, Opts}}).
+
+validate_termination_cause_mapping(Opt, Value) when is_list(Opt), is_integer(Value) ->
+    Value;
+validate_termination_cause_mapping(Opt, Value) ->
+    throw({error, {termination_cause_mapping, {Opt, Value}}}).
 
 %%===================================================================
 %% Internal Helpers

@@ -436,11 +436,12 @@ pipeline(Procedure, DataIn, EventsIn, Opts, [Head|Tail]) ->
     end.
 
 step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
-					  session = Session} = Data, Events, Opts)
+					  session = Session0} = Data, Events, Opts)
   when is_atom(Service) ->
     Svc = ergw_aaa_config:get_service(Service),
     StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),
+    Session = termination_cause_mapping(Session0, StepOpts),
     State = maps:get(Handler, HandlersS, undefined),
     {Result, SessOut, EvsOut, StateOut} =
 	Handler:invoke(Service, Procedure, Session, Events, StepOpts, State),
@@ -474,3 +475,9 @@ get_handler_state(_, undefined) ->
     undefined;
 get_handler_state(Handler, State) ->
     Handler:get_state_atom(State).
+
+termination_cause_mapping(#{'Termination-Cause' := Cause} = Session, #{termination_cause_mapping := Config})
+  when is_atom(Cause), is_map_key(Cause, Config) ->
+    Session#{'Termination-Cause' := maps:get(Cause, Config)};
+termination_cause_mapping(Session, _) ->
+    Session.

@@ -53,7 +53,8 @@
 -define(DIAMETER_APP_ID_GX, ?DIAMETER_DICT_GX:id()).
 
 -define(DefaultOptions, [{function, "undefined"},
-			 {'Destination-Realm', undefined}]).
+			 {'Destination-Realm', undefined},
+			 {termination_cause_mapping, []}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -253,6 +254,8 @@ validate_option(answer_if_timeout, Value) when is_atom(Value) ->
     Value;
 validate_option(avp_filter, Value) when is_list(Value) ->
     Value;
+validate_option(termination_cause_mapping, Value) ->
+    ergw_aaa_diameter:validate_termination_cause_mapping(Value);
 validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
