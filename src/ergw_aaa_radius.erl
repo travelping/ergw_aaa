@@ -86,7 +86,7 @@ invoke(_Service, authenticate = Procedure, Session0, Events0, #{now := Now} = Op
 	       system_time_to_universal_time(Now + erlang:time_offset(), native)}],
     Attrs1 = session_auth_options(
 	       maps:get('Authentication-Method', Session0, 'PAP'), Session0, Attrs0),
-    Attrs2 = radius_session_options(State0, Attrs1),
+    Attrs2 = radius_session_options(auth, State0, Attrs1),
     Attrs3 = session_options(Session0, Attrs2),
     Attrs4 = vendor_dicts(Opts, Session0, Attrs3),
     Attrs5 = remove_accounting_attrs(Attrs4),
@@ -98,9 +98,10 @@ invoke(_Service, authenticate = Procedure, Session0, Events0, #{now := Now} = Op
 	     msg_hmac = true,
 	     eap_msg = maps:get('EAP-Data', Session0, <<>>)},
 
+    State1 = maps:remove('RADIUS-State', State0),
     {Verdict, Session, Events, State} =
 	radius_response(Procedure, send_request(Req, Session0, Opts),
-			Opts, Session0, Events0, State0),
+			Opts, Session0, Events0, State1),
     case Verdict of
 	success ->
 	    {ok, Session, Events, State#{'Authentication-Result' => Verdict}};
@@ -139,7 +140,7 @@ accounting(Type, Attrs0, Session, Events, #{now := Now} = Opts, State) ->
     UserName0 = maps:get('Username', Session, <<>>),
     UserName = maps:get('Username', State, UserName0),
 
-    Attrs1 = radius_session_options(State, Attrs0),
+    Attrs1 = radius_session_options(acct, State, Attrs0),
     Attrs2 = session_options(Session, Attrs1),
     Attrs3 = vendor_dicts(Opts, Session, Attrs2),
     Attrs4 = [{?RStatus_Type,   Type},
@@ -337,17 +338,17 @@ vendor_ituma('Called-Station-Id', #{'SSID' := SSID, 'BSSID' := BSSID}, Attrs) ->
 vendor_ituma(_, _, Attrs) ->
     Attrs.
 
-%% radius_session_options/2
-radius_session_options(RadiusSession, Attrs) ->
-    maps:fold(fun radius_session_options/3, Attrs, RadiusSession).
+%% radius_session_options/3
+radius_session_options(Type, RadiusSession, Attrs) ->
+    maps:fold(radius_session_options(Type, _, _, _), Attrs, RadiusSession).
 
-radius_session_options('Class', [], Attrs) ->
+radius_session_options(_, 'Class', [], Attrs) ->
     Attrs;
-radius_session_options('Class', [H|T], Attrs) ->
+radius_session_options(_, 'Class', [H|T], Attrs) ->
     [{?Class, H}|radius_session_options('Class', T, Attrs)];
-radius_session_options('RADIUS-State', State, Attrs) ->
+radius_session_options(auth, 'RADIUS-State', State, Attrs) ->
     [{?State, State}|Attrs];
-radius_session_options(_Key, _Value, Attrs) ->
+radius_session_options(_, _Key, _Value, Attrs) ->
     Attrs.
 
 %% session_options/2
