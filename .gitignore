@@ -9,3 +9,4 @@
 # diameter compiler atrifacts
 /src/diameter_*
 /include/diameter_*
+rebar3
