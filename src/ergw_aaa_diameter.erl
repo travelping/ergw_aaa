@@ -30,7 +30,7 @@
     {upf_failure, 5},         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LINK_BROKEN'
     {session_error, 1},       % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {inactivity_timeout, 1},  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
-    {path_failure, 1}         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {path_restart, 1}         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
 ]).
 
 -define(VENDOR_ID_3GPP, 10415).
