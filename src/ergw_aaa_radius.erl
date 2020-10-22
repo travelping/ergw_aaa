@@ -39,10 +39,10 @@
     {normal, 1},
     {administrative, 6},
     {link_broken, 2},
-    {upf_failure, 2},
-    {session_error, 2},
+    {upf_failure, 9},
+    {remote_failure, 2},
     {inactivity_timeout, 4},
-    {path_restart, 2}
+    {peer_restart, 7}
 ]).
 
 -define(DefaultOptions, [{server, undefined},

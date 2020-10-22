@@ -28,9 +28,9 @@
     {administrative, 4},      % ?'DIAMETER_BASE_TERMINATION-CAUSE_ADMINISTRATIVE'
     {link_broken, 5},         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LINK_BROKEN'
     {upf_failure, 5},         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LINK_BROKEN'
-    {session_error, 1},       % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {remote_failure, 1},      % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {inactivity_timeout, 1},  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
-    {path_restart, 1}         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {peer_restart, 1}         % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
 ]).
 
 -define(VENDOR_ID_3GPP, 10415).
