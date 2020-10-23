@@ -351,7 +351,8 @@ simple(Config, Opts) ->
 		      #{'Framed-IP-Address' => {10,10,10,10},
 			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
 			'Framed-Pool' => <<"pool-A">>,
-			'Framed-IPv6-Pool' => <<"pool-A">>}),
+			'Framed-IPv6-Pool' => <<"pool-A">>,
+			'Framed-Interface-Id' => {0,0,0,0,0,0,0,1}}),
 
     {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
 

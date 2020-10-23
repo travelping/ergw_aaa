@@ -398,8 +398,8 @@ session_options('Framed-IPv6-Prefix', Value, Attrs) ->
     [{?Framed_IPv6_Prefix, Value}|Attrs];
 session_options('Framed-IPv6-Pool', Value, Attrs) ->
     [{?Framed_IPv6_Pool, Value}|Attrs];
-session_options('Framed-Interface-Id', Value, Attrs) ->
-    [{?Framed_Interface_Id, Value}|Attrs];
+session_options('Framed-Interface-Id', {_,_,_,_,E,F,G,H}, Attrs) ->
+    [{?Framed_Interface_Id, <<E:16,F:16,G:16,H:16>>}|Attrs];
 
 session_options('Session-Id', Value, Attrs) ->
     Id = io_lib:format("~40.16.0B", [Value]),
