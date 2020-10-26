@@ -74,9 +74,31 @@ Example of possible config.
                   }
          }
         ]},
-     {ergw_aaa_radius, [{server, {{127,0,0,1}, 1812, <<"secret">>}}]},
+     {ergw_aaa_radius, [
+        {server, {{127,0,0,1}, 1812, <<"secret">>}},
+        {termination_cause_mapping, [
+            {normal, 1},
+            {administrative, 6},
+            {link_broken, 2},
+            {upf_failure, 9},
+            {remote_failure, 9},
+            {inactivity_timeout, 4},
+            {peer_restart, 7}
+        ]}
+     ]},
      {ergw_aaa_rf, [{transport, 'ergw-pgw-epc'}]},
-     {ergw_aaa_ro, [{transport, 'ergw-pgw-epc'}]}
+     {ergw_aaa_ro, [
+        {transport, 'ergw-pgw-epc'},
+        {termination_cause_mapping, [
+            {normal, 1},           
+            {administrative, 4}, 
+            {link_broken, 5},      
+            {upf_failure, 5},      
+            {remote_failure, 1},   
+            {inactivity_timeout, 1},  
+            {peer_restart, 1} 
+        ]}
+     ]}
     ]},
 
    {services,
