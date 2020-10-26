@@ -3,6 +3,19 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.0 - 26 October 2020
+----------------------------
+
+* Add TLS-Pre-Shared-Key to special handing in session
+* Add ergw_aaa_session:get/3 method
+* Allow static handler to invoke to_session on defined handler
+* Add RADIUS AVP filter and vendor dictionary support
+* Add Ituma vendor RADIUS dictionary support
+* Include RADIUS State AVP only in auth requests
+* Termination cause mapping
+* Pass `Framed-Interface-Id` to Radius
+* Update [eradius](https://github.com/travelping/eradius) tag to [2.0.0](https://github.com/travelping/eradius/releases/tag/2.0.0)
+
 Version 3.5.0 - 29 July 2020
 ----------------------------
 
