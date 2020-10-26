@@ -217,14 +217,8 @@ validate_avp_filters({vendor, Vendor} = Attr, M)
 validate_avp_filters(Value, _) ->
     throw({error, {options, {avp_filter, Value}}}).
 
-validate_vendor(Vendor)
-  when is_integer(Vendor), Vendor > 0, Vendor =< 16#ffffffff ->
-    case eradius_dict:lookup(vendor, Vendor) of
-	false ->
-	    throw({error, {options, {vendor_dicts, Vendor}}});
-	_ ->
-	    Vendor
-    end;
+validate_vendor(?'Ituma' = Vendor) -> Vendor;
+validate_vendor(ituma) -> ?'Ituma';
 validate_vendor(Vendor) ->
     throw({error, {options, {vendor_dicts, Vendor}}}).
 
