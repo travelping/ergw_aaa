@@ -23,6 +23,52 @@ In the future possible other providers are:
 
 * LDAP (Authentication and Authorization only)
 
+TERMINATION CAUSE MAPPING
+-------------
+When ergw needs to terminate an AAA session, the termination reasons to be included in those messages (e.g. CCR-T or ACR stop in diameter and Accounting-Request stop in Radius) are provided by the `ergw` to the `ergw_aaa` in the session data in the format of atoms. 
+Each AAA handler can have a mapping configured to map these to termination causes of the corresponding protocol/interface.
+See RFCs: [RFC2866](https://tools.ietf.org/html/rfc2866#section-5.10), [RFC3588](https://tools.ietf.org/html/rfc3588#section-8.15).
+An example of this mapping:
+```erlang
+%% DIAMETER config example
+% ...
+{handlers, [
+    % ...
+    {ergw_aaa_ro, [
+        {function, 'ergw-pgw-epc-ro'},
+        {'Destination-Realm', <<"test.apn.net">>},
+        {termination_cause_mapping, [
+            {normal, 1},           
+            {administrative, 4}, 
+            {link_broken, 5},      
+            {upf_failure, 5},      
+            {remote_failure, 1},   
+            {inactivity_timeout, 1},  
+            {peer_restart, 1} 
+        ]}
+    ]}
+    % ...
+]},
+%...
+```
+```erlang
+% RADIUS config example
+% ...
+{ergw_aaa_radius, [
+    {server, {{192,168,255,1}, 1813, <<"radproxy">>}},
+        {termination_cause_mapping, [
+        {normal, 1},
+        {administrative, 6},
+        {link_broken, 2},
+        {upf_failure, 9},
+        {remote_failure, 9},
+        {inactivity_timeout, 4},
+        {peer_restart, 7}
+    ]}
+]}
+% ...
+```
+
 BUILDING
 --------
 
