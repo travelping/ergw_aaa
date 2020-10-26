@@ -212,6 +212,14 @@ config(_Config)  ->
     ?ok_set([handlers, ergw_aaa_radius, retries], 1),
     ?ok_set([handlers, ergw_aaa_radius, timeout], 1000),
 
+    ?ok_set([handlers, ergw_aaa_radius, vendor_dicts], []),
+    ?ok_set([handlers, ergw_aaa_radius, vendor_dicts], [ituma]),
+    ?ok_set([handlers, ergw_aaa_radius, vendor_dicts], [52315]),
+    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], [atom]),
+    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], atom),
+    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], 52315),
+    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], ituma),
+
     ?error_set([services, 'RADIUS-Service', handler], invalid_handler),
 
     ?error_set([services, 'RADIUS-Test-Service'], ?RADIUS_AUTH_CONFIG),
