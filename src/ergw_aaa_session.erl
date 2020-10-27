@@ -304,6 +304,7 @@ handle_event(info, {'$reply', Promise, Handler, Msg, Opts} = _Info,
     State = maps:get(Handler, HandlersS, undefined),
     {_, SessOut, EvsOut, StateOut} =
 	Handler:handle_response(Promise, Msg, Session, [], Opts, State),
+    aaa_state_stats(Handler, State, StateOut),
     Data = Data0#data{handlers = maps:put(Handler, StateOut, HandlersS), session = SessOut},
     update_session(SessOut, EvsOut, Data),
     {keep_state, Data};
