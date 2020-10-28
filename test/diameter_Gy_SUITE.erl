@@ -122,8 +122,9 @@ all() ->
      tarif_time_change,
      ocs_hold_initial_timeout,
      ocs_hold_update_timeout,
+     ocs_hold_update_timeout_async,
      ccr_retry,
-     %% ccr_t_rate_limit,
+     % ccr_t_rate_limit,
      rate_limit,
      handle_failure,
      handle_answer_error].
@@ -709,6 +710,76 @@ ocs_hold_update_timeout(Config) ->
 	 },
     GyUpdate = #{used_credits => maps:to_list(UsedCredits)},
     {ok, _Session2, Events2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, []),
+    ?match([{update_credits,
+	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
+	   ] when Time > 1800 andalso Time =< 1900, Events2),
+
+    ?equal([{ergw_aaa_ro, ocs_hold, 1}, {ergw_aaa_ro, started, 0}], get_session_stats()),
+
+    %% Invoke Terminate and check if the session is terminated, while not sending CCR-T
+    Stats2 = get_stats(?SERVICE),
+
+    GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       used_credits => UsedCredits},
+    {{error, ocs_hold_end}, _Session3, [stop]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+
+    ?equal([{ergw_aaa_ro, ocs_hold, 0}, {ergw_aaa_ro, started, 0}], get_session_stats()),
+
+    Stats3 = diff_stats(Stats2, get_stats(?SERVICE)),
+
+    %% Make sure we didn't send anything
+    ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ?CLEAR_TC_INFO(),
+    ok.
+
+ocs_hold_update_timeout_async(Config) ->
+    %% Respond to CCR-I and time out CCR-U to trigger OCS Hold there
+    DTRA =
+	fun (#diameter_packet{msg = ['CCR' | #{'CC-Request-Type' := 2}]},
+	     _Svc, _Peer, _Extra) ->
+		timer:sleep(2000),
+		ok;
+	    (_Packet, _Svc, _Peer, _Extra) -> ok
+	end,
+
+    Session = init_session(#{}, Config),
+    GyOpts = #{credits => #{1000 => empty}},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    set_diameter_session_handler(DiameterSId, DTRA),
+
+    %% Send CCR-I
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, _Session1, Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
+    %% Check if the data is coming from the test server
+    ?match([{update_credits, [#{'Volume-Quota-Threshold' := [1048576]}]}], Events),
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(1, proplists:get_value({{4, 272, 0}, recv, {'Result-Code', 2001}}, Stats1)),
+
+    %% Invoke Update and check that the data is returned from OCS Hold config
+    UsedCredits =
+	#{1000 => #{'CC-Input-Octets'  => [0],
+		    'CC-Output-Octets' => [0],
+		    'CC-Time'          => [60],
+		    'CC-Total-Octets'  => [0],
+		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
+	 },
+    GyUpdate = #{used_credits => maps:to_list(UsedCredits)},
+    {ok, _Session2} = ergw_aaa_session:invoke(SId, GyUpdate, {gy, 'CCR-Update'}, #{async => true}),
+    Events2 =
+	receive
+	    {update_session, _, Ev1} -> Ev1
+	after 5000 -> ct:fail(timeout)
+	end,
+
     ?match([{update_credits,
 	     [#{'Granted-Service-Unit' := [#{'CC-Time' := [Time]}]}]}
 	   ] when Time > 1800 andalso Time =< 1900, Events2),
