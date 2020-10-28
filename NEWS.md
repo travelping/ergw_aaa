@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.1 - 28 October 2020
+----------------------------
+
+* Fix AAA session state metrics for async invoke
+* Fix vendor dicts validation
+* Update [eradius](https://github.com/travelping/eradius) tag to [2.0.1](https://github.com/travelping/eradius/releases/tag/2.0.1)
+
 Version 3.6.0 - 26 October 2020
 ----------------------------
 
