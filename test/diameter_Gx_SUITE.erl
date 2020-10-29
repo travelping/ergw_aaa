@@ -253,7 +253,7 @@ abort_session_request(Config) ->
     ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
 
     receive
-	#aaa_request{procedure = {_, 'ASR'}} = Request ->
+	#aaa_request{procedure = {?HUT, 'ASR'}} = Request ->
 	    ergw_aaa_session:response(Request, ok, #{}, #{})
     after 1000 ->
 	    ct:fail("no ASR")
@@ -355,7 +355,7 @@ re_auth_request(Config) ->
 						    RAROpts)),
 
     receive
-	#aaa_request{procedure = {_, 'RAR'}, events = Events} = Request ->
+	#aaa_request{procedure = {?HUT, 'RAR'}, events = Events} = Request ->
 	    ?match([{pcc, install, [#{'Charging-Rule-Name' := [<<"service01">>]}]}],
 		   Events),
 	    ergw_aaa_session:response(Request, ok, #{}, #{})
@@ -369,7 +369,7 @@ re_auth_request(Config) ->
 						    ?'Origin-Host', ?'Origin-Realm',
 						    RAROpts)),
     receive
-	#aaa_request{procedure = {_, 'RAR'}, events = Evs2} = Req2 ->
+	#aaa_request{procedure = {?HUT, 'RAR'}, events = Evs2} = Req2 ->
 	    ?match([{pcc, install, [#{'Charging-Rule-Name' := [<<"service01">>]}]}],
 		   Evs2),
 	    %% check that the session is not blocked for other DIAMETER Apps

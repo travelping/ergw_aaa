@@ -339,7 +339,7 @@ handle_aca(['ACA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, St
     {ok, Session, Events, State};
 handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, RC}, Session, [stop | Events], State};
+    {{fail, RC}, Session, [{stop, {?MODULE, peer_reject}} | Events], State};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
     {Result, Session, Events, State}.
 

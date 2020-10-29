@@ -224,7 +224,7 @@ gx_session(Config) ->
     {Result3, Session3, Events3} =
 	ergw_aaa_session:invoke(SId, GxTerm, {gx, 'CCR-Terminate'}, []),
     ?equal({fail, 5003}, Result3),
-    ?match([stop], Events3),
+    ?match([{stop, {?HUT, peer_reject}}], Events3),
     ?equal(false, maps:is_key('Result-Code', Session3)),
 
     %% make sure nothing crashed
