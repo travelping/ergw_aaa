@@ -67,7 +67,7 @@ all() ->
      simple_normal_terminate,
      accounting,
      accounting_async,
-	 accounting_bkup_server,
+     accounting_backup_server,
      attrs_3gpp,
      avp_filter,
      vendor_dicts].
@@ -205,43 +205,29 @@ accounting_async(Config) ->
     application:set_env(ergw_aaa, apps, OrigApps),
     ok.
 
-accounting_async() ->
-    [{doc, "Check that Start / Stop msg work in async mode"}].
-accounting_async(Config) ->
-    eradius_test_handler:ready(),
-    OrigApps = set_service_pars([{async, true}, {retries, 1}, {timeout, 5000}]),
-    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
-						     #{'Framed-IP-Address' => {10,10,10,10}}),
-    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
-    ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
-    ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
-    ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
-
-    %% make sure nothing crashed
-    meck_validate(Config),
-    application:set_env(ergw_aaa, apps, OrigApps),
-    ok.
-
-accounting_bkup_server() ->
+accounting_backup_server() ->
 	[{doc, "Check that we can backup server if default one is not avialable"}].
-accounting_bkup_server(Config) ->
+accounting_backup_server(Config) ->
     eradius_test_handler:ready(),
-    Servers = #{default => {{127,0,0,1},1813,<<"secret">>},
-                backup => {{127,0,0,2}, 1813,<<"secret">>}},
-    OrigApps = set_service_pars([{async, true}, {retries, 1}, {timeout, 5000}, 
-			       {server, Servers}]),
-    OrigServices = set_bkup_server(Servers),
-    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
-						     #{'Framed-IP-Address' => {10,10,10,10}}),
-    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
-    ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
-    ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
-    ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+    {ok, #{default := #{procedures := #{authenticate := Authenticate}}} = Apps} = application:get_env(ergw_aaa, apps),
 
-    %% make sure nothing crashed
+    NewOptsBad = [{async, true}, {retries, 1},
+        {server, {{127,0,0,1}, 0, <<"secret">>}}, {server_backup, {{127,0,0,1}, 0, <<"secret">>}}],
+    NewOptsGood = [{async, true}, {retries, 1},
+        {server, {{127,0,0,1}, 0, <<"secret">>}}, {server_backup, {{127,0,0,1}, 1812, <<"secret">>}}],
+
+    AppsBad = Apps#{default => #{procedures => #{authenticate => add_opts(Authenticate, NewOptsBad)}}},
+    application:set_env(ergw_aaa, apps, AppsBad),
+    {ok, SessionBad} = ergw_aaa_session_sup:new_session(self(), #{'Framed-IP-Address' => {10,10,10,10}}),
+    ?equal(fail, ergw_aaa_session:authenticate(SessionBad, #{})),
+
+    AppsGood = Apps#{default => #{procedures => #{authenticate => add_opts(Authenticate, NewOptsGood)}}},
+    application:set_env(ergw_aaa, apps, AppsGood),
+    {ok, SessionGood} = ergw_aaa_session_sup:new_session(self(), #{'Framed-IP-Address' => {10,10,10,10}}),
+    ?equal(success, ergw_aaa_session:authenticate(SessionGood, #{})),
+
     meck_validate(Config),
-    application:set_env(ergw_aaa, apps, OrigApps),
-    application:set_env(ergw_aaa, services, OrigServices),
+    application:set_env(ergw_aaa, apps, Apps),
     ok.
 
 attrs_3gpp() ->
@@ -413,21 +399,3 @@ simple(Config, Opts) ->
 
     meck_validate(Config),
     ok.
-
-set_bkup_server(Servers) ->
-    {ok, Apps} = application:get_env(ergw_aaa, apps),
-    [{ServiceName, _}] = get_cfg_value([default, procedures, start], Apps),
-    {ok, Services} = application:get_env(ergw_aaa, services),
-    Services1 = set_cfg_map_value([ServiceName, server], Servers, Services),
-    application:set_env(ergw_aaa, services, Services1),
-    Services.
-
-% Need to fit it in set_cfg_value function somehow.
-set_cfg_map_value([H|T], Value, Config) when is_map(Config) ->
-    SubMap = maps:get(H, Config, #{}),
-    case T of
-	[] ->
-	    maps:put(H, Value, Config);
-	_ ->
-	    maps:put(H, set_cfg_map_value(T, Value, SubMap), Config)
-    end.

@@ -56,7 +56,8 @@ An example of this mapping:
 % ...
 {ergw_aaa_radius, [
     {server, {{192,168,255,1}, 1813, <<"radproxy">>}},
-        {termination_cause_mapping, [
+    {server_backup => {{127,0,0,1}, 1812,<<"secret">>}},
+    {termination_cause_mapping, [
         {normal, 1},
         {administrative, 6},
         {link_broken, 2},
@@ -122,6 +123,7 @@ Example of possible config.
         ]},
      {ergw_aaa_radius, [
         {server, {{127,0,0,1}, 1812, <<"secret">>}},
+        {server_backup => {{127,0,0,2}, 1813,<<"secret">>}},
         {termination_cause_mapping, [
             {normal, 1},
             {administrative, 6},
@@ -150,9 +152,11 @@ Example of possible config.
    {services,
     [{'Default',     [{handler, 'ergw_aaa_static'}]},
      {'RADIUS-Auth', [{handler, 'ergw_aaa_radius'},
-	                  {server, {{127,1,0,1}, 1812, <<"secret">>}}]},
+	                  {server, {{127,1,0,1}, 1812, <<"secret">>}},
+	                  {server_backup => {{127,0,0,1}, 1812,<<"secret">>}}]},
      {'RADIUS-Acct', [{handler, 'ergw_aaa_radius'},
-	                  {server, {{127,2,0,1}, 1813, <<"secret">>}}]},
+	                  {server, {{127,2,0,1}, 1813, <<"secret">>}},
+	                  {server_backup => {{127,0,0,2}, 1813,<<"secret">>}}]},
      {'Rf',          [{handler, 'ergw_aaa_rf'}]},
      {'Gx',          [{handler, 'ergw_aaa_gx'}]}
      {'Gy',          [{handler, 'ergw_aaa_ro'}]}

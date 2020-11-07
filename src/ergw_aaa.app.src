@@ -1,6 +1,6 @@
 {application, ergw_aaa,
  [
-  {description, ""},
+  {description, "erGW AAA"},
   {vsn, "1"},
   {registered, []},
   {applications, [

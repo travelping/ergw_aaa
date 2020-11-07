@@ -222,7 +222,7 @@ validate_vendor(ituma) -> ?'Ituma';
 validate_vendor(Vendor) ->
     throw({error, {options, {vendor_dicts, Vendor}}}).
 
-validate_option(server, Value) ->
+validate_option(Opt, Value) when Opt =:= server_backup; Opt =:= server ->
     validate_server_spec(server, Value);
 validate_option(Opt, Value)
   when (Opt =:= server_name orelse Opt =:= client_name)
@@ -244,17 +244,6 @@ validate_option(vendor_dicts, Value) when is_list(Value) ->
     lists:map(fun validate_vendor/1, Value);
 validate_option(termination_cause_mapping, Value) ->
     validate_termination_cause_mapping(Value);
-validate_option(server, #{default := DefVal,
-			  backup := BkupVal} = Dests) ->
-    validate_server_spec(default, DefVal),
-    validate_server_spec(backup, BkupVal),
-    Dests;
-validate_option(server, #{default := Value} = Dest) ->
-    validate_server_spec(default, Value),
-    Dest;
-validate_option(server, #{backup := Value} = Dest) ->
-    validate_server_spec(backup, Value),
-    Dest;
 validate_option(Opt, Value) ->
     throw({error, {options, {Opt, Value}}}).
 
@@ -881,29 +870,18 @@ send_request(Req, Session, #{server := NAS, retries := Retries, timeout := Timeo
 			{server_name, maps:get(server_name, Opts, Id)},
 			{retries, Retries},
 			{timeout, Timeout}],
-    eradius_client:send_request(NAS, Req, RadiusClientOpts);
-%% otherwise NAS is map of default and/or backup entries
-send_request(Req, Session, #{server := Server} = Opts) ->
-    send_request(Req, Session, Server, Opts).
-send_request(Req, Session, #{default := NAS} = Server, Opts) ->
-    case send_rad_request(Req, Session, NAS, Opts) of
-	{ok, _, _} = Res ->
-	    Res;
-	_Err ->
-	    send_request(Req, Session, maps:remove(default, Server), Opts)
-    end;
-send_request(Req, Session, #{backup := NAS}, Opts) ->
-    send_rad_request(Req, Session, NAS, Opts);
-send_request(_Req, _Session, _Server, Opts) ->
-    {error, invalid_NAS, Opts}.
-
-send_rad_request(Req, Session, NAS,
-		 #{retries := Retries, timeout := Timeout} = Opts) ->
-    Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
-    RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
-			{server_name, maps:get(server_name, Opts, Id)},
-			{retries, Retries}, {timeout, Timeout}],
-    eradius_client:send_request(NAS, Req, RadiusClientOpts).
+    case eradius_client:send_request(NAS, Req, RadiusClientOpts) of
+        {ok, _, _} = Res ->
+            Res;
+        _Err ->
+            %% otherwise NAS is map of server and/or server_backup entries
+            case eradius_client:send_request(maps:get(server_backup, Opts, NAS), Req, RadiusClientOpts) of
+                {ok, _, _} = Res ->
+                    Res;
+                _ ->
+                    {error, invalid_NAS, Opts}
+            end
+    end.
 
 get_state_atom(#{'State' := State}) ->
     State.
