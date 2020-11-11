@@ -212,9 +212,9 @@ accounting_backup_server(Config) ->
     {ok, #{default := #{procedures := #{authenticate := Authenticate}}} = Apps} = application:get_env(ergw_aaa, apps),
 
     NewOptsBad = [{async, true}, {retries, 1},
-        {server, {{127,0,0,1}, 0, <<"secret">>}}, {server_backup, {{127,0,0,1}, 0, <<"secret">>}}],
+        {server, {{127,0,0,1}, 0, <<>>}}, {server_backup, {{127,0,0,1}, 0, <<>>}}],
     NewOptsGood = [{async, true}, {retries, 1},
-        {server, {{127,0,0,1}, 0, <<"secret">>}}, {server_backup, {{127,0,0,1}, 1812, <<"secret">>}}],
+        {server, {{127,0,0,1}, 0, <<>>}}, {server_backup, {{127,0,0,1}, 1812, <<"secret">>}}],
 
     AppsBad = Apps#{default => #{procedures => #{authenticate => add_opts(Authenticate, NewOptsBad)}}},
     application:set_env(ergw_aaa, apps, AppsBad),

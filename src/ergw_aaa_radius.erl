@@ -691,10 +691,8 @@ framed_protocol('GPRS-PDP-Context')  -> 7;
 framed_protocol('TP-CAPWAP')         -> 16#48f90001;
 framed_protocol(_)                   -> 1.
 
-radius_response(Procedure, {ok, Response, RequestAuthenticator}, #{server := {_, _, Secret}},
-		Session, Events, State) ->
-    radius_reply(Procedure,
-      eradius_lib:decode_request(Response, Secret, RequestAuthenticator), Session, Events, State);
+radius_response(Procedure, {ok, Response, RequestAuthenticator}, Opts, Session, Events, State) ->
+    radius_reply(Procedure, decode_request(Response, RequestAuthenticator, Opts), Session, Events, State);
 radius_response(_Procedure, Response, _, Session, Events, State) ->
     ?LOG(error, "RADIUS failed with ~p", [Response]),
     {fail, Session, Events, State}.
@@ -882,6 +880,16 @@ send_request(Req, Session, #{server := NAS, retries := Retries, timeout := Timeo
                     {error, invalid_NAS, Opts}
             end
     end.
+
+decode_request(Response, RequestAuthenticator, #{server := {_, _, Secret}, server_backup := {_, _, BackupSecret}}) ->
+    case eradius_lib:decode_request(Response, Secret, RequestAuthenticator) of
+        #radius_request{} = DecReq ->
+            DecReq;
+        _ ->
+            eradius_lib:decode_request(Response, BackupSecret, RequestAuthenticator)
+    end;
+decode_request(Response, RequestAuthenticator, #{server := {_, _, Secret}}) ->
+    eradius_lib:decode_request(Response, Secret, RequestAuthenticator).
 
 get_state_atom(#{'State' := State}) ->
     State.
