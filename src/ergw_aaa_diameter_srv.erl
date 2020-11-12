@@ -146,9 +146,11 @@ await_response(Promise, Timeout) ->
 
 handle_plain_error(Module, Error, Request, SvcName, CallOpts)
   when is_atom(Module) ->
+    ?LOG(debug, "DIAMETER error in ~p with: ~p. Request: ~p", [Module, Error, Request]),
     erlang:apply(Module, handle_error, [Error, Request, SvcName, undefined, CallOpts]);
 handle_plain_error([Module | Extra], Error, Request, SvcName, CallOpts)
   when is_atom(Module) ->
+    ?LOG(debug, "DIAMETER error in ~p with: ~p. Request: ~p", [Module, Error, Request]),
     erlang:apply(Module, handle_error,
 		 [Error, Request, SvcName, undefined] ++ Extra ++ [CallOpts]).
 %% we don't currently use #diameter_callback{}

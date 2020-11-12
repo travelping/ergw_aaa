@@ -275,7 +275,6 @@ handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events, State#state{state = stopped}};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
-    ?LOG(error, "ACR failed with: ~p", [Result]),
     {Result, Session, Events, State#state{state = stopped}}.
 
 %% to_session/3
