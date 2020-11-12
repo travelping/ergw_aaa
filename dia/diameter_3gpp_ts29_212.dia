@@ -101,7 +101,7 @@
    Presence-Reporting-Area-Status        2823        Unsigned32       V
    Priority-Level                        1046        Unsigned32       V
    PS-to-CS-Session-Continuity           1099        Enumerated       V
-   QoS-Class-Identifier                  1028        Enumerated      MV
+   QoS-Class-Identifier                  1028        Unsigned32      MV
    QoS-Information                       1016           Grouped      MV
    QoS-Negotiation                       1029        Enumerated      MV
    QoS-Upgrade                           1030        Enumerated      MV
@@ -506,22 +506,6 @@
 @enum PS-to-CS-Session-Continuity
 
    VIDEO_PS2CS_CONT_CANDIDATE           0
-
-@enum QoS-Class-Identifier
-
-   QCI_1        1
-   QCI_2        2
-   QCI_3        3
-   QCI_4        4
-   QCI_5        5
-   QCI_6        6
-   QCI_7        7
-   QCI_8        8
-   QCI_9        9
-   QCI_65       65
-   QCI_66       66
-   QCI_69       69
-   QCI_70       70
 
 @enum QoS-Negotiation
 
