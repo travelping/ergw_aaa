@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.3 - 13 November 2020
+----------------------------
+
+* Change QoS-Class-Identifier type from Enumerated to Unsigned32 [issue #71](https://github.com/travelping/ergw_aaa/issues/71)
+* Added log with level `debug` for log errors of `diameter:call/4`
+* Update [eradius](https://github.com/travelping/eradius) tag to [2.1.0](https://github.com/travelping/eradius/releases/tag/2.1.0)
+
 Version 3.6.1 - 28 October 2020
 ----------------------------
 
