@@ -3,7 +3,7 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
-Version 3.6.3 - 13 November 2020
+Version 3.6.2 - 13 November 2020
 ----------------------------
 
 * Change QoS-Class-Identifier type from Enumerated to Unsigned32 [issue #71](https://github.com/travelping/ergw_aaa/issues/71)
