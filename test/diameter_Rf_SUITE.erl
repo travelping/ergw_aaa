@@ -171,7 +171,7 @@ init_session(Session, _Config) ->
 
 	  'QoS-Information' =>
 	      #{
-		'QoS-Class-Identifier' => 8,
+		'QoS-Class-Identifier' => 255,
 		'Max-Requested-Bandwidth-DL' => 0,
 		'Max-Requested-Bandwidth-UL' => 0,
 		'Guaranteed-Bitrate-DL' => 0,
