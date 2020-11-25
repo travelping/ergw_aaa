@@ -227,7 +227,7 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors},
 	    [_ | #{'Result-Code' := RC}] -> RC;	%% try to handle gracefully
 	    _                            -> failed
 	end,
-    if Code >= 3000 ->
+    if Code >= 3000 andalso Code < 4000->
 	    maybe_retry(Code, SvcName, Peer, CallOpts);
        true ->
 	    {error, Code}
@@ -235,7 +235,7 @@ handle_answer(#diameter_packet{msg = Msg, errors = Errors},
 
 handle_answer(#diameter_packet{msg = [_ | #{'Result-Code' := Code}]},
 	      _, SvcName, Peer, CallOpts)
-  when Code >= 3000 ->
+  when Code >= 3000 andalso Code < 4000 ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     maybe_retry(Code, SvcName, Peer, CallOpts);
 
