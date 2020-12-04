@@ -41,8 +41,16 @@
     {link_broken, 2},
     {upf_failure, 9},
     {remote_failure, 2},
-    {inactivity_timeout, 4},
-    {peer_restart, 7}
+    {cp_inactivity_timeout, 4},
+    {up_inactivity_timeout, 4},
+    {peer_restart, 7},
+    {asr, 6},
+    {error, 9},
+    {req_timeout, 4},
+    {conn_error, 10},
+    {rate_limit, 10},
+    {ocs_hold_end, 10},
+    {peer_reject, 10} 
 ]).
 
 -define(DefaultOptions, [{server, undefined},

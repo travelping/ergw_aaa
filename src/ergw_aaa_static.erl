@@ -88,7 +88,7 @@ handle_response(Procedure, #{'Result-Code' := Code} = Avps,
     {Session, Events} = to_session(Procedure, {Session0, Events0}, Avps),
     {ok, Session, Events, State};
 handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
-    {{fail, Code}, Session, [stop | Events], State};
+    {{fail, Code}, Session, [{stop, {?MODULE, peer_reject}} | Events], State};
 handle_response(_Procedure, Response, Session, Events, State) ->
     ?LOG(error, "Response: ~p", [Response]),
     {Response, Session, Events, State}.
