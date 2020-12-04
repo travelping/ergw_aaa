@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.3 - 4 December 2020
+----------------------------
+
+* Added retry for Ro/Gy CCR if CCA RC is temporary error
+* Improve session termination reason handling: updated/added termination cause names
+
 Version 3.6.2 - 13 November 2020
 ----------------------------
 
