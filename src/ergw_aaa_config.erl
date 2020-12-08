@@ -226,10 +226,10 @@ validate_rate_limit(RateLimit, Opts) ->
 		     Opts, ?DefaultRateLimit, map).
 
 validate_rate_limit_option(_RateLimit, outstanding_requests, Reqs)
-  when is_integer(Reqs) ->
+  when is_integer(Reqs) andalso Reqs > 0 ->
     Reqs;
 validate_rate_limit_option(_RateLimit, rate, Rate)
-  when is_integer(Rate) ->
+  when is_integer(Rate) andalso Rate > 0 andalso Rate < 100000 ->
     Rate;
 validate_rate_limit_option(RateLimit, Opt, Value) ->
     throw({error, {options, {RateLimit, Opt, Value}}}).
