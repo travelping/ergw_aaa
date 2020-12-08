@@ -325,7 +325,7 @@ acct_app_alias(#{accounting := split}) -> ?BASE_ACC_APP.
 
 handle_aaa(['AAA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, State)
   when RC < 3000 ->
-    {Session, Events} = to_session({nasreq, 'AAA'}, {Session0, Events0}, Avps),
+    {Session, Events} = to_session({?APP, 'AAA'}, {Session0, Events0}, Avps),
     {ok, Session, Events, State};
 handle_aaa([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'AAA'; Answer =:= 'answer-message' ->
@@ -335,11 +335,11 @@ handle_aaa({error, _} = Result, Session, Events, _Opts, State) ->
 
 handle_aca(['ACA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, State)
   when RC < 3000 ->
-    {Session, Events} = to_session({nasreq, 'ACA'}, {Session0, Events0}, Avps),
+    {Session, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
     {ok, Session, Events, State};
 handle_aca([Answer | #{'Result-Code' := RC}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, RC}, Session, [{stop, {?MODULE, peer_reject}} | Events], State};
+    {{fail, RC}, Session, [{stop, {?APP, peer_reject}} | Events], State};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
     {Result, Session, Events, State}.
 

@@ -87,8 +87,10 @@ handle_response(Procedure, #{'Result-Code' := Code} = Avps,
   when Code < 3000 ->
     {Session, Events} = to_session(Procedure, {Session0, Events0}, Avps),
     {ok, Session, Events, State};
-handle_response(_Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
-    {{fail, Code}, Session, [{stop, {?MODULE, peer_reject}} | Events], State};
+handle_response({API, _}, #{'Result-Code' := Code}, Session, Events, State) ->
+    {{fail, Code}, Session, [{stop, {API, peer_reject}} | Events], State};
+handle_response(Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
+    {{fail, Code}, Session, [{stop, {Procedure, peer_reject}} | Events], State};
 handle_response(_Procedure, Response, Session, Events, State) ->
     ?LOG(error, "Response: ~p", [Response]),
     {Response, Session, Events, State}.
