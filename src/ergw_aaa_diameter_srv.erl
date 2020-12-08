@@ -54,7 +54,7 @@
 	       capacity    = 50,
 	       last_ts     = undefined,
 	       rate        = 10,                    %% requests per second
-	       interval    = 0,                     %% refill interval in milliseconds
+	       interval    = 0,                     %% refill interval in microseconds
 	       tokens      = 0
 	      }).
 
@@ -276,13 +276,13 @@ code_change(_OldVsn, State, _Extra) ->
 %% https://medium.com/smyte/rate-limiter-df3408325846
 update_bucket(#peer{last_ts = undefined, rate = Rate} = Peer) ->
     Peer#peer{
-      last_ts = erlang:monotonic_time(millisecond),
-      interval = floor(1000 / Rate),
+      last_ts = erlang:monotonic_time(microsecond),
+      interval = floor(1000000 / Rate),
       tokens = Rate
      };
 update_bucket(#peer{last_ts = Last, interval = Interval,
 		    rate = Rate, tokens = Tokens} = Peer) ->
-    Now = erlang:monotonic_time(millisecond),
+    Now = erlang:monotonic_time(microsecond),
     Refill = floor((Now - Last) / Interval),
     Peer#peer{
       last_ts = min(Now, Last + Refill * Interval),
