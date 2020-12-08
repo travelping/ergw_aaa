@@ -19,6 +19,7 @@
 
 -define(HUT, ergw_aaa_ro).
 -define(SERVICE, 'diam-test').
+-define(API, gy).
 -define(SET_TC_INFO(Name, Value), set_test_info(?FUNCTION_NAME, Name, Value)).
 -define(GET_TC_INFO(Name), get_test_info(?FUNCTION_NAME, Name)).
 -define(GET_TC_INFO(Name, Default), get_test_info(?FUNCTION_NAME, Name)).
@@ -394,7 +395,7 @@ abort_session_request(Config) ->
     ?equal(ok, diameter_test_server:abort_session_request(gy, SessionId, ?'Origin-Host', ?'Origin-Realm')),
 
     receive
-	#aaa_request{procedure = {?HUT, 'ASR'}} = Request ->
+	#aaa_request{procedure = {?API, 'ASR'}} = Request ->
 	    ergw_aaa_session:response(Request, ok, #{}, #{})
     after 1000 ->
 	    ct:fail("no ASR")
@@ -658,7 +659,7 @@ ocs_hold_initial_timeout(Config) ->
 		    'Reporting-Reason' => [?'DIAMETER_3GPP_CHARGING_REPORTING-REASON_VALIDITY_TIME']}
 	 },
     GyTerm = #{used_credits => maps:to_list(UsedCredits)},
-    ?match({{error, ocs_hold_end}, _Session2, [{stop, {?HUT, ocs_hold_end}}]},
+    ?match({{error, ocs_hold_end}, _Session2, [{stop, {?API, ocs_hold_end}}]},
 	   ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Update'}, [])),
 
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
@@ -721,7 +722,7 @@ ocs_hold_update_timeout(Config) ->
 
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
-    {{error, ocs_hold_end}, _Session3, [{stop, {?HUT, ocs_hold_end}}]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+    {{error, ocs_hold_end}, _Session3, [{stop, {?API, ocs_hold_end}}]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
 
     ?equal([{ergw_aaa_ro, ocs_hold, 0}, {ergw_aaa_ro, started, 0}], get_session_stats()),
 
@@ -791,7 +792,7 @@ ocs_hold_update_timeout_async(Config) ->
 
     GyTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
-    {{error, ocs_hold_end}, _Session3, [{stop, {?HUT, ocs_hold_end}}]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
+    {{error, ocs_hold_end}, _Session3, [{stop, {?API, ocs_hold_end}}]} = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
 
     ?equal([{ergw_aaa_ro, ocs_hold, 0}, {ergw_aaa_ro, started, 0}], get_session_stats()),
 

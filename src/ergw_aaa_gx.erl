@@ -51,6 +51,7 @@
 -define(APP, 'Gx').
 -define(DIAMETER_DICT_GX, diameter_3gpp_ts29_212).
 -define(DIAMETER_APP_ID_GX, ?DIAMETER_DICT_GX:id()).
+-define(API, gx).
 
 -define(DefaultOptions, [{function, "undefined"},
 			 {'Destination-Realm', undefined},
@@ -291,22 +292,22 @@ handle_cca({error, no_connection}, Session, Events,
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
 handle_cca({error, Reason} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
-    {Result, Session, [{stop, {?MODULE, Reason}} | Events], State#state{state = stopped}}.
+    {Result, Session, [{stop, {?API, Reason}} | Events], State#state{state = stopped}}.
 
 %% handle_cca/7
 handle_cca('CCA', RC, AVPs, Session0, Events0, _Opts, State)
   when RC < 3000 ->
-    {Session, Events} = to_session({gy, 'CCA'}, {Session0, Events0}, AVPs),
+    {Session, Events} = to_session({?API, 'CCA'}, {Session0, Events0}, AVPs),
     {ok, Session, Events, State};
 handle_cca(Answer, RC, _AVPs, Session, Events, _Opts, State)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
-    {{fail, RC}, Session, [{stop, {?MODULE, peer_reject}} | Events], State#state{state = stopped}}.
+    {{fail, RC}, Session, [{stop, {?API, peer_reject}} | Events], State#state{state = stopped}}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
     {Result, ReplyAvps0} =
 	case ergw_aaa_session_reg:lookup(SessionId) of
 	    Session when is_pid(Session) ->
-		ergw_aaa_session:request(Session, ?MODULE, {?MODULE, Command}, Avps);
+		ergw_aaa_session:request(Session, ?MODULE, {?API, Command}, Avps);
 	    _ ->
 		{{error, unknown_session}, #{}}
 	end,
