@@ -172,6 +172,9 @@ config(_Config)  ->
     ?ok_set([rate_limits, default], [{rate, 50}]),
     ?error_set([rate_limits, default], [{outstanding_requests, atom}, {rate, 50}]),
     ?error_set([rate_limits, default], [{outstanding_requests, 50}, {rate, atom}]),
+    ?error_set([rate_limits, default], [{outstanding_requests, 50}, {rate, -1}]),
+    ?error_set([rate_limits, default], [{outstanding_requests, 50}, {rate, 200000}]),
+    ?error_set([rate_limits, default], [{outstanding_requests, 0}, {rate, 50}]),
 
     ?error_set([handlers], invalid),
     ?error_set([handlers, invalid_handler], []),
