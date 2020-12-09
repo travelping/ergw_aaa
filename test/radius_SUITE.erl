@@ -295,7 +295,7 @@ vendor_dicts(Config) ->
 			    <<143,196,99,94,218,207,226,25,122,187,116,116,38,124,132,10>>,
 			'Calling-Station-Id' => "01-02-03-04-05-06",
 			'Framed-Protocol' => 'TP-CAPWAP',
-			'Location-Id' => <<"The Fridge">>,
+			'Location-Id' => <<"654321">>,
 			'MAC' => <<1,2,3,4,5,6>>,
 			'SSID' => <<"DEV CAPWAP WIFI">>,
 			'Service-Type' => 'TP-CAPWAP-STA',
