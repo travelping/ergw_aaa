@@ -315,11 +315,6 @@ system_time_to_universal_time(Time, TimeUnit) ->
     calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
 -endif.
 
-format_eui(<<A:8, B:8, C:8, D:8, E:8, F:8>>) ->
-    io_lib:format("~2.16.0B-~2.16.0B-~2.16.0B-~2.16.0B-~2.16.0B-~2.16.0B", [A, B, C, D, E, F]);
-format_eui(MAC) ->
-    io_lib:format("~w", [MAC]).
-
 gethostbyname(Name) ->
     case inet:gethostbyname(Name, inet6) of
 	{error, nxdomain} ->
@@ -364,7 +359,7 @@ vendor_ituma('Wifi-Connect-Typ', #{'WLAN-Authentication-Mode' := open}, Attrs) -
 vendor_ituma('SSID', #{'SSID' := SSID}, Attrs) ->
     [{?'IM_SSID', SSID}|Attrs];
 vendor_ituma('Called-Station-Id', #{'SSID' := SSID, 'Location-Id' := Location}, Attrs) ->
-    LocId = format_eui(<< (binary_to_integer(Location)):48 >>),
+    LocId = lists:join($-, [<<X:16>> || <<X:16>> <= Location]),
     Id = iolist_to_binary(lists:join($;, [LocId, SSID])),
     lists:keystore(?Called_Station_Id, 1, Attrs, {?Called_Station_Id, Id});
 vendor_ituma(_, _, Attrs) ->
