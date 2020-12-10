@@ -3,6 +3,15 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.4 - 10 December 2020
+----------------------------
+
+* Termination Cause Mapping: Change asr to 'ASR' - [PR #99](https://github.com/travelping/ergw_aaa/pull/99)
+* Change Ituma Called-Station-Id to 'Location;SSID' - [PR #98](https://github.com/travelping/ergw_aaa/pull/98)
+* Increase max diameter peer rate limit - [PR #96](https://github.com/travelping/ergw_aaa/pull/96)
+* Termination Cause Mapping: change `?MODULE` to interface names for termination cause errors - [PR #95](https://github.com/travelping/ergw_aaa/pull/95)
+* Add [CODEOWNERS](https://docs.github.com/en/free-pro-team@latest/github/creating-cloning-and-archiving-repositories/about-code-owners) - [PR #94](https://github.com/travelping/ergw_aaa/pull/94)
+
 Version 3.6.3 - 4 December 2020
 ----------------------------
 
