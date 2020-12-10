@@ -44,7 +44,7 @@
     {cp_inactivity_timeout, 4},
     {up_inactivity_timeout, 4},
     {peer_restart, 7},
-    {asr, 6},
+    {'ASR', 6},
     {error, 9},
     {req_timeout, 4},
     {conn_error, 10},
