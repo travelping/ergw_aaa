@@ -32,7 +32,7 @@
     {cp_inactivity_timeout, 1},  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {up_inactivity_timeout, 1},  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {peer_restart, 1},           % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
-    {asr, 1},                    % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {'ASR', 1},                  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {error, 1},                  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {req_timeout, 1},            % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {conn_error, 1},             % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
