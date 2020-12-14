@@ -97,7 +97,7 @@ pick_peer(Candidates, SvcName, #diam_call{peers_tried = ExceptPeers}) ->
 
 %% start_request/2
 start_request(SvcName, Peer) ->
-    gen_server:call(?SERVER, {start_request, SvcName, Peer}).
+    gen_server:call(?SERVER, {start_request, SvcName, Peer, self()}).
 
 %% start_request/3
 start_request(Msg, SvcName, Peer) ->
@@ -107,7 +107,7 @@ start_request(Msg, SvcName, Peer) ->
     end.
 
 finish_request(SvcName, Peer) ->
-    gen_server:call(?SERVER, {finish_request, SvcName, Peer}).
+    gen_server:call(?SERVER, {finish_request, SvcName, Peer, self()}).
 
 -ifdef(TEST).
 peers() ->
@@ -241,12 +241,12 @@ handle_call({pick_peer, Candidates, SvcName}, _From, #state{peers = Peers} = Sta
     Reply = pick_peer_h(Candidates, SvcName, Peers),
     {reply, Reply, State};
 
-handle_call({start_request, SvcName, Peer}, _From, #state{peers = Peers0} = State) ->
-    {Reply, Peers} = start_request_h(SvcName, Peer, Peers0),
+handle_call({start_request, SvcName, Peer, RPid}, _From, #state{peers = Peers0} = State) ->
+    {Reply, Peers} = start_request_h(SvcName, Peer, RPid, Peers0),
     {reply, Reply, State#state{peers = Peers}};
 
-handle_call({finish_request, SvcName, Peer}, _From, #state{peers = Peers0} = State) ->
-    {Reply, Peers} = finish_request_h(SvcName, Peer, Peers0),
+handle_call({finish_request, SvcName, Peer, RPid}, _From, #state{peers = Peers0} = State) ->
+    {Reply, Peers} = finish_request_h(SvcName, Peer, RPid, Peers0),
     {reply, Reply, State#state{peers = Peers}}.
 
 handle_cast({peer_down, _SvcName, {PeerRef, _}}, #state{peers = Peers} = State) ->
@@ -254,6 +254,13 @@ handle_cast({peer_down, _SvcName, {PeerRef, _}}, #state{peers = Peers} = State) 
 
 handle_cast(stop, State) ->
     {stop, normal, State}.
+
+handle_info({'DOWN', MRef, _Type, Pid, Info}, #state{peers = Peers0} = State0)
+  when is_map_key(MRef, Peers0) ->
+    ?LOG(alert, "got down for pending request ~0p with ~p", [maps:get(MRef, Peers0), Info]),
+    State = State0#state{peers = maps:without([Pid, MRef], Peers0)},
+    ets:match_delete(?MODULE, {{'_', Pid}, MRef}),
+    {noreply, State};
 
 handle_info({'DOWN', MRef, _Type, Pid, _Info}, State) ->
     ets:match_delete(?MODULE, {{'_', Pid}, MRef}),
@@ -348,7 +355,7 @@ pick_peer_h(Candidates, _SvcName, Peers) ->
     Connection = pick_connection(maps:get(lists:nth(N, Cands), CandMap), Peers),
     {ok, Connection}.
 
-start_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Peers0) ->
+start_request_h(SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}} = Caps}, RPid, Peers0) ->
     Peer = get_peer(OH, Peers0),
     #peer{outstanding = Cnt,
 	  capacity    = Cap,
@@ -359,10 +366,20 @@ start_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Pee
 	    Peers1 =
 		Peers0#{OH => Peer#peer{outstanding = Cnt + 1, tokens = Tokens - 1}},
 	    Peers2 = maps:update_with(PeerRef, _ + 1, 1, Peers1),
-	    {ok, Peers2}
+	    MRef = monitor(process, RPid),
+	    Peers3 = maps:put(MRef, {RPid, SvcName, PeerRef, Caps}, Peers2),
+	    Peers4 = maps:put(RPid, MRef, Peers3),
+	    {ok, Peers4}
     end.
 
-finish_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, Peers0) ->
+finish_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, RPid, Peers0a) ->
+    Peers0 = case Peers0a of
+		 #{RPid := MRef} ->
+		     demonitor(MRef),
+		     maps:without([RPid, MRef], Peers0a);
+		 _ ->
+		     Peers0a
+	     end,
     Peers1 = case Peers0 of
 		 #{PeerRef := _} -> maps:update_with(PeerRef, _ - 1, Peers0);
 		 _               -> Peers0
