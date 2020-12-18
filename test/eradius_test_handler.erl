@@ -16,7 +16,6 @@ start() ->
     application:set_env(eradius, session_nodes, local),
     application:set_env(eradius, one, [{{"ONE", []}, [{"127.0.0.1", "secret"}]}]),
     application:set_env(eradius, servers, [{one, {"127.0.0.1", [1812, 1813]}}]),
-    application:set_env(eradius, metrics, []),
     application:ensure_all_started(eradius).
 
 stop() ->
