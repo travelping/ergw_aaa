@@ -49,7 +49,8 @@ radius_request(#radius_request{cmd = request, attrs = Attrs} = _Req, _Nasprop, _
 		    {reply, #radius_request{cmd = reject, attrs = []}}
 	    end;
 	_ ->
-	    IEs = [{?Acct_Interim_Interval, 1800}],
+	    IEs = [{?Acct_Interim_Interval, 1800},
+		   {?Filter_Id, <<"test">>}],
 	    {reply, #radius_request{cmd = accept, attrs = IEs}}
 	end;
 radius_request(#radius_request{cmd = accreq} = _Req, _Nasprop, _Args) ->

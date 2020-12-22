@@ -762,7 +762,7 @@ to_session_opts({#attribute{name = "X_" ++ Name} = Attr, Value}, SOpts) ->
 to_session_opts({#attribute{name = Name} = Attr, Value}, SOpts) ->
     to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
 to_session_opts({Attr, Value}, SOpts) ->
-    ?LOG(debug, "unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
+    ?LOG(debug, "unhandled undecoded reply AVP: ~0p: ~0p", [Attr, Value]),
     SOpts.
 
 %% Service-Type = Framed-User
@@ -845,8 +845,11 @@ to_session_opts(_Attr, Key, Value, SOpts)
       Key =:= 'CAPWAP-Power-Save-Idle-Timeout';
       Key =:= 'CAPWAP-Power-Save-Busy-Timeout' ->
     SOpts#{Key => Value};
+to_session_opts(_Attr, Key, Value, SOpts) when is_atom(Key) ->
+    ?LOG(debug, "unhandled reply AVP: ~w: ~p", [Key, Value]),
+    SOpts;
 to_session_opts(Attr, {'EXIT', {badarg, _}}, Value, SOpts) ->
-    ?LOG(debug, "unhandled undecoded reply AVP: ~w: ~p", [Attr, Value]),
+    ?LOG(debug, "unhandled undecoded reply AVP: ~0p: ~0p", [Attr, Value]),
     SOpts.
 
 remove_accounting_attrs(Attrs) ->
