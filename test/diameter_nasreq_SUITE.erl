@@ -24,7 +24,8 @@
 
 -define(DIAMETER_TRANSPORT,
 	[
-	 {connect_to, <<"aaa://127.0.0.1">>}
+	 {connect_to, <<"aaa://127.0.0.1">>},
+	 {ip, {127, 0, 0, 1}}, {port, 3868}
 	]).
 -define(DIAMETER_FUNCTION,
 	{?SERVICE,

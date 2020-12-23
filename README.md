@@ -109,7 +109,7 @@ Example of possible config.
        {'Origin-Realm', <<"dia.example.net">>},
        {transports, [
            [{connect_to, <<"aaa://srv1.dia.example.net;transport=sctp">>},
-            {recbuf, 32768}]
+            {recbuf, 32768}, {recbuf, 32768}, {ip, {192, 168, 12, 12}}, {port, 3868}]
         ]},
       ]}
     ]},

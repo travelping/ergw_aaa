@@ -61,7 +61,8 @@
 
 -define(DIAMETER_TRANSPORT,
 	[
-	 {connect_to, <<"aaa://127.0.0.1">>}
+	 {connect_to, <<"aaa://127.0.0.1">>},
+	 {ip, {127, 0, 0, 1}}, {port, 3868}
 	]).
 -define(DIAMETER_FUNCTION,
 	{'diam-test',
@@ -263,6 +264,8 @@ config(_Config)  ->
     ?ok_set([functions, 'diam-test', transports, 1, unordered], false),
     ?ok_set([functions, 'diam-test', transports, 1, reuseaddr], false),
     ?ok_set([functions, 'diam-test', transports, 1, nodelay], false),
+    ?ok_set([functions, 'diam-test', transports, 1, ip], {127, 0, 0, 1}),
+    ?ok_set([functions, 'diam-test', transports, 1, port], 3868),
 	?error_set([functions, 'diam-test', transports, 1, fragment_timer], invalid),
     ?error_set([functions, 'diam-test', transports, 1, recbuf], invalid),
     ?error_set([functions, 'diam-test', transports, 1, recbuf], 13),
@@ -271,6 +274,8 @@ config(_Config)  ->
     ?error_set([functions, 'diam-test', transports, 1, unordered], invalid),
     ?error_set([functions, 'diam-test', transports, 1, reuseaddr], invalid),
     ?error_set([functions, 'diam-test', transports, 1, nodelay], invalid),
+    ?error_set([functions, 'diam-test', transports, 1, ip], invalid_ip),
+    ?error_set([functions, 'diam-test', transports, 1, port], invalid_port),
 
     ?error_set([handlers, ergw_aaa_nasreq], []),
     ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),

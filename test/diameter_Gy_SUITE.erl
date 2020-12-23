@@ -36,7 +36,7 @@
 	 {'Service-Type',          'Framed-User'}]).
 
 -define(DIAMETER_TRANSPORTS,
-	[[{connect_to, <<"aaa://127.0.10.10">>}],
+	[[{connect_to, <<"aaa://127.0.10.10">>}, {ip, {127, 0, 10, 10}}, {port, 3868}],
 	 [{connect_to, <<"aaa://127.0.10.20">>}],
 	 [{connect_to, <<"aaa://127.0.10.30">>}],
 	 [{connect_to, <<"aaa://127.0.10.40">>}]]).

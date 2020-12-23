@@ -96,7 +96,7 @@ initialize_transport(Id, #{connect_to :=
     {ok, {Raddr, Type}} = resolve_hostname(Host),
     TransportOpts = [{capabilities, Caps},
 		     {transport_module, transport_module(Transport)},
-		     {transport_config, transport_config(Transport, Type, Raddr, Port, Opts)}],
+		     {transport_config, transport_config(Transport, Type, maps:get(ip, Opts, Raddr), maps:get(port, Opts, Port), Opts)}],
     {ok, _} = diameter:add_transport(Id, {connect, TransportOpts}),
     ok.
 
@@ -163,6 +163,10 @@ validate_transport(reuseaddr, Value) when is_boolean(Value) ->
 validate_transport(unordered, Value) when is_boolean(Value) ->
     Value;
 validate_transport(nodelay, Value) when is_boolean(Value) ->
+    Value;
+validate_transport(ip, Value) when is_tuple(Value) ->
+    Value;
+validate_transport(port, Value) when is_integer(Value) ->
     Value;
 validate_transport(Opt, Value) ->
     validate_transport_error(Opt, Value).
