@@ -3,6 +3,14 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.5 - 31 December 2020
+----------------------------
+
+* Change the encoding of the `Location` in Ituma `Called-Station-Id` - [PR #100](https://github.com/travelping/ergw_aaa/pull/100)
+* Remove non exist eradius env what was used for `exameter` - [PR #101](https://github.com/travelping/ergw_aaa/pull/101)
+* Fix handling of ignored `RADIUS` AVPs - [PR #102](https://github.com/travelping/ergw_aaa/pull/102)
+* Update [eradius](https://github.com/travelping/eradius) tag to [2.2.0](https://github.com/travelping/eradius/releases/tag/2.2.0) - [PR #104](https://github.com/travelping/ergw_aaa/pull/104)
+
 Version 3.6.4 - 10 December 2020
 ----------------------------
 
