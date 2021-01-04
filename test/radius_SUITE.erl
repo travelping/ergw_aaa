@@ -354,7 +354,8 @@ simple(Config, Opts) ->
 			'Framed-IPv6-Pool' => <<"pool-A">>,
 			'Framed-Interface-Id' => {0,0,0,0,0,0,0,1}}),
 
-    {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+    {ok, SOut, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+    ?match(#{'MS-Primary-DNS-Server' := {8,8,8,8}}, SOut),
 
     ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
 
