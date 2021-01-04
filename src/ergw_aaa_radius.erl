@@ -293,6 +293,9 @@ to_session(_, Key, Value, {Session, Events, State})
        Key =:= 'Username';
        Key =:= 'TLS-Pre-Shared-Key' ->
    {Session, Events, maps:put(Key, Value, State)};
+to_session(_, Key, Value, {Session, Events, State})
+  when is_atom(Key) ->
+    {maps:put(Key, Value, Session), Events, State};
 to_session(_, _, _, SessEvSt) ->
     SessEvSt.
 
