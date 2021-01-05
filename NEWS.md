@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.6 - 14 January 2021
+----------------------------
+
+* Fix passing `RADIUS` response IEs into session - [PR #106](https://github.com/travelping/ergw_aaa/pull/106)
+* Trace pending `DIAMETER` request by `PID` - [PR #107](https://github.com/travelping/ergw_aaa/pull/107)
+
 Version 3.6.5 - 31 December 2020
 ----------------------------
 
