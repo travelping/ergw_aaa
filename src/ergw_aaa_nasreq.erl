@@ -354,24 +354,23 @@ inc_record_number(#state{record_number = Number} = State) when is_integer(Number
 inc_record_number(State) ->
     State#state{record_number = 0}.
 
+init_session_avp_defaults(#{'Acct-Interim-Interval' := Interim}, Avps)
+  when not is_map_key('Acct-Interim-Interval', Avps),
+       is_integer(Interim), Interim > 0 ->
+    Avps#{'Acct-Interim-Interval' => [Interim]};
+init_session_avp_defaults(_, Avps) ->
+    Avps.
+
 %% to_session/3
-to_session(Procedure, {Session0, Events0}, Avps) ->
-    Session =
-	case Session0 of
-	    #{'Acct-Interim-Interval' := Interim}
-	      when not is_map_key('Acct-Interim-Interval', Avps),
-		   is_integer(Interim), Interim > 0 ->
-		Session0#{'Acct-Interim-Interval' => [Interim]};
-	    _ ->
-		Session0
-	end,
-    maps:fold(to_session(Procedure, _, _, _), {Session, Events0}, Avps).
+to_session(Procedure, {Session, _} = SessEvs, Avps0) ->
+    Avps = init_session_avp_defaults(Session, Avps0),
+    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
 
 %% to_session/4
 to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
   when is_integer(Interim), Interim > 0 ->
     Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
-    {Session#{'Acct-Interim-Interval' => Interim}, ergw_aaa_session:ev_set(Trigger, Events)};
+    {Session, ergw_aaa_session:ev_set(Trigger, Events)};
 
 to_session(_, 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
     {Session#{'Framed-IP-Address' => {A,B,C,D}}, Events};

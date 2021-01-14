@@ -277,18 +277,17 @@ handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
     {Result, Session, Events, State#state{state = stopped}}.
 
+init_session_avp_defaults(#{'Acct-Interim-Interval' := Interim}, Avps)
+  when not is_map_key('Acct-Interim-Interval', Avps),
+       is_integer(Interim), Interim > 0 ->
+    Avps#{'Acct-Interim-Interval' => [Interim]};
+init_session_avp_defaults(_, Avps) ->
+    Avps.
+
 %% to_session/3
-to_session(Procedure, {Session0, Events0}, Avps) ->
-    Session =
-	case Session0 of
-	    #{'Acct-Interim-Interval' := Interim}
-	      when not is_map_key('Acct-Interim-Interval', Avps),
-		   is_integer(Interim), Interim > 0 ->
-		Session0#{'Acct-Interim-Interval' => [Interim]};
-	    _ ->
-		Session0
-	end,
-    maps:fold(to_session(Procedure, _, _, _), {Session, Events0}, Avps).
+to_session(Procedure, {Session, _} = SessEvs, Avps0) ->
+    Avps = init_session_avp_defaults(Session, Avps0),
+    maps:fold(to_session(Procedure, _, _, _), SessEvs, Avps).
 
 %% to_session/4
 to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
