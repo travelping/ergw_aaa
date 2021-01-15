@@ -269,16 +269,26 @@ validate_termination_cause_mapping(Opt, Value) ->
 %% Internal Helpers
 %%===================================================================
 
+init_session_avp_defaults(#{'Acct-Interim-Interval' := Interim}, Avps)
+  when not is_map_key('Acct-Interim-Interval', Avps),
+       is_integer(Interim), Interim > 0 ->
+    Avps#{'Acct-Interim-Interval' => Interim};
+init_session_avp_defaults(_, Avps) ->
+    Avps.
+
 %% to_session/3
-to_session(Procedure, {Session0, Events0}, Avps) ->
+to_session(Procedure, {Session0, Events0}, Avps0) ->
+    Avps = init_session_avp_defaults(Session0, Avps0),
     {Session, Events, _} =
 	maps:fold(to_session(Procedure, _, _, _), {Session0, Events0, #{}}, Avps),
     {Session, Events};
-to_session(Procedure, {_Session, _Events, _State} = Iter, Avps) ->
+to_session(Procedure, {Session, _Events, _State} = Iter, Avps0) ->
+    Avps = init_session_avp_defaults(Session, Avps0),
     maps:fold(to_session(Procedure, _, _, _), Iter, Avps).
 
 %% to_session/4
-to_session(_, 'Acct-Interim-Interval', Interim, {Session, Events, State}) ->
+to_session(_, 'Acct-Interim-Interval', Interim, {Session, Events, State})
+  when is_integer(Interim), Interim > 0 ->
     Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
     {Session, ergw_aaa_session:ev_set(Trigger, Events), State};
 
