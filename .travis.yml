@@ -1,17 +1,26 @@
-dist: xenial
+dist: bionic
 
 language: erlang
 
 otp_release:
- - 21.3.8.1
  - 22.0.7
- - 22.1.8
+ - 22.1.8.1
+ - 22.2.8
+ - 22.3.4
+ - 23.0.4
+ - 23.1.2
 
 install: "true"
 
 before_install:
   - wget https://s3.amazonaws.com/rebar3/rebar3
   - chmod u+x ./rebar3
+
+jobs:
+  include:
+    -
+    - dist: xenial
+      otp_release: 21.3.8.1
 
 script:
   - env
