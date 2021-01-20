@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.7 - 20 January 2021
+----------------------------
+
+* Fix `Acct-Interim-Interval` handling - [PR #109](https://github.com/travelping/ergw_aaa/pull/109)
+* Remove dotfiles - [PR #111](https://github.com/travelping/ergw_aaa/pull/111)
+
 Version 3.6.6 - 14 January 2021
 ----------------------------
 
