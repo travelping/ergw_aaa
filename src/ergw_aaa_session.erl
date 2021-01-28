@@ -30,7 +30,7 @@
 -include_lib("kernel/include/logger.hrl").
 -include("include/ergw_aaa_session.hrl").
 
--record(data, {'$version' = 1,
+-record(data, {'$version' = 2,
 	       owner,
 	       owner_monitor,
 	       application,
@@ -193,7 +193,7 @@ init([Owner, SessionOpts]) ->
     Data = #data{
 	      owner         = Owner,
 	      owner_monitor = MonRef,
-	      application   = App,
+	      application   = AppId,
 	      handlers      = #{},
 	      session       = DefaultSessionOpts
 	      },
@@ -422,7 +422,8 @@ services(Procedure, App) ->
     Procedures = maps:get(procedures, App, #{}),
     maps:get(Procedure, Procedures, []).
 
-action(Procedure, Opts, #data{application = App} = Data) ->
+action(Procedure, Opts, #data{application = AppId} = Data) ->
+    App = ergw_aaa_config:get_application(AppId),
     Pipeline = services(Procedure, App),
     pipeline(Procedure, Data, [], Opts, Pipeline).
 
