@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.8 - 29 January 2021
+----------------------------
+
+**Features** :rocket:
+* [#114](https://github.com/travelping/ergw_aaa/pull/114) Read session configuration everytime we run a action
+
 Version 3.6.7 - 20 January 2021
 ----------------------------
 
