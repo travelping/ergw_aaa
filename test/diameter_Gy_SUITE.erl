@@ -128,7 +128,8 @@ all() ->
      % ccr_t_rate_limit,
      rate_limit,
      handle_failure,
-     handle_answer_error].
+     handle_answer_error,
+     handle_authorization_rejected].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -855,6 +856,37 @@ handle_answer_error(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     ?match({{error, 3007}, _, _},
 	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_authorization_rejected() ->
+    [{doc, "check that a DIAMETER_AUTHORIZATION_REJECTED does not retransmit"}].
+handle_authorization_rejected(Config) ->
+    Session = init_session(#{}, Config),
+    GyOpts =
+	#{'3GPP-IMSI' => <<"FAIL-RC-5003">>,
+	  '3GPP-MSISDN' => <<"FAIL-RC-5003">>,
+	  credits =>
+	      #{1000 => empty,
+		2000 => empty,
+		3000 => empty
+	       }
+	 },
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{fail, 5003}, _, _},
+	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [])),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    %% check that we didn't retransmit or fail over
+    ?equal(1, proplists:get_value({{4,272,1},send}, Stats1)),
+    ?equal(1, proplists:get_value({{4,272,0},recv}, Stats1)),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
