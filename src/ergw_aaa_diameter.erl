@@ -70,6 +70,11 @@ initialize_function(Id, #{'Origin-Host' := {OriginHost, Addr},
 			  transports := Transports}) ->
     ProductName = application:get_env(ergw_aaa, product_name, "erGW-AAA"),
 
+    %% adding the DIAMETER RFC base dictionary controls some options in
+    %% the Erlang diameter app
+    Base6733 = [{alias, base6733},
+		{dictionary, diameter_gen_base_rfc6733},
+		{module, [?MODULE, base6733]}],
     SvcOpts0 = #{'Origin-Host' => OriginHost,
 		 'Origin-Realm' => OriginRealm,
 		 'Origin-State-Id' => diameter:origin_state_id(),
@@ -80,7 +85,9 @@ initialize_function(Id, #{'Origin-Host' := {OriginHost, Addr},
 					   ?VENDOR_ID_ETSI,
 					   ?VENDOR_ID_TP],
 		 string_decode => false,
-		 decode_format => map},
+		 decode_format => map,
+		 application => sets:from_list([Base6733])
+		},
     SvcOpts = merge_svc(SvcOpts0, ergw_aaa_diameter_srv:get_service_opts(Id)),
     ok = diameter:start_service(Id, svc_to_opts(SvcOpts)),
     [ok = initialize_transport(Id, X) || X <- Transports],
