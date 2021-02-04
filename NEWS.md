@@ -3,6 +3,15 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.9 - 4 February 2021
+----------------------------
+
+**Features** :rocket:
+* [#116](https://github.com/travelping/ergw_aaa/pull/116) Adding the `DIAMETER` `RFC` base dictionary to all services
+
+**Dependencies** :gear:
+* [#117](https://github.com/travelping/ergw_aaa/pull/117) Update [eradius](https://github.com/travelping/eradius) tag to [2.2.1](https://github.com/travelping/eradius/releases/tag/2.2.1)
+
 Version 3.6.8 - 29 January 2021
 ----------------------------
 
