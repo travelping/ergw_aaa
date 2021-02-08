@@ -1,7 +1,21 @@
-AAA diameter session metrics
-================================
+# erGW-AAA
+* [DIAMETER metrics](#diameter-metrics)
+* [DIAMETER session metrics](#diameter-session-metrics)
 
-ergw_aaa exposes prometheus gauge metric for the states of the different diameter handlers
+`erGW-AAA` uses [prometheus.erl](https://github.com/deadtrickster/prometheus.erl) to implement various operation metrics.
+
+# DIAMETER metrics
+
+The following metrics exist:
+| Name                                       | Type      | Labels         | Description                            |
+|--------------------------------------------|-----------|----------------|----------------------------------------|
+| aaa_sessions_total                         | gauge     | handler, state | AAA of active sessions                 |
+| ergw_aaa_diameter_outstanding_requests     | gauge     | name, type     | The number of outstanding requests     |
+| ergw_aaa_diameter_available_tokens         | gauge     | name, type     | The number of available tokens         |
+
+# DIAMETER session metrics
+
+`erGW-AAA` exposes prometheus gauge metric for the states of the different diameter handlers
  and the radius handler.
 The metrics are labeled with the name of the handler module and the handler state. The name
  of the metric is `aaa_sessions_total`.

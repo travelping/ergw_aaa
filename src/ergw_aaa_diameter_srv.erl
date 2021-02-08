@@ -28,7 +28,7 @@
 	 start_request/3,
 	 finish_request/2,
 	 send_request/4, retry_request/4, await_response/1, await_response/2,
-	 prepare_request/4]).
+	 prepare_request/4, get_peers_info/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -41,6 +41,7 @@
 -include_lib("kernel/include/logger.hrl").
 -include_lib("diameter/include/diameter.hrl").
 -include("include/ergw_aaa_session.hrl").
+-include("ergw_aaa_internal.hrl").
 
 -define(SERVER, ?MODULE).
 -define(REQ_LIMIT_TAB, ergw_aaa_diameter_limiter).
@@ -49,14 +50,6 @@
 		handlers,
 		peers = #{}
 	       }).
--record(peer, {
-	       outstanding = 0,
-	       capacity    = 50,
-	       last_ts     = undefined,
-	       rate        = 10,                    %% requests per second
-	       interval    = 0,                     %% refill interval in microseconds
-	       tokens      = 0
-	      }).
 
 -define(LoadBuckets, 20).
 
@@ -108,6 +101,9 @@ start_request(Msg, SvcName, Peer) ->
 
 finish_request(SvcName, Peer) ->
     gen_server:call(?SERVER, {finish_request, SvcName, Peer, self()}).
+
+get_peers_info() ->
+    gen_server:call(?SERVER, peers_info).
 
 -ifdef(TEST).
 peers() ->
@@ -247,7 +243,10 @@ handle_call({start_request, SvcName, Peer, RPid}, _From, #state{peers = Peers0} 
 
 handle_call({finish_request, SvcName, Peer, RPid}, _From, #state{peers = Peers0} = State) ->
     {Reply, Peers} = finish_request_h(SvcName, Peer, RPid, Peers0),
-    {reply, Reply, State#state{peers = Peers}}.
+    {reply, Reply, State#state{peers = Peers}};
+
+handle_call(peers_info, _, #state{peers = Peers} = State) ->
+    {reply, Peers, State}.
 
 handle_cast({peer_down, _SvcName, {PeerRef, _}}, #state{peers = Peers} = State) ->
     {noreply, State#state{peers = maps:remove(PeerRef, Peers)}};
