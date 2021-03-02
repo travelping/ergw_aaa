@@ -34,11 +34,39 @@ jobs:
     - name: Coveralls
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        COVERALLS_FLAG_NAME: ${{ matrix.otp }}
       run: DEBUG=1 rebar3 as test coveralls send || /bin/true
+    - name: Archive Test Output
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-output-${{ matrix.otp }}
+        path: |
+          _build/test/logs/
+          !_build/test/logs/last
+
+  slack:
+    needs: test
+    runs-on: ubuntu-20.04
+    if: always()
+    steps:
+    - name: Slack notification
+      uses: 8398a7/action-slack@v3
+      with:
+        author_name: "GitHub Actions"
+        username: ${{ github.event.repository.name }}
+        icon_emoji: ':octocat:'
+        fields: repo, message, ref, commit, author, action, eventName, workflow, job, took
+        status: ${{ needs.test.result }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        MATRIX_CONTEXT: ${{ toJson(matrix) }}
 
   finish:
     needs: test
     runs-on: ubuntu-20.04
+    if: always()
     steps:
     - name: Coveralls Finished
       env:
@@ -46,4 +74,4 @@ jobs:
       run: |
            curl -v -k https://coveralls.io/webhook \
                 --header "Content-Type: application/json" \
-                --data "{\"repo_name\":\"$GITHUB_REPOSITORY\",\"repo_token\":\"$GITHUB_TOKEN\",\"payload\":{\"build_num\":$GITHUB_RUN_NUMBER,\"status\":\"done\"}}"
+                --data "{\"repo_name\":\"$GITHUB_REPOSITORY\",\"repo_token\":\"$GITHUB_TOKEN\",\"payload\":{\"build_num\":$GITHUB_RUN_ID,\"status\":\"done\"}}"
