@@ -129,7 +129,8 @@ all() ->
      rate_limit,
      handle_failure,
      handle_answer_error,
-     handle_authorization_rejected].
+     handle_authorization_rejected,
+     diameter_metrics].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -892,6 +893,14 @@ handle_authorization_rejected(Config) ->
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
+
+diameter_metrics() ->
+    [{doc, "check DIAMETER metrics"}].
+diameter_metrics(_Config) ->
+    ?equal(ok, prometheus_registry:register_collector(ergw_aaa, ergw_aaa_prometheus_collector)),
+    Metrics = prometheus_text_format:format(ergw_aaa),
+    ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_outstanding_requests")),
+    ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_available_tokens")).
 
 %%%======================================================================
 %%% Rate limit test helper to generate the requests in separate processes

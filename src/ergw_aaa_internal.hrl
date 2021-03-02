@@ -17,3 +17,12 @@
 		 }).
 
 -define(AAA_ERR(Level), #aaa_err{level=Level,where={?FILE, ?LINE}}).
+
+-record(peer, {
+    outstanding = 0,
+    capacity    = 50,
+    last_ts     = undefined,
+    rate        = 10,          %% requests per second
+    interval    = 0,           %% refill interval in microseconds
+    tokens      = 0
+}).
