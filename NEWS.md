@@ -3,6 +3,17 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.10 - 16 March 2021
+----------------------------
+
+**Features** :rocket:
+* [#119](https://github.com/travelping/ergw_aaa/pull/119) Implement `DIAMETER` rate limiter metric collector in `erGW-AAA`
+
+**Dependencies** :gear:
+* [#124](https://github.com/travelping/ergw_aaa/pull/124) Start use [cut](https://github.com/truqu/cut) with tag [1.0.3](https://github.com/truqu/cut/releases/tag/1.0.3)
+* [#125](https://github.com/travelping/ergw_aaa/pull/125) Update [regine](https://github.com/travelping/regine) tag to [1.0.0](https://github.com/travelping/regine/releases/tag/1.0.0)
+* [#126](https://github.com/travelping/ergw_aaa/pull/126) Update [setup](https://github.com/uwiger/setup) tag to [2.1.0](https://github.com/uwiger/setup/releases/tag/2.1.0)
+
 Version 3.6.9 - 4 February 2021
 ----------------------------
 
