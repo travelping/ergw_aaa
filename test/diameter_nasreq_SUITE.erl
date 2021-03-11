@@ -15,53 +15,53 @@
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_nasreq).
--define(SERVICE, 'diam-test').
+-define(SERVICE, <<"diam-test">>).
+
+-define('Origin-Host', <<"127.0.0.1">>).
+-define('Origin-Realm', <<"example.com">>).
 
 -define(STATIC_CONFIG,
-	[{'NAS-Identifier',        <<"NAS">>},
-	 {'Framed-Protocol',       'PPP'},
-	 {'Service-Type',          'Framed-User'}]).
+	#{'NAS-Identifier'       => <<"NAS">>,
+	  'Framed-Protocol'      => 'PPP',
+	  'Service-Type'         => 'Framed-User'}).
 
 -define(DIAMETER_TRANSPORT,
-	[
-	 {connect_to, <<"aaa://127.0.0.1">>}
-	]).
+	#{connect_to => <<"aaa://127.0.0.1">>}).
+
 -define(DIAMETER_FUNCTION,
-	{?SERVICE,
-	 [{handler, ergw_aaa_diameter},
-	  {'Origin-Host', <<"127.0.0.1">>},
-	  {'Origin-Realm', <<"example.com">>},
-	  {transports, [?DIAMETER_TRANSPORT]}
-	 ]}).
+	#{?SERVICE =>
+	      #{handler => ergw_aaa_diameter,
+		'Origin-Host' => ?'Origin-Host',
+		'Origin-Realm' => ?'Origin-Realm',
+		transports => [?DIAMETER_TRANSPORT]}}).
+
 -define(DIAMETER_CONFIG,
-	[{function, ?SERVICE},
-	 {'Destination-Realm', <<"test-srv.example.com">>}]).
+	#{function => ?SERVICE,
+	  'Destination-Realm' => <<"test-srv.example.com">>}).
 
 -define(CONFIG,
-	[{rate_limits,
-	  [{default, [{outstanding_requests, 10}, {rate, 1000}]}]},
-	 {functions, [?DIAMETER_FUNCTION]},
-	 {handlers,
-	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG}
-	  ]},
-	 {services,
-	  [{'Default', [{handler, 'ergw_aaa_static'}]},
-	   {'NASREQ',  [{handler, 'ergw_aaa_nasreq'}]}
-	  ]},
-
-	 {apps,
-	  [{default,
-	    [{session, ['Default']},
-	     {procedures, [{authenticate, ['NASREQ']},
-			   {authorize, ['NASREQ']},
-			   {start, ['NASREQ']},
-			   {interim, ['NASREQ']},
-			   {stop, ['NASREQ']}
-			  ]}
-	    ]}
-	  ]}
-	]).
+	#{rate_limits =>
+	      #{<<"default">> => #{outstanding_requests => 10, rate => 1000}},
+	  functions => ?DIAMETER_FUNCTION,
+	  handlers =>
+	      #{ergw_aaa_static => ?STATIC_CONFIG,
+		ergw_aaa_nasreq => ?DIAMETER_CONFIG},
+	  services =>
+	      #{<<"Default">> =>
+		    #{handler => 'ergw_aaa_static'},
+		<<"NASREQ">> =>
+		    #{handler => 'ergw_aaa_nasreq'}},
+	  apps =>
+	      #{<<"default">> =>
+		    #{init => [<<"Default">>],
+		      authenticate => [<<"NASREQ">>],
+		      authorize => [<<"NASREQ">>],
+		      start => [<<"NASREQ">>],
+		      interim => [<<"NASREQ">>],
+		      stop => [<<"NASREQ">>]
+		     }
+	       }
+	 }).
 
 %%%===================================================================
 %%% Common Test callbacks
@@ -99,7 +99,7 @@ init_per_group(Group, Config) ->
 	    split   -> set_cfg_value([handlers, ergw_aaa_nasreq, accounting], split, ?CONFIG);
 	    _       -> ?CONFIG
 	end,
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- AppConfig],
+    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(AppConfig)],
 
     meck_init(Config),
 

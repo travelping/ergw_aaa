@@ -64,7 +64,7 @@ validate_option(answer, Value) when is_atom(Value) ->
 validate_option(_Opt, Value) ->
     Value.
 %% validate_option(Opt, Value) ->
-%%     throw({error, {options, {Opt, Value}}}).
+%%     erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% internal helpers

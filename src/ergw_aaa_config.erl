@@ -17,16 +17,10 @@
 -export([validate_config/1]).
 -endif.
 
--define(DefaultRateLimit, [{outstanding_requests, 50},
-			   {rate, 50}
-			  ]).
--define(DefaultOptions, [{product_name, "erGW-AAA"},
-			 {functions, []}
-			]).
+-define(DefaultRateLimit, #{outstanding_requests => 50, rate => 50}).
+-define(DefaultOptions, #{product_name => "erGW-AAA", functions => #{}}).
 
 -define(is_opts(X), (is_list(X) orelse is_map(X))).
--define(non_empty_opts(X), ((is_list(X) andalso length(X) /= 0) orelse
-			    (is_map(X) andalso map_size(X) /= 0))).
 
 %%%===================================================================
 %%% API
@@ -34,7 +28,7 @@
 
 load_config() ->
     Config0 = setup:get_all_env(ergw_aaa),
-    Config = validate_config(Config0),
+    Config = validate_config(maps:from_list(Config0)),
     maps:map(fun(K,V) -> application:set_env(ergw_aaa, K, V) end, Config),
     Config.
 
@@ -43,15 +37,15 @@ load_config() ->
 %% opts_fold(Fun, AccIn, Opts) when is_map(Opts) ->
 %%     maps:fold(Fun, AccIn, Opts).
 
-validate_options(Fun, Options, Defaults, ReturnType)
+validate_options(Fun, Options, Defaults, list)
   when is_list(Options), ?is_opts(Defaults) ->
     Opts0 = proplists:unfold(Options),
     Opts = lists:ukeymerge(1, lists:keysort(1, Opts0), lists:keysort(1, to_list(Defaults))),
-    return_type(validate_options(Fun, Opts), ReturnType);
-validate_options(Fun, Options, Defaults, ReturnType)
+    return_type(validate_options(Fun, Opts), list);
+validate_options(Fun, Options, Defaults, map)
   when is_map(Options) andalso ?is_opts(Defaults) ->
     Opts = maps:to_list(maps:merge(to_map(Defaults), Options)),
-    return_type(validate_options(Fun, Opts), ReturnType).
+    return_type(validate_options(Fun, Opts), map).
 
 get_service(Service) ->
     Services = application:get_env(ergw_aaa, services, #{}),
@@ -84,16 +78,6 @@ to_list(Map) when is_map(Map) ->
 to_list(List) when is_list(List) ->
     List.
 
-%% get_opt(Key, List) when is_list(List) ->
-%%     proplists:get_value(Key, List);
-%% get_opt(Key, Map) when is_map(Map) ->
-%%     maps:get(Key, Map).
-
-get_opt(Key, List, Default) when is_list(List) ->
-    proplists:get_value(Key, List, Default);
-get_opt(Key, Map, Default) when is_map(Map) ->
-    maps:get(Key, Map, Default).
-
 set_opt(Key, Value, List) when is_list(List) ->
     lists:keystore(Key, 1, List, {Key, Value});
 set_opt(Key, Value, Map) when is_map(Map) ->
@@ -112,7 +96,7 @@ check_unique_keys(Key, List) when is_list(List) ->
 	    ok;
        true ->
 	    Duplicate = proplists:get_keys(List) -- proplists:get_keys(UList),
-	    throw({error, {options, {Key, Duplicate}}})
+	    erlang:error(badarg, [Key, Duplicate])
     end.
 
 validate_option(Fun, Opt, Value) when is_function(Fun, 2) ->
@@ -128,12 +112,12 @@ validate_options(Fun, [{Opt, Value} | Tail]) ->
     [validate_option(Fun, Opt, Value) | validate_options(Fun, Tail)].
 
 validate_config(Config0) ->
-    Config1 = validate_keyed_opt(functions, fun validate_function/2, Config0, []),
-    Config2 = validate_keyed_opt(handlers, fun validate_handler/2, Config1, []),
-    Config3 = validate_keyed_opt(services, validate_service(_, _, Config2), Config2, []),
-    Config4 = validate_keyed_opt(apps, validate_app(_, _, Config3), Config3, []),
+    Config1 = validate_keyed_opt(functions, fun validate_function/2, Config0, #{}),
+    Config2 = validate_keyed_opt(handlers, fun validate_handler/2, Config1, #{}),
+    Config3 = validate_keyed_opt(services, validate_service(_, _, Config2), Config2, #{}),
+    Config4 = validate_keyed_opt(apps, validate_app(_, _, Config3), Config3, #{}),
     Config = validate_keyed_opt(rate_limits, fun validate_rate_limit/2, Config4,
-				[{default, ?DefaultRateLimit}]),
+				#{<<"default">> => ?DefaultRateLimit}),
     validate_options(fun validate_option/2, Config, ?DefaultOptions, map).
 
 validate_option(product_name, Value)
@@ -141,28 +125,30 @@ validate_option(product_name, Value)
     Value;
 validate_option(Opt, Value)
   when Opt == product_name ->
-    throw({error, {options, {Opt, Value}}});
+    erlang:error(badarg, [Opt, Value]);
 validate_option(_Opt, Value) ->
     Value.
 
-validate_keyed_opt(Key, Fun, Config, Default) ->
-    case get_opt(Key, Config, Default) of
-	Values when ?is_opts(Values) ->
+validate_keyed_opt(Key, Fun, Config, Default) when is_map(Config) ->
+    case maps:get(Key, Config, Default) of
+	Values when is_map(Values) ->
 	    check_unique_keys(Key, Values),
 	    V = validate_options(Fun, Values, [], map),
 	    set_opt(Key, V, Config);
 	Values ->
-	    throw({error, {options, {Key, Values}}})
-    end.
+	    erlang:error(badarg, [Key, Values])
+    end;
+validate_keyed_opt(Key, _, Config, _) ->
+    erlang:error(badarg, [Key, Config]).
 
 validate_function(Function, Opts)
-  when is_atom(Function) ->
-    Handler = get_opt(handler, Opts, undefined),
+  when is_binary(Function), is_map(Opts) ->
+    Handler = maps:get(handler, Opts, undefined),
     case code:ensure_loaded(Handler) of
 	{module, _} ->
 	    ok;
 	_ ->
-	    throw({error, {options, {Handler, Opts}}})
+	    erlang:error(badarg, [Handler, Opts])
     end,
     OOut = Handler:validate_function(without_opts([handler], Opts)),
     set_opt(handler, Handler, OOut).
@@ -173,57 +159,58 @@ validate_handler(Handler, Opts)
 	{module, _} ->
 	    ok;
 	_ ->
-	    throw({error, {options, {Handler, Opts}}})
+	    erlang:error(badarg, [Handler, Opts])
     end,
     Handler:validate_handler(Opts).
 
-validate_service(Service, Opts, Config) ->
-    Handlers = get_opt(handlers, Config, #{}),
-    Handler = get_opt(handler, Opts, undefined),
+validate_service(Service, Opts, Config)
+  when is_binary(Service), is_map(Opts), is_map(Config) ->
+    Handlers = maps:get(handlers, Config, #{}),
+    Handler = maps:get(handler, Opts, undefined),
     case maps:get(Handler, Handlers, undefined) of
 	HandlerOpts when is_map(HandlerOpts) ->
 	    OOut = Handler:validate_service(Service, HandlerOpts, without_opts([handler], Opts)),
 	    set_opt(handler, Handler, OOut);
 	_ ->
-	    throw({error, {options, {Service, {handler, Handler}}}})
-    end.
+	    erlang:error(badarg, [Service, {handler, Handler}])
+    end;
+validate_service(Service, Opts, _) ->
+    erlang:error(badarg, [Service, Opts]).
 
-validate_app(App, Opts, Config) ->
-    validate_options(validate_app_option(App, _, _, Config), Opts, [], map).
-
-validate_app_option(App, session, Services, Config)
-  when is_list(Services) ->
-    validate_options(validate_app_procs_svc(App, init, _, _, Config), Services, [], list);
-validate_app_option(App, procedures, Procedures, Config)
-  when ?is_opts(Procedures) ->
+validate_app(App, Procedures, Config)
+  when is_binary(App), is_map(Procedures) ->
     validate_options(validate_app_procs_option(App, _, _, Config), Procedures, [], map);
-validate_app_option(App, Opt, Value, _Config) ->
-    throw({error, {options, {App, Opt, Value}}}).
+validate_app(App, Procedures, _) ->
+    erlang:error(badarg, [App, Procedures]).
 
 validate_app_procs_option(App, Procedure, Services, Config)
   when is_list(Services) ->
-    validate_options(validate_app_procs_svc(App, Procedure, _, _, Config), Services, [], list);
+    lists:map(validate_app_procs_svc(App, Procedure, _, Config), Services);
 validate_app_procs_option(App, Procedure, Services, _Config) ->
-    throw({error, {options, {App, Procedure, Services}}}).
+    erlang:error(badarg, [App, Procedure, Services]).
 
-validate_app_procs_svc(App, Procedure, Service, true, Config) ->
-    validate_app_procs_svc(App, Procedure, Service, [], Config);
-validate_app_procs_svc(App, Procedure, Service, Opts, Config)
-  when ?is_opts(Opts) ->
-    case get_opt(services, Config, undefined) of
+validate_app_procs_svc(App, Procedure, Service, Config)
+  when is_binary(Service) ->
+    validate_app_procs_svc(App, Procedure, {Service, #{}}, Config);
+validate_app_procs_svc(App, Procedure, {Service, Opts}, Config)
+  when is_binary(Service), is_map(Opts) ->
+    case maps:get(services, Config, undefined) of
 	#{Service := SvcOpts} ->
 	    Handler = maps:get(handler, SvcOpts),
-	    Handler:validate_procedure(App, Procedure, Service,
-				       without_opts([handler], SvcOpts), Opts);
+	    {Service, Handler:validate_procedure(App, Procedure, Service,
+						 without_opts([handler], SvcOpts), Opts)};
 	_ ->
-	    throw({error, {options, {App, Procedure, Service}}})
+	    erlang:error(badarg, [App, Procedure, Service])
     end;
-validate_app_procs_svc(App, Procedure, Service, Opts, _Config) ->
-    throw({error, {options, {App, Procedure, Service, Opts}}}).
+validate_app_procs_svc(App, Procedure, Service, _Config) ->
+    erlang:error(badarg, [App, Procedure, Service]).
 
-validate_rate_limit(RateLimit, Opts) ->
+validate_rate_limit(RateLimit, Opts)
+  when is_binary(RateLimit) ->
     validate_options(validate_rate_limit_option(RateLimit, _, _),
-		     Opts, ?DefaultRateLimit, map).
+		     Opts, ?DefaultRateLimit, map);
+validate_rate_limit(RateLimit, Opts) ->
+    erlang:error(badarg, [RateLimit, Opts]).
 
 validate_rate_limit_option(_RateLimit, outstanding_requests, Reqs)
   when is_integer(Reqs) andalso Reqs > 0 ->
@@ -232,4 +219,6 @@ validate_rate_limit_option(_RateLimit, rate, Rate)
   when is_integer(Rate) andalso Rate > 0 andalso Rate < 100000 ->
     Rate;
 validate_rate_limit_option(RateLimit, Opt, Value) ->
-    throw({error, {options, {RateLimit, Opt, Value}}}).
+    erlang:error(badarg, [RateLimit, Opt, Value]).
+
+%%%===================================================================

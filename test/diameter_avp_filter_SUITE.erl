@@ -18,8 +18,7 @@
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_ro).
-
--define(SERVICE, 'diam-test').
+-define(SERVICE, <<"diam-test">>).
 
 -define(SET_TC_INFO(Name, Value),
 	set_test_info(?FUNCTION_NAME, Name, Value)).
@@ -39,16 +38,15 @@
 	clear_test_info(?FUNCTION_NAME)).
 
 -define('Origin-Host', <<"127.0.0.1">>).
-
 -define('Origin-Realm', <<"example.com">>).
 
 -define(STATIC_CONFIG,
-	[{'NAS-Identifier', <<"NAS">>},
-	 {'Framed-Protocol', 'PPP'},
-	 {'Service-Type', 'Framed-User'}]).
+	#{'NAS-Identifier'       => <<"NAS">>,
+	  'Framed-Protocol'      => 'PPP',
+	  'Service-Type'         => 'Framed-User'}).
 
 -define(DIAMETER_TRANSPORTS,
-	[[{connect_to, <<"aaa://127.0.10.10">>}]]).
+	[#{connect_to => <<"aaa://127.0.10.10">>}]).
 
 -define(TEST_SERVER_TRANSPORTS,
 	[{{127, 0, 10, 10}, "server1.test-srv.example.com"}]).
@@ -59,37 +57,41 @@
 		{?MODULE, test_server_request, []}}]}).
 
 -define(DIAMETER_FUNCTION,
-	{?SERVICE,
-	 [{handler, ergw_aaa_diameter},
-	  {'Origin-Host', ?'Origin-Host'},
-	  {'Origin-Realm', ?'Origin-Realm'},
-	  {transports, ?DIAMETER_TRANSPORTS}]}).
+	#{?SERVICE =>
+	      #{handler => ergw_aaa_diameter,
+		'Origin-Host' => ?'Origin-Host',
+		'Origin-Realm' => ?'Origin-Realm',
+		transports => ?DIAMETER_TRANSPORTS}}).
 
 -define(DIAMETER_RO_CONFIG,
-	[{function, ?SERVICE},
-	 {'Destination-Realm', <<"test-srv.example.com">>}]).
-
--define(DIAMETER_SERVICE_OPTS, []).
+	#{function => ?SERVICE,
+	  'Destination-Realm' => <<"test-srv.example.com">>}).
 
 -define(CONFIG,
-	[{rate_limits,
-	  [{default, [{outstanding_requests, 10}, {rate, 10}]}]},
-	 {functions, [?DIAMETER_FUNCTION]},
-	 {handlers,
-	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_ro, ?DIAMETER_RO_CONFIG}]},
-	 {services,
-	  [{'Default', [{handler, ergw_aaa_static}]},
-	   {'Ro', [{handler, ergw_aaa_ro}]}]},
-	 {apps,
-	  [{default,
-	    [{session, ['Default']},
-	     {procedures,
-	      [{authenticate, []}, {authorize, []}, {start, []},
-	       {interim, []}, {stop, []},
-	       {{gy, 'CCR-Initial'}, [{'Ro', []}]},
-	       {{gy, 'CCR-Update'}, [{'Ro', []}]},
-	       {{gy, 'CCR-Terminate'}, [{'Ro', []}]}]}]}]}]).
+	#{rate_limits =>
+	      #{<<"default">> => #{outstanding_requests => 10, rate => 10}},
+	  functions => ?DIAMETER_FUNCTION,
+	  handlers =>
+	      #{ergw_aaa_static => ?STATIC_CONFIG,
+		ergw_aaa_ro => ?DIAMETER_RO_CONFIG},
+	  services =>
+	      #{<<"Default">> =>
+		    #{handler => 'ergw_aaa_static'},
+		<<"Ro">> =>
+		    #{handler => 'ergw_aaa_ro'}},
+	  apps =>
+	      #{<<"default">> =>
+		    #{init => [<<"Default">>],
+		      authenticate => [],
+		      authorize => [],
+		      start => [],
+		      interim => [],
+		      stop => [],
+		      {gy, 'CCR-Initial'} => [<<"Ro">>],
+		      {gy, 'CCR-Update'} => [<<"Ro">>],
+		      {gy, 'CCR-Terminate'} => [<<"Ro">>]}
+	       }
+	 }).
 
 %%%===================================================================
 %%% Common Test callbacks
@@ -103,21 +105,30 @@ all() -> [default_filter,
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
+
     application:load(ergw_aaa),
-    [application:set_env(ergw_aaa, Key, Opts)
-     || {Key, Opts} <- ?CONFIG],
-    init_test_info_ets(),
+    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(?CONFIG)],
+
     meck_init(Config),
-    TestTransports = [[{transport_module, diameter_tcp},
-		       {capabilities, [{'Origin-Host', Host}]},
-		       {transport_config, [{reuseaddr, true}, {ip, IP}]}]
-		      || {IP, Host} <- ?TEST_SERVER_TRANSPORTS],
-    diameter_test_server:start(?TEST_SERVER_CALLBACK_OVERRIDE,
-			       TestTransports),
+
+    init_test_info_ets(),
+
+    TestTransports =
+	[[{transport_module, diameter_tcp},
+	  {capabilities, [{'Origin-Host', Host}]},
+	  {transport_config,
+	   [{reuseaddr, true}, {ip, IP}]}]
+	 || {IP, Host} <- ?TEST_SERVER_TRANSPORTS],
+
+    diameter_test_server:start(?TEST_SERVER_CALLBACK_OVERRIDE, TestTransports),
     {ok, _} = application:ensure_all_started(ergw_aaa),
+
     case wait_for_diameter(?SERVICE, 10) of
-      ok -> Config;
-      Other -> end_per_suite(Config), {skip, Other}
+	ok ->
+	    Config;
+	Other ->
+	    end_per_suite(Config),
+	    {skip, Other}
     end.
 
 end_per_suite(Config) ->
@@ -129,7 +140,7 @@ end_per_suite(Config) ->
 
 init_per_testcase(Config) -> meck_reset(Config), Config.
 
-end_per_testcase(Config) -> 
+end_per_testcase(Config) ->
     meck_validate(Config),
     ok.
 
@@ -162,13 +173,13 @@ simple_root(_Config) ->
 
     ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
     ?match([_], maps:get('User-Name', Before, undefined)),
-    
+
     ?equal(undefined, maps:get('3GPP-IMSI', After, undefined)),
     ?equal(undefined, maps:get('User-Name', After, undefined)),
     ok.
 
 %%====================================================================
-%% Simple path filter to remove 
+%% Simple path filter to remove
 %% 'Service-Information' -> 'PS-Information' -> '3GPP-MS-TimeZone'
 %% and '3GPP-IMSI'
 %%====================================================================
@@ -186,11 +197,11 @@ simple_path(_Config) ->
     ?equal(undefined, maps:get('3GPP-MS-TimeZone', PSInfoAfter, undefined)),
     ?equal(undefined, maps:get('3GPP-IMSI', After, undefined)),
     ok.
-    
+
 
 %%====================================================================
-%% Conditionally filter multiple instance AVP : delete the IMSI 
-%% 'Subscription-Id' instance, based on the 'Subscription-Id-Type' 
+%% Conditionally filter multiple instance AVP : delete the IMSI
+%% 'Subscription-Id' instance, based on the 'Subscription-Id-Type'
 %% value = 1 and leave '3GPP-IMSI'
 %%====================================================================
 conditional_instance(_Config) ->
@@ -201,12 +212,12 @@ conditional_instance(_Config) ->
 
     ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
     ?equal(2, length(maps:get('Subscription-Id', Before))),
-    
+
     ?match(#{'3GPP-IMSI' := [_], 'Subscription-Id' := [#{'Subscription-Id-Type' := 0}]}, After),
     ok.
 
 %%====================================================================
-%% Ignore single element path with matching condition list in the root 
+%% Ignore single element path with matching condition list in the root
 %% AVP structure. i.e. send the message with the other paths filtered
 %%====================================================================
 ignore_single_condition_path(_Config) ->
@@ -218,7 +229,7 @@ ignore_single_condition_path(_Config) ->
 
     ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
     ?equal(2, length(maps:get('Subscription-Id', Before))),
-    
+
     ?match(#{'3GPP-IMSI' := [_], 'Subscription-Id' := [#{'Subscription-Id-Type' := 0}]}, After),
     ok.
 
@@ -385,7 +396,7 @@ get_diameter_session_handler(SId) ->
 delete_diameter_session_handler(SId) ->
     ets:delete(?MODULE, {diameter_session_handler, SId}).
 
-set_avp_filter(SId, Filter) -> 
+set_avp_filter(SId, Filter) ->
     ets:insert(?MODULE,
 	       {{diameter_session_avp_filter, SId}, Filter}).
 

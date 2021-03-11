@@ -59,11 +59,11 @@
 -define(DIAMETER_APP_ID_NASREQ, ?DIAMETER_DICT_NASREQ:id()).
 -define(DEFAULT_TERMINATION_CAUSE, ?'TERMINATION-CAUSE_PORT_ERROR').
 
--define(DefaultOptions, [{function, "undefined"},
+-define(DefaultOptions, [{function, undefined},
 			 {accounting, coupled},
 			 {'Destination-Realm', undefined},
 			 {avp_filter, [['Framed-Pool'], ['Framed-IPv6-Pool']]},
-			 {termination_cause_mapping, []}]).
+			 {termination_cause_mapping, #{}}]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
@@ -294,7 +294,7 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
-validate_option(function, Value) when is_atom(Value) ->
+validate_option(function, Value) when is_binary(Value) ->
     Value;
 validate_option(accounting, coupled = Value) ->
     Value;
@@ -314,7 +314,7 @@ validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
 validate_option_error(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% internal helpers
