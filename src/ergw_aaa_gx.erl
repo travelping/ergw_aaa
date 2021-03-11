@@ -53,9 +53,9 @@
 -define(DIAMETER_APP_ID_GX, ?DIAMETER_DICT_GX:id()).
 -define(API, gx).
 
--define(DefaultOptions, [{function, "undefined"},
+-define(DefaultOptions, [{function, undefined},
 			 {'Destination-Realm', undefined},
-			 {termination_cause_mapping, []}]).
+			 {termination_cause_mapping, #{}}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -239,7 +239,7 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
-validate_option(function, Value) when is_atom(Value) ->
+validate_option(function, Value) when is_binary(Value) ->
     Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];
@@ -261,7 +261,7 @@ validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
 validate_option_error(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% internal helpers

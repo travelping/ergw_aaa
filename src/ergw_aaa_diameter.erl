@@ -126,7 +126,7 @@ validate_capability(Opt, Value) ->
     validate_capability_error(Opt, Value).
 
 validate_capability_error(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 validate_function(Opts) ->
     ergw_aaa_config:validate_options(fun validate_function/2, Opts,
@@ -143,7 +143,7 @@ validate_function(Opt, Value) ->
     validate_function_error(Opt, Value).
 
 validate_function_error(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 validate_transport(connect_to, Value) when is_record(Value, diameter_uri) ->
     Value;
@@ -158,7 +158,7 @@ validate_transport(K, V)
     validate_capability(K, V);
 validate_transport(fragment_timer, Value) when Value =:= infinity ->
     Value;
-validate_transport(fragment_timer, Value) 
+validate_transport(fragment_timer, Value)
   when is_integer(Value), Value >= 0, Value =< 16#FFFFFFFF ->
     Value;
 validate_transport(recbuf, Value) when is_integer(Value), Value >= 16*1024 ->
@@ -175,17 +175,17 @@ validate_transport(Opt, Value) ->
     validate_transport_error(Opt, Value).
 
 validate_transport_error(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
     ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING, map);
 validate_termination_cause_mapping(Opts) ->
-    throw({error, {termination_cause_mapping, Opts}}).
+    erlang:error(badarg, [termination_cause_mapping, Opts]).
 
 validate_termination_cause_mapping(Opt, Value) when is_atom(Opt), is_integer(Value) ->
     Value;
 validate_termination_cause_mapping(Opt, Value) ->
-    throw({error, {termination_cause_mapping, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% internal helpers

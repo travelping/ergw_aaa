@@ -7,6 +7,8 @@
 
 -module(ergw_aaa_test_lib).
 
+-compile({parse_transform, cut}).
+
 -define(ERGW_AAA_NO_IMPORTS, true).
 
 -export([meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1]).
@@ -45,20 +47,17 @@ meck_validate(Config) ->
 
 set_cfg_value(Key, Value) when is_function(Value) ->
     Value(Key);
-set_cfg_value(Key, Value) ->
-    {Key, Value}.
+set_cfg_value(_, Value) ->
+    Value.
 
-set_cfg_value([Key], Value, Config) when is_boolean(Value) ->
-    lists:keystore(Key, 1, proplists:delete(Key, Config), set_cfg_value(Key, Value));
-set_cfg_value([{Key, Pos}], Value, Config) ->
-    Tuple = lists:keyfind(Key, 1, Config),
-    lists:keystore(Key, 1, Config, setelement(Pos, Tuple, set_cfg_value(Key, Value)));
+set_cfg_value([{Key, Pos}], Value, Config) when is_map_key(Key, Config) ->
+    Tuple = maps:get(Key, Config),
+    maps:put(Key, setelement(Pos, Tuple, set_cfg_value(Key, Value)), Config);
 set_cfg_value([Key], Value, Config) ->
-    lists:keystore(Key, 1, Config, set_cfg_value(Key, Value));
-set_cfg_value([{Key, Pos} | T], Value, Config) ->
-    Tuple = lists:keyfind(Key, 1, Config),
-    lists:keystore(Key, 1, Config,
-		   setelement(Pos, Tuple, set_cfg_value(T, Value, element(Pos, Tuple))));
+    maps:put(Key, set_cfg_value(Key, Value), Config);
+set_cfg_value([{Key, Pos} | T], Value, Config) when is_map_key(Key, Config) ->
+    Tuple = maps:get(Key, Config),
+    maps:put(Key, setelement(Pos, Tuple, set_cfg_value(T, Value, element(Pos, Tuple))), Config);
 set_cfg_value([Pos | T], Value, Config)
   when is_integer(Pos), is_tuple(Config) ->
     setelement(Pos, Config, set_cfg_value(T, Value, element(Pos, Config)));
@@ -68,8 +67,7 @@ set_cfg_value([Pos | T], Value, Config)
     Arr1 = array:set(Pos - 1, set_cfg_value(T, Value, array:get(Pos - 1, Arr0)), Arr0),
     array:to_list(Arr1);
 set_cfg_value([H | T], Value, Config) ->
-    Prop = proplists:get_value(H, Config, []),
-    lists:keystore(H, 1, Config, {H, set_cfg_value(T, Value, Prop)}).
+    maps:put(H, set_cfg_value(T, Value, maps:get(H, Config, #{})), Config).
 
 %% add_cfg_value([Key], Value, Config) ->
 %%     ct:pal("Cfg: ~p", [[{Key, Value} | Config]]),

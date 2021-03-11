@@ -24,63 +24,57 @@
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_gx).
--define(SERVICE, ergw_aaa_gx).
+-define(SERVICE, <<"ergw_aaa_gx">>).
 -define(API, gx).
 
 -define('Origin-Host', <<"127.0.0.1">>).
 -define('Origin-Realm', <<"example.com">>).
 
 -define(STATIC_CONFIG,
-	[{'NAS-Identifier',        <<"NAS">>},
-	 {'Framed-Protocol',       'PPP'},
-	 {'Service-Type',          'Framed-User'}]).
+	#{'NAS-Identifier'       => <<"NAS">>,
+	  'Framed-Protocol'      => 'PPP',
+	  'Service-Type'         => 'Framed-User'}).
 
 -define(DIAMETER_TRANSPORT,
-	[
-	 {connect_to, <<"aaa://127.0.0.1">>}
-	]).
+	#{connect_to => <<"aaa://127.0.0.1">>}).
+
 -define(DIAMETER_FUNCTION,
-	{?SERVICE,
-	 [{handler, ergw_aaa_diameter},
-	  {'Origin-Host', ?'Origin-Host'},
-	  {'Origin-Realm', ?'Origin-Realm'},
-	  {transports, [?DIAMETER_TRANSPORT]}
-	 ]}).
+	#{?SERVICE =>
+	      #{handler => ergw_aaa_diameter,
+		'Origin-Host' => ?'Origin-Host',
+		'Origin-Realm' => ?'Origin-Realm',
+		transports => [?DIAMETER_TRANSPORT]}}).
+
 -define(DIAMETER_CONFIG,
-	[{function, ?SERVICE},
-	 {'Destination-Realm', <<"test-srv.example.com">>}]).
+	#{function => ?SERVICE,
+	  'Destination-Realm' => <<"test-srv.example.com">>}).
 
 -define(CONFIG,
-	[{functions, [?DIAMETER_FUNCTION]},
-	 {handlers,
-	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_nasreq, ?DIAMETER_CONFIG},
-	   {ergw_aaa_gx, ?DIAMETER_CONFIG}
-	  ]},
-	 {services,
-	  [{'Default',
-	    [{handler, 'ergw_aaa_static'}]},
-	   {'NASREQ',
-	    [{handler, 'ergw_aaa_nasreq'}]},
-	   {'Gx',
-	    [{handler, 'ergw_aaa_gx'}]}
-	  ]},
-
-	 {apps,
-	  [{default,
-	    [{session, ['Default']},
-	     {procedures, [{authenticate, []},
-			   {authorize, []},
-			   {start, ['NASREQ']},
-			   {interim, ['NASREQ']},
-			   {stop, ['NASREQ']},
-			   {{gx, 'CCR-Initial'},   ['Gx']},
-			   {{gx, 'CCR-Update'},    ['Gx']},
-			   {{gx, 'CCR-Terminate'}, ['Gx']}
-			  ]}
-	    ]}
-	  ]}
-	]).
+	#{functions => ?DIAMETER_FUNCTION,
+	  handlers =>
+	      #{ergw_aaa_static => ?STATIC_CONFIG,
+		ergw_aaa_nasreq => ?DIAMETER_CONFIG,
+		ergw_aaa_gx => ?DIAMETER_CONFIG},
+	  services =>
+	      #{<<"Default">> =>
+		    #{handler => 'ergw_aaa_static'},
+		<<"NASREQ">> =>
+		    #{handler => 'ergw_aaa_nasreq'},
+		<<"Gx">> =>
+		    #{handler => 'ergw_aaa_gx'}
+	       },
+	  apps =>
+	      #{<<"default">> =>
+		    #{init => [<<"Default">>],
+		      authenticate => [],
+		      authorize => [],
+		      start => [<<"NASREQ">>],
+		      interim => [<<"NASREQ">>],
+		      stop => [<<"NASREQ">>],
+		      {gx, 'CCR-Initial'}   => [<<"Gx">>],
+		      {gx, 'CCR-Update'}    => [<<"Gx">>],
+		      {gx, 'CCR-Terminate'} => [<<"Gx">>]}}
+	 }).
 
 %%%===================================================================
 %%% Common Test callbacks
@@ -99,7 +93,7 @@ init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
 
     application:load(ergw_aaa),
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
+    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(?CONFIG)],
 
     meck_init(Config),
 

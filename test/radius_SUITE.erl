@@ -18,44 +18,41 @@
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_radius).
--define(SERVICE, 'aaa-test').
+-define(SERVICE, <<"aaa-test">>).
 
 -define(STATIC_CONFIG,
-	[{'NAS-Identifier',        <<"NAS">>},
-	 {'Framed-Protocol',       'PPP'},
-	 {'Service-Type',          'Framed-User'}]).
+	#{'NAS-Identifier'       => <<"NAS">>,
+	  'Framed-Protocol'      => 'PPP',
+	  'Service-Type'         => 'Framed-User'}).
 
 -define(RADIUS_CONFIG,
-	[{server, {{127,0,0,1}, 1812, <<"secret">>}}]).
+	#{server => {{127,0,0,1}, 1812, <<"secret">>}}).
 
 -define(CONFIG,
-	[{rate_limits,
-	  [{default, [{outstanding_requests, 10}, {rate, 1000}]}]},
-	 {functions, []},
-	 {handlers,
-	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_radius, ?RADIUS_CONFIG}
-	  ]},
-	 {services,
-	  [{'Default', [{handler, 'ergw_aaa_static'}]},
-	   {'RADIUS-Auth', [{handler, 'ergw_aaa_radius'},
-			    {server, {{127,0,0,1}, 1812, <<"secret">>}}]},
-	   {'RADIUS-Acct', [{handler, 'ergw_aaa_radius'},
-			    {server, {{127,0,0,1}, 1813, <<"secret">>}}]}
-	  ]},
-
-	 {apps,
-	  [{default,
-	    [{session, ['Default']},
-	     {procedures, [{authenticate, ['RADIUS-Auth']},
-			   {authorize,    ['RADIUS-Auth']},
-			   {start,   ['RADIUS-Acct']},
-			   {interim, ['RADIUS-Acct']},
-			   {stop,    ['RADIUS-Acct']}
-			  ]}
-	    ]}
-	  ]}
-	]).
+	#{rate_limits =>
+	      #{<<"default">> => #{outstanding_requests => 10, rate => 1000}},
+	  handlers =>
+	      #{ergw_aaa_static => ?STATIC_CONFIG,
+		ergw_aaa_radius => ?RADIUS_CONFIG},
+	  services =>
+	      #{<<"Default">> =>
+		    #{handler => 'ergw_aaa_static'},
+		<<"RADIUS-Auth">> =>
+		    #{handler => 'ergw_aaa_radius',
+		      server =>  {{127,0,0,1}, 1812, <<"secret">>}},
+		<<"RADIUS-Acct">> =>
+		    #{handler => 'ergw_aaa_radius',
+		      server => {{127,0,0,1}, 1813, <<"secret">>}}},
+	  apps =>
+	      #{<<"default">> =>
+		    #{init         => [<<"Default">>],
+		      authenticate => [<<"RADIUS-Auth">>],
+		      authorize    => [<<"RADIUS-Auth">>],
+		      start        => [<<"RADIUS-Acct">>],
+		      interim      => [<<"RADIUS-Acct">>],
+		      stop         => [<<"RADIUS-Acct">>]}
+	       }
+	 }).
 
 %%%===================================================================
 %%% Common Test callbacks
@@ -74,7 +71,7 @@ all() ->
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
     application:load(ergw_aaa),
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
+    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(?CONFIG)],
     eradius_test_handler:start(),
 
     meck_init(Config),
@@ -325,7 +322,7 @@ set_service_pars(NewOpts) ->
     Apps =
 	lists:foldl(
 	  fun(P, A) ->
-		  maps_update_with([default, procedures, P], Upd, A)
+		  maps_update_with([<<"default">>, P], Upd, A)
 	  end, Apps0, [authenticate, start, interim, stop]),
     application:set_env(ergw_aaa, apps, Apps),
     Apps0.

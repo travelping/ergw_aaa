@@ -50,7 +50,7 @@
     {conn_error, 10},
     {rate_limit, 10},
     {ocs_hold_end, 10},
-    {peer_reject, 10} 
+    {peer_reject, 10}
 ]).
 
 -define(DefaultOptions, [{server, undefined},
@@ -58,7 +58,7 @@
 			 {retries, 3},
 			 {avp_filter, []},
 			 {vendor_dicts, []},
-			 {termination_cause_mapping, []}
+			 {termination_cause_mapping, #{}}
 			]).
 
 %%===================================================================
@@ -195,21 +195,21 @@ validate_ip(Opt, Host) when is_list(Host) ->
 	    IP;
 	_ ->
 	    ?LOG(error, "can't resolve remote RADIUS server name '~s'", [Host]),
-	    throw({error, {options, {Opt, Host}}})
+	    erlang:error(badarg, [Opt, Host])
     end;
 validate_ip(_Opt, {_,_,_,_} = IP) ->
     IP;
 validate_ip(_Opt, {_,_,_,_,_,_,_,_} = IP) ->
     IP;
 validate_ip(Opt, IP) ->
-    throw({error, {options, {Opt, IP}}}).
+    erlang:error(badarg, [Opt, IP]).
 
 validate_server_spec(Opt, {IP, Port, Secret} = Value)
   when is_integer(Port), is_binary(Secret) ->
     validate_ip(Opt, IP),
     Value;
 validate_server_spec(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 validate_avp_filters(Id, M)
   when is_integer(Id), Id > 0, Id < 256 ->
@@ -223,12 +223,12 @@ validate_avp_filters({vendor, Vendor} = Attr, M)
   when is_integer(Vendor), Vendor > 0, Vendor =< 16#ffffffff ->
     M#{Attr => true};
 validate_avp_filters(Value, _) ->
-    throw({error, {options, {avp_filter, Value}}}).
+    erlang:error(badarg, [avp_filter, Value]).
 
 validate_vendor(?'Ituma' = Vendor) -> Vendor;
 validate_vendor(ituma) -> ?'Ituma';
 validate_vendor(Vendor) ->
-    throw({error, {options, {vendor_dicts, Vendor}}}).
+    erlang:error(badarg, [vendor_dicts, Vendor]).
 
 validate_option(server, Value) ->
     validate_server_spec(server, Value);
@@ -253,17 +253,17 @@ validate_option(vendor_dicts, Value) when is_list(Value) ->
 validate_option(termination_cause_mapping, Value) ->
     validate_termination_cause_mapping(Value);
 validate_option(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
     ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING, map);
 validate_termination_cause_mapping(Opts) ->
-    throw({error, {termination_cause_mapping, Opts}}).
+    erlang:error(badarg, [termination_cause_mapping, Opts]).
 
 validate_termination_cause_mapping(Opt, Value) when is_atom(Opt), is_integer(Value) ->
     Value;
 validate_termination_cause_mapping(Opt, Value) ->
-    throw({error, {termination_cause_mapping, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% Internal Helpers

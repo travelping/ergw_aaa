@@ -51,14 +51,14 @@
 -define(DIAMETER_APP_ID_RO, ?DIAMETER_DICT_RO:id()).
 -define(API, gy).
 
--define(DefaultOptions, [{function, "undefined"},
+-define(DefaultOptions, [{function, undefined},
 			 {'Destination-Realm', undefined},
 			 {'CC-Session-Failover', supported},
 			 {'Credit-Control-Failure-Handling', terminate},
 			 {answer_if_down, reject},
 			 {answer_if_timeout, reject},
 			 {avp_filter, [['3GPP-IMSI']]},
-			 {termination_cause_mapping, []}]).
+			 {termination_cause_mapping, #{}}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -272,7 +272,7 @@ handle_request(_Packet, _SvcName, {_PeerRef, _Caps} = _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
-validate_option(function, Value) when is_atom(Value) ->
+validate_option(function, Value) when is_binary(Value) ->
     Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];
@@ -291,11 +291,14 @@ validate_option('Credit-Control-Failure-Handling', Value)
     Value;
 validate_option(answers, Value) when is_map(Value) ->
     Value;
-validate_option(answer_if_down, Value) when is_atom(Value) ->
+validate_option(answer_if_down, Value)
+  when is_binary(Value); Value =:= reject ->
     Value;
-validate_option(answer_if_timeout, Value) when is_atom(Value) ->
+validate_option(answer_if_timeout, Value)
+  when is_binary(Value); Value =:= reject ->
     Value;
-validate_option(answer_if_rate_limit, Value) when is_atom(Value) ->
+validate_option(answer_if_rate_limit, Value)
+  when is_binary(Value); Value =:= reject ->
     Value;
 validate_option(tx_timeout, Value) when is_integer(Value) ->
     Value;
@@ -310,7 +313,7 @@ validate_option(Opt, Value) ->
     validate_option_error(Opt, Value).
 
 validate_option_error(Opt, Value) ->
-    throw({error, {options, {Opt, Value}}}).
+    erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% internal helpers

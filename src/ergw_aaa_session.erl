@@ -171,7 +171,7 @@ callback_mode() -> handle_event_function.
 init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
 
-    AppId = maps:get('AAA-Application-Id', SessionOpts, default),
+    AppId = maps:get('AAA-Application-Id', SessionOpts, <<"default">>),
     SessionId = ergw_aaa_session_seq:inc(AppId),
     MonRef = erlang:monitor(process, Owner),
 
@@ -414,13 +414,12 @@ services(init, App) ->
 	maps:fold(
 	  fun(_, Svcs, S0) ->
 		  lists:foldl(fun({Svc, _}, S1) -> S1#{Svc => #{}} end, S0, Svcs)
-	  end, #{}, maps:get(procedures, App, #{})),
-    Session = maps:get(session, App, []),
+	  end, #{}, maps:remove(init, App)),
+    Session = maps:get(init, App, []),
     {Keys, _} = lists:unzip(Session),
     Session ++ maps:to_list(maps:without(Keys, Procedures));
 services(Procedure, App) ->
-    Procedures = maps:get(procedures, App, #{}),
-    maps:get(Procedure, Procedures, []).
+    maps:get(Procedure, App, []).
 
 action(Procedure, Opts, #data{application = AppId} = Data) ->
     App = ergw_aaa_config:get_application(AppId),
@@ -439,7 +438,7 @@ pipeline(Procedure, DataIn, EventsIn, Opts, [Head|Tail]) ->
 
 step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
 					  session = Session0} = Data, Events, Opts)
-  when is_atom(Service) ->
+  when is_binary(Service) ->
     Svc = ergw_aaa_config:get_service(Service),
     StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),

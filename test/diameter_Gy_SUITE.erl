@@ -18,7 +18,7 @@
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_ro).
--define(SERVICE, 'diam-test').
+-define(SERVICE, <<"diam-test">>).
 -define(API, gy).
 -define(SET_TC_INFO(Name, Value), set_test_info(?FUNCTION_NAME, Name, Value)).
 -define(GET_TC_INFO(Name), get_test_info(?FUNCTION_NAME, Name)).
@@ -31,15 +31,15 @@
 -define('Origin-Realm', <<"example.com">>).
 
 -define(STATIC_CONFIG,
-	[{'NAS-Identifier',        <<"NAS">>},
-	 {'Framed-Protocol',       'PPP'},
-	 {'Service-Type',          'Framed-User'}]).
+	#{'NAS-Identifier'       => <<"NAS">>,
+	  'Framed-Protocol'      => 'PPP',
+	  'Service-Type'         => 'Framed-User'}).
 
 -define(DIAMETER_TRANSPORTS,
-	[[{connect_to, <<"aaa://127.0.10.10">>}],
-	 [{connect_to, <<"aaa://127.0.10.20">>}],
-	 [{connect_to, <<"aaa://127.0.10.30">>}],
-	 [{connect_to, <<"aaa://127.0.10.40">>}]]).
+	[#{connect_to => <<"aaa://127.0.10.10">>},
+	 #{connect_to => <<"aaa://127.0.10.20">>},
+	 #{connect_to => <<"aaa://127.0.10.30">>},
+	 #{connect_to => <<"aaa://127.0.10.40">>}]).
 
 -define(TEST_SERVER_TRANSPORTS,
 	[{{127, 0, 10, 10}, "server1.test-srv.example.com"},
@@ -51,66 +51,62 @@
 	#{diameter_gy => [{handle_request, {?MODULE, test_server_request, []}}]}).
 
 -define(DIAMETER_FUNCTION,
-	{?SERVICE,
-	 [{handler, ergw_aaa_diameter},
-	  {'Origin-Host', ?'Origin-Host'},
-	  {'Origin-Realm', ?'Origin-Realm'},
-	  {transports, ?DIAMETER_TRANSPORTS}
-	 ]}).
+	#{?SERVICE =>
+	      #{handler => ergw_aaa_diameter,
+		'Origin-Host' => ?'Origin-Host',
+		'Origin-Realm' => ?'Origin-Realm',
+		transports => ?DIAMETER_TRANSPORTS}}).
+
 -define(DIAMETER_RO_CONFIG,
-	[{function, ?SERVICE},
-	 {'Destination-Realm', <<"test-srv.example.com">>}]).
--define(DIAMETER_SERVICE_OPTS, []).
+	#{function => ?SERVICE,
+	  'Destination-Realm' => <<"test-srv.example.com">>}).
 
 -define(CONFIG,
-	[{rate_limits,
-	  [{default, [{outstanding_requests, 1}, {rate, 10}]}]},
-	 {functions, [?DIAMETER_FUNCTION]},
-	 {handlers,
-	  [{ergw_aaa_static, ?STATIC_CONFIG},
-	   {ergw_aaa_ro, ?DIAMETER_RO_CONFIG}
-	  ]},
-	 {services,
-	  [{'Default',
-	    [{handler, 'ergw_aaa_static'}]},
-	   {'Ro',
-	    [{handler, 'ergw_aaa_ro'},
-	     {answers,
-	      #{'OCS-Hold' => {ocs_hold,
-			       [#{'Envelope-Reporting' => [0],
-				  'Granted-Service-Unit' =>
-				      [#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
-				  'Rating-Group' => [1000],
-				  'Result-Code' => [2001],
-				  'Time-Quota-Threshold' => [60]}
-			       ]
-			      }
-	       }}
-	    ]}
-	  ]},
-
-	 {apps,
-	  [{default,
-	    [{session, ['Default']},
-	     {procedures, [{authenticate, []},
-			   {authorize, []},
-			   {start, []},
-			   {interim, []},
-			   {stop, []},
-			   {{gy, 'CCR-Initial'},   [{'Ro', [{tx_timeout, 1000},
-							    {max_retries, 2},
-							    {answer_if_down, 'OCS-Hold'},
-							    {answer_if_timeout, 'OCS-Hold'}
-							   ]}]},
-			   {{gy, 'CCR-Update'},    [{'Ro', [{tx_timeout, 1000},
-							    {answer_if_down, 'OCS-Hold'},
-							    {answer_if_timeout, 'OCS-Hold'}
-							   ]}]},
-			   {{gy, 'CCR-Terminate'}, [{'Ro', []}]}
-			  ]}
-	    ]}
-	  ]}
-	]).
+	#{rate_limits =>
+	      #{<<"default">> => #{outstanding_requests => 1, rate => 10}},
+	  functions => ?DIAMETER_FUNCTION,
+	  handlers =>
+	      #{ergw_aaa_static => ?STATIC_CONFIG,
+		ergw_aaa_ro => ?DIAMETER_RO_CONFIG},
+	  services =>
+	      #{<<"Default">> =>
+		    #{handler => 'ergw_aaa_static'},
+		<<"Ro">> =>
+		    #{handler => 'ergw_aaa_ro',
+		      answers =>
+			  #{<<"OCS-Hold">> =>
+				{ocs_hold,
+				 [#{'Envelope-Reporting' => [0],
+				    'Granted-Service-Unit' =>
+					[#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
+				    'Rating-Group' => [1000],
+				    'Result-Code' => [2001],
+				    'Time-Quota-Threshold' => [60]}
+				 ]
+				}
+			   }}
+		     },
+	  apps =>
+	      #{<<"default">> =>
+		    #{init => [<<"Default">>],
+		      authenticate => [],
+		      authorize => [],
+		      start => [],
+		      interim => [],
+		      stop => [],
+		      {gy, 'CCR-Initial'} =>
+			  [{<<"Ro">>, #{tx_timeout => 1000,
+					max_retries => 2,
+					answer_if_down => <<"OCS-Hold">>,
+					answer_if_timeout => <<"OCS-Hold">>}}],
+		      {gy, 'CCR-Update'} =>
+			  [{<<"Ro">>, #{tx_timeout => 1000,
+					answer_if_down => <<"OCS-Hold">>,
+					answer_if_timeout => <<"OCS-Hold">>}}],
+		      {gy, 'CCR-Terminate'} =>
+			  [<<"Ro">>]}
+	       }
+	 }).
 
 %%%===================================================================
 %%% Common Test callbacks
@@ -136,7 +132,7 @@ init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
 
     application:load(ergw_aaa),
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- ?CONFIG],
+    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(?CONFIG)],
 
     meck_init(Config),
 
