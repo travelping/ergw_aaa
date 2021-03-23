@@ -12,16 +12,6 @@
 -include_lib("common_test/include/ct.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
--define(error_option(Config),
-	?match({'EXIT', {badarg, _}}, (catch ergw_aaa_config:validate_config(Config)))).
-	%% ?match({error,{options, _}}, (catch ergw_aaa_config:validate_config(Config)))).
-
--define(ok_option(Config),
-	?match(#{}, (catch ergw_aaa_config:validate_config(Config)))).
-
--define(ok_set(Opt, Value), ?ok_option(set_cfg_value(Opt, Value, ?CONFIG))).
--define(error_set(Opt, Value), ?error_option(set_cfg_value(Opt, Value, ?CONFIG))).
-
 -define(bad(Fun), ?match({'EXIT', {badarg, _}}, (catch Fun))).
 -define(ok(Fun), ?match(#{}, (catch Fun))).
 

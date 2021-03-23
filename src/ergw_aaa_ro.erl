@@ -274,7 +274,7 @@ handle_request(_Packet, _SvcName, {_PeerRef, _Caps} = _Peer) ->
 
 validate_option(handler, ?MODULE) ->
     ?MODULE;
-validate_option(function, Value) when is_binary(Value) ->
+validate_option(function, Value) ->
     Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];

@@ -54,7 +54,7 @@
 		<<"Rf">> =>
 		    #{handler => 'ergw_aaa_rf'}},
 	  apps =>
-	    #{<<"default">> =>
+	    #{default =>
 		    #{init => [<<"Default">>],
 		      authenticate => [],
 		      authorize => [],

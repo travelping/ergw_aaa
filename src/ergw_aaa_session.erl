@@ -171,7 +171,7 @@ callback_mode() -> handle_event_function.
 init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
 
-    AppId = maps:get('AAA-Application-Id', SessionOpts, <<"default">>),
+    AppId = maps:get('AAA-Application-Id', SessionOpts, default),
     SessionId = ergw_aaa_session_seq:inc(AppId),
     MonRef = erlang:monitor(process, Owner),
 
@@ -376,8 +376,7 @@ update_session(Session, Events, #data{owner = Owner}) ->
     Owner ! {update_session, Session, Events}.
 
 exec(Procedure, SessionOpts, Opts0, #data{owner = Owner, session = SessionIn} = Data) ->
-    Opts = Opts0#{now => maps:get(now, Opts0, erlang:monotonic_time()),
-		  owner => Owner},
+    Opts = Opts0#{now => maps:get(now, Opts0, erlang:monotonic_time()), owner => Owner},
     Session0 = session_merge(SessionIn, SessionOpts),
     Session1 = maps:fold(fun handle_session_opts/3, Session0, Opts),
     Session2 = update_accounting_state(Procedure, Session1, Opts),
@@ -437,8 +436,7 @@ pipeline(Procedure, DataIn, EventsIn, Opts, [Head|Tail]) ->
     end.
 
 step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
-					  session = Session0} = Data, Events, Opts)
-  when is_binary(Service) ->
+					  session = Session0} = Data, Events, Opts) ->
     Svc = ergw_aaa:get_service(Service),
     StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),

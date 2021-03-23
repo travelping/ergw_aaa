@@ -63,7 +63,7 @@
 
 -define(CONFIG,
 	#{rate_limits =>
-	      #{<<"default">> => #{outstanding_requests => 1, rate => 10}},
+	      #{default => #{outstanding_requests => 1, rate => 10}},
 	  functions => ?DIAMETER_FUNCTION,
 	  handlers =>
 	      #{ergw_aaa_static => ?STATIC_CONFIG,
@@ -87,7 +87,7 @@
 			   }}
 		     },
 	  apps =>
-	      #{<<"default">> =>
+	      #{default =>
 		    #{init => [<<"Default">>],
 		      authenticate => [],
 		      authorize => [],

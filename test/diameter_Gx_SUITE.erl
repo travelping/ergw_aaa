@@ -64,7 +64,7 @@
 		    #{handler => 'ergw_aaa_gx'}
 	       },
 	  apps =>
-	      #{<<"default">> =>
+	      #{default =>
 		    #{init => [<<"Default">>],
 		      authenticate => [],
 		      authorize => [],

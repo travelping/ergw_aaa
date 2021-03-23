@@ -88,12 +88,12 @@ validate_option(product_name, Value)
 validate_option(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
-validate_function(Function, Opts)
-  when is_binary(Function), is_map(Opts) ->
+validate_function(_Function, Opts)
+  when is_map(Opts) ->
     Handler = maps:get(handler, Opts, undefined),
     validate_apply(Handler, ?FUNCTION_NAME, [Opts]);
 validate_function(Function, Opts)
-  when is_binary(Function), is_list(Opts) ->
+  when is_list(Opts) ->
     validate_function(Function, to_map(Opts));
 validate_function(Function, Opts) ->
     erlang:error(badarg, [Function, Opts]).
@@ -105,7 +105,7 @@ validate_handler(Handler, Opts) ->
     erlang:error(badarg, [Handler, Opts]).
 
 validate_service(Service, Opts)
-  when is_binary(Service), is_map(Opts) ->
+  when is_map(Opts) ->
     Handler = maps:get(handler, Opts, undefined),
     case ergw_aaa:get_handler(Handler) of
 	HandlerOpts when is_map(HandlerOpts) ->
@@ -114,16 +114,16 @@ validate_service(Service, Opts)
 	    erlang:error(badarg, [Service, {handler, Handler}])
     end;
 validate_service(Service, Opts)
-  when is_binary(Service), is_list(Opts) ->
+  when is_list(Opts) ->
     validate_service(Service, to_map(Opts));
 validate_service(Service, Opts) ->
     erlang:error(badarg, [Service, Opts]).
 
 validate_app(App, Procedures)
-  when is_binary(App), is_map(Procedures) ->
+  when is_map(Procedures) ->
     validate_options(validate_app_procs_option(App, _, _), Procedures, []);
 validate_app(App, Procedures)
-  when is_binary(App), is_list(Procedures) ->
+  when is_list(Procedures) ->
     validate_app(App, to_map(Procedures));
 validate_app(App, Procedures) ->
     erlang:error(badarg, [App, Procedures]).
@@ -135,21 +135,23 @@ validate_app_procs_option(App, Procedure, Services) ->
     erlang:error(badarg, [App, Procedure, Services]).
 
 validate_app_procs_svc(App, Procedure, Service)
-  when is_binary(Service) ->
+  when not is_tuple(Service) ->
     validate_app_procs_svc(App, Procedure, {Service, #{}});
 validate_app_procs_svc(App, Procedure, {Service, Opts})
-  when is_binary(Service), is_map(Opts) ->
+  when is_map(Opts) ->
     case ergw_aaa:get_service(Service) of
 	#{handler := Handler} = SvcOpts ->
 	    {Service, validate_apply(Handler, validate_procedure, [App, Procedure, Service, SvcOpts, Opts])};
 	_ ->
 	    erlang:error(badarg, [App, Procedure, Service])
     end;
+validate_app_procs_svc(App, Procedure, {Service, Opts})
+  when is_list(Opts) ->
+    validate_app_procs_svc(App, Procedure, {Service, to_map(Opts)});
 validate_app_procs_svc(App, Procedure, Service) ->
     erlang:error(badarg, [App, Procedure, Service]).
 
-validate_rate_limit(RateLimit, Opts)
-  when is_binary(RateLimit); RateLimit =:= default ->
+validate_rate_limit(RateLimit, Opts) when ?is_opts(Opts) ->
     validate_options(validate_rate_limit_option(RateLimit, _, _), Opts, ?DefaultRateLimit);
 validate_rate_limit(RateLimit, Opts) ->
     erlang:error(badarg, [RateLimit, Opts]).

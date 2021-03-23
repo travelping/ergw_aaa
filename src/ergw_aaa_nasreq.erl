@@ -296,7 +296,7 @@ handle_request(_Packet, _SvcName, _Peer) ->
 
 validate_option(handler, ?MODULE) ->
     ?MODULE;
-validate_option(function, Value) when is_binary(Value) ->
+validate_option(function, Value) ->
     Value;
 validate_option(accounting, coupled = Value) ->
     Value;
