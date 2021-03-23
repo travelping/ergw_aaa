@@ -44,7 +44,7 @@
 		    #{handler => 'ergw_aaa_radius',
 		      server => {{127,0,0,1}, 1813, <<"secret">>}}},
 	  apps =>
-	      #{<<"default">> =>
+	      #{default =>
 		    #{init         => [<<"Default">>],
 		      authenticate => [<<"RADIUS-Auth">>],
 		      authorize    => [<<"RADIUS-Auth">>],
@@ -324,7 +324,7 @@ set_service_pars(NewOpts) ->
     Apps =
 	lists:foldl(
 	  fun(P, A) ->
-		  maps_update_with([<<"default">>, P], Upd, A)
+		  maps_update_with([default, P], Upd, A)
 	  end, Apps0, [authenticate, start, interim, stop]),
     application:set_env(ergw_aaa, apps, Apps),
     Apps0.

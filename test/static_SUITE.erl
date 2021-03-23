@@ -87,7 +87,7 @@
 	       },
 
 	  apps =>
-	      #{<<"default">> =>
+	      #{default =>
 		    #{init => [<<"Default">>],
 		      authenticate => [],
 		      authorize => [],

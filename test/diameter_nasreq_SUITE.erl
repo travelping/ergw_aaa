@@ -52,7 +52,7 @@
 		<<"NASREQ">> =>
 		    #{handler => 'ergw_aaa_nasreq'}},
 	  apps =>
-	      #{<<"default">> =>
+	      #{default =>
 		    #{init => [<<"Default">>],
 		      authenticate => [<<"NASREQ">>],
 		      authorize => [<<"NASREQ">>],

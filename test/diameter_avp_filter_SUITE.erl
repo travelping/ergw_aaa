@@ -80,7 +80,7 @@
 		<<"Ro">> =>
 		    #{handler => 'ergw_aaa_ro'}},
 	  apps =>
-	      #{<<"default">> =>
+	      #{default =>
 		    #{init => [<<"Default">>],
 		      authenticate => [],
 		      authorize => [],

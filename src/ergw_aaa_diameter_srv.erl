@@ -305,8 +305,8 @@ get_peer(Host, Peers) ->
 		#{outstanding_requests := Capacity, rate := Rate} =
 		    if is_map_key(Host, RateLimits) ->
 			    maps:get(Host, RateLimits);
-		       is_map_key(<<"default">>, RateLimits) ->
-			    maps:get(<<"default">>, RateLimits);
+		       is_map_key(default, RateLimits) ->
+			    maps:get(default, RateLimits);
 		       true ->
 			    #{outstanding_requests => 50, rate => 50}
 		    end,
