@@ -86,13 +86,13 @@ initialize_service(_ServiceId, #{function := Function}) ->
     {ok, []}.
 
 validate_handler(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions).
 
 validate_service(_Service, HandlerOpts, Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts).
 
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts).
 
 invoke(_Service, init, Session, Events, _Opts, _State) ->
     {ok, Session, Events, #state{state = stopped}};
@@ -239,6 +239,8 @@ handle_request(_Packet, _SvcName, _Peer) ->
 %%% Options Validation
 %%%===================================================================
 
+validate_option(handler, ?MODULE) ->
+    ?MODULE;
 validate_option(function, Value) when is_binary(Value) ->
     Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
@@ -258,9 +260,6 @@ validate_option(avp_filter, Value) when is_list(Value) ->
 validate_option(termination_cause_mapping, Value) ->
     ergw_aaa_diameter:validate_termination_cause_mapping(Value);
 validate_option(Opt, Value) ->
-    validate_option_error(Opt, Value).
-
-validate_option_error(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================

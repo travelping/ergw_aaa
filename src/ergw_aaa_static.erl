@@ -34,13 +34,13 @@ initialize_service(_ServiceId, _Opts) ->
     {ok, []}.
 
 validate_handler(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, [], map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, []).
 
 validate_service(_Service, HandlerOpts, Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts).
 
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts).
 
 invoke(_Service, Procedure, Session, Events, #{answers := Answers, answer := Answer}, State) ->
     handle_response(Procedure, maps:get(Answer, Answers, #{}), Session, Events, State);

@@ -175,7 +175,7 @@ init([Owner, SessionOpts]) ->
     SessionId = ergw_aaa_session_seq:inc(AppId),
     MonRef = erlang:monitor(process, Owner),
 
-    App = ergw_aaa_config:get_application(AppId),
+    App = ergw_aaa:get_application(AppId),
     OriginHost = maps:get('Origin-Host', App, net_adm:localhost()),
     DiamSessionId =
 	iolist_to_binary(ergw_aaa_session_seq:diameter_session_id(OriginHost, SessionId)),
@@ -422,7 +422,7 @@ services(Procedure, App) ->
     maps:get(Procedure, App, []).
 
 action(Procedure, Opts, #data{application = AppId} = Data) ->
-    App = ergw_aaa_config:get_application(AppId),
+    App = ergw_aaa:get_application(AppId),
     Pipeline = services(Procedure, App),
     pipeline(Procedure, Data, [], Opts, Pipeline).
 
@@ -439,7 +439,7 @@ pipeline(Procedure, DataIn, EventsIn, Opts, [Head|Tail]) ->
 step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
 					  session = Session0} = Data, Events, Opts)
   when is_binary(Service) ->
-    Svc = ergw_aaa_config:get_service(Service),
+    Svc = ergw_aaa:get_service(Service),
     StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),
     Session = termination_cause_mapping(Session0, StepOpts),
