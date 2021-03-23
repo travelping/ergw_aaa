@@ -93,18 +93,20 @@ end_per_suite(_Config) ->
 
 init_per_group(Group, Config) ->
     application:load(ergw_aaa),
+    ergw_aaa_test_lib:clear_app_env(),
+
     AppConfig =
 	case Group of
 	    coupled -> set_cfg_value([handlers, ergw_aaa_nasreq, accounting], coupled, ?CONFIG);
 	    split   -> set_cfg_value([handlers, ergw_aaa_nasreq, accounting], split, ?CONFIG);
 	    _       -> ?CONFIG
 	end,
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(AppConfig)],
 
     meck_init(Config),
 
     diameter_test_server:start_nasreq(),
     {ok, _} = application:ensure_all_started(ergw_aaa),
+    ergw_aaa_test_lib:ergw_aaa_init(AppConfig),
 
     case wait_for_diameter(?SERVICE, 10) of
 	ok ->

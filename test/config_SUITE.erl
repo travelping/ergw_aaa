@@ -22,6 +22,9 @@
 -define(ok_set(Opt, Value), ?ok_option(set_cfg_value(Opt, Value, ?CONFIG))).
 -define(error_set(Opt, Value), ?error_option(set_cfg_value(Opt, Value, ?CONFIG))).
 
+-define(bad(Fun), ?match({'EXIT', {badarg, _}}, (catch Fun))).
+-define(ok(Fun), ?match(#{}, (catch Fun))).
+
 -define(STATIC_CONFIG,
 	#{'NAS-Identifier'        => <<"NAS-Identifier">>,
 	  'Acct-Interim-Interval' => 600,
@@ -66,11 +69,10 @@
 	#{connect_to => <<"aaa://127.0.0.1">>}).
 
 -define(DIAMETER_FUNCTION,
-	#{<<"diam-test">> =>
-	      #{handler        => ergw_aaa_diameter,
-		'Origin-Host'  => <<"127.0.0.1">>,
-		'Origin-Realm' => <<"test-clnt.example.com">>,
-		transports     => [?DIAMETER_TRANSPORT]}}).
+	#{handler        => ergw_aaa_diameter,
+	  'Origin-Host'  => <<"127.0.0.1">>,
+	  'Origin-Realm' => <<"test-clnt.example.com">>,
+	  transports     => [?DIAMETER_TRANSPORT]}).
 -define(DIAMETER_CONFIG,
 	#{function            => <<"diam-test">>,
 	  'Destination-Realm' => <<"test-srv.example.com">>}).
@@ -157,149 +159,316 @@ match_map(Match, Map, File, Line) ->
 %%%===================================================================
 
 all() ->
-    [config].
+    [toplevel,
+     rate_limits,
+     function,
+     static_handler,
+     radius_handler,
+     nasreq_handler,
+     rf_handler,
+     ro_handler,
+     service,
+     app
+    ].
 
-config() ->
-    [{doc, "Test the config validation"}].
-config(_Config)  ->
-    ?ok_option(?CONFIG),
-    ValidatedCfg = ergw_aaa_config:validate_config(?CONFIG),
-    ?ok_option(ValidatedCfg),
-    ?ok_set([vsn], "1.0.0"),
+init_per_testcase(_, Config) ->
+    ergw_aaa_test_lib:clear_app_env(),
+    Config.
 
-    ?ok_set([product_name], "PRODUCT"),
-    ?ok_set([product_name], <<"PRODUCT">>),
-    ?error_set([product_name], 1),
+end_per_testcase(_, _Config) ->
+    ok.
 
-    ?ok_set([rate_limits, <<"default">>], #{outstanding_requests => 50, rate => 50}),
-    ?ok_set([rate_limits, <<"default">>], #{outstanding_requests => 50}),
-    ?ok_set([rate_limits, <<"default">>], #{rate => 50}),
-    ?error_set([rate_limits, <<"default">>], #{outstanding_requests => atom, rate => 50}),
-    ?error_set([rate_limits, <<"default">>], #{outstanding_requests => 50, rate => atom}),
-    ?error_set([rate_limits, <<"default">>], #{outstanding_requests => 50, rate => -1}),
-    ?error_set([rate_limits, <<"default">>], #{outstanding_requests => 50, rate => 200000}),
-    ?error_set([rate_limits, <<"default">>], #{outstanding_requests => 0, rate => 50}),
+toplevel() ->
+    [{doc, "Test simple top level options"}].
+toplevel(_Config)  ->
+    Cfg = #{product_name => <<"PRODUCT">>},
+    ValF = fun(Opts) ->
+		   ergw_aaa_config:validate_options(
+		     fun ergw_aaa_config:validate_option/2, Opts, [])
+	   end,
 
-    ?error_set([handlers], invalid),
-    ?error_set([handlers, invalid_handler], []),
-    ?error_set([services], invalid),
+    ?ok(ValF(Cfg)),
+    ?ok(ValF(ValF(Cfg))),
+    ok.
 
-    %% make sure the handler config is passed through to the service
-    DefCfgMap = maps:put(handler, 'ergw_aaa_static', ?STATIC_CONFIG),
-    ?equal(DefCfgMap, get_cfg_value([services, <<"Default">>], ValidatedCfg)),
-    %% make sure the handler config is also passed through to the session
-    ?equal(?STATIC_CONFIG,
-	   get_cfg_value([apps, <<"RADIUS-Application">>, init, <<"Default">>], ValidatedCfg)),
+rate_limits() ->
+    [{doc, "Test rate limit options"}].
+rate_limits(_Config)  ->
+    Limit = [{outstanding_requests, 50}, {rate, 50}],
+    ValF = fun ergw_aaa_config:validate_rate_limit/2,
 
-    %% ?error_set([handlers, ergw_aaa_static, invalid_option], []),
-    %% ?error_set([handlers, ergw_aaa_static, shared_secret], invalid_secret),
-    ?ok_set([handlers, ergw_aaa_static], #{}),
-    %% ?ok_set([handlers, ergw_aaa_static, shared_secret], <<"secret">>),
+    ?ok(ValF(default, Limit)),
+    ?ok(ValF(default, ValF(default, Limit))),
 
-    ?error_set([handlers, ergw_aaa_radius], #{}),
-    ?error_set([handlers, ergw_aaa_radius, invalid_option], []),
-    ?error_set([handlers, ergw_aaa_radius, server], invalid_id),
-    ?error_set([handlers, ergw_aaa_radius, server], invalid_id),
-    ?error_set([handlers, ergw_aaa_radius, server],
-	       {"undefined.example.net",1812,<<"secret">>}),
-    ?error_set([handlers, ergw_aaa_radius, server],
-	       {invalid_ip,1812,<<"secret">>}),
-    ?error_set([handlers, ergw_aaa_radius, server],
-	       {{127,0,0,1},invalid_port,<<"secret">>}),
-    ?error_set([handlers, ergw_aaa_radius, server],
-	       {{127,0,0,1},1812,invalid_secret}),
-    ?error_set([handlers, ergw_aaa_radius, async], invalid),
-    ?error_set([handlers, ergw_aaa_radius, retries], invalid),
-    ?error_set([handlers, ergw_aaa_radius, timeout], invalid),
+    ?ok(ValF(default, [])),
+    ?ok(ValF(default, [{outstanding_requests, 50}])),
+    ?ok(ValF(default, [{rate, 50}])),
 
-    ?ok_set([handlers, ergw_aaa_radius, server],
-	    {"localhost",1812,<<"secret">>}),
-    ?ok_set([handlers, ergw_aaa_radius, async], true),
-    ?ok_set([handlers, ergw_aaa_radius, async], false),
-    ?ok_set([handlers, ergw_aaa_radius, retries], 1),
-    ?ok_set([handlers, ergw_aaa_radius, timeout], 1000),
+    ?bad(ValF(default, [{rate, 50}, {rate, 50}])),
+    ?bad(ValF(default, [{outstanding_requests, invalid}])),
+    ?bad(ValF(default, [{rate, invalid}])),
 
-    ?ok_set([handlers, ergw_aaa_radius, vendor_dicts], []),
-    ?ok_set([handlers, ergw_aaa_radius, vendor_dicts], [ituma]),
-    ?ok_set([handlers, ergw_aaa_radius, vendor_dicts], [52315]),
-    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], [atom]),
-    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], atom),
-    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], 52315),
-    ?error_set([handlers, ergw_aaa_radius, vendor_dicts], ituma),
+    ?bad(ValF(default, [{rate, 0}])),
+    ?bad(ValF(default, [{rate, 100000}])),
+    ok.
 
-    ?error_set([services, <<"RADIUS-Service">>, handler], invalid_handler),
+function() ->
+    [{doc, "Test function options"}].
+function(_Config)  ->
+    Function = ?DIAMETER_FUNCTION,
+    ValF = fun ergw_aaa_config:validate_function/2,
 
-    ?error_set([services, <<"RADIUS-Test-Service">>], ?RADIUS_AUTH_CONFIG),
-    ?ok_set([services, <<"RADIUS-Test-Service">>],
-	     maps:put(handler, 'ergw_aaa_radius', ?RADIUS_AUTH_CONFIG)),
+    ?ok(ValF(<<"test">>, Function)),
+    ?ok(ValF(<<"test">>, ValF(<<"test">>, Function))),
 
-    %% make sure the handler config is passed through to the service
-    RadCfgMap = maps:put(handler, 'ergw_aaa_radius', ?RADIUS_ACCT_CONFIG),
-    ?equal(RadCfgMap, get_cfg_value([services, <<"RADIUS-Service">>], ValidatedCfg)),
-    %% make sure the handler config is also passed through to the session
-    ?equal(maps:merge(?RADIUS_SERVICE_OPTS, ?RADIUS_AUTH_CONFIG),
-	   get_cfg_value([apps, <<"RADIUS-Application">>,
-			  authenticate, <<"RADIUS-Service">>], ValidatedCfg)),
+    ?bad(ValF(<<"test">>, [])),
+    ?bad(ValF(<<"test">>, set_cfg_value([invalid_option], [], Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value(['Origin-Host'], invalid_host, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value(['Origin-Host'], <<"undefined.example.net">>, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value(['Origin-Realm'], invalid_realm, Function))),
 
-    ?error_set([functions, <<"diam-test">>], #{}),
-    ?error_set([functions, <<"diam-test">>, invalid_option], []),
-    ?error_set([functions, <<"diam-test">>, 'Origin-Host'], invalid_host),
-    ?error_set([functions, <<"diam-test">>, 'Origin-Host'], <<"undefined.example.net">>),
-    ?error_set([functions, <<"diam-test">>, 'Origin-Realm'], invalid_realm),
-
-    ?error_set([functions, <<"diam-test">>, transports], []),
-    ?error_set([functions, <<"diam-test">>, transports], {}),
-    ?error_set([functions, <<"diam-test">>, transports, 1, connect_to], invalid_uri),
-    ?error_set([functions, <<"diam-test">>, transports, 1, connect_to], <<"http://example.com:12345">>),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports], [], Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports], {}, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, connect_to], invalid_uri, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, connect_to], <<"http://example.com:12345">>, Function))),
 
     % transport options
-	?ok_set([functions, <<"diam-test">>, transports, 1, fragment_timer], 200),
-	?ok_set([functions, <<"diam-test">>, transports, 1, recbuf], 424242),
-    ?ok_set([functions, <<"diam-test">>, transports, 1, sndbuf], 424242),
-    ?ok_set([functions, <<"diam-test">>, transports, 1, unordered], false),
-    ?ok_set([functions, <<"diam-test">>, transports, 1, reuseaddr], false),
-    ?ok_set([functions, <<"diam-test">>, transports, 1, nodelay], false),
-	?error_set([functions, <<"diam-test">>, transports, 1, fragment_timer], invalid),
-    ?error_set([functions, <<"diam-test">>, transports, 1, recbuf], invalid),
-    ?error_set([functions, <<"diam-test">>, transports, 1, recbuf], 13),
-    ?error_set([functions, <<"diam-test">>, transports, 1, sndbuf], invalid),
-    ?error_set([functions, <<"diam-test">>, transports, 1, sndbuf], 13),
-    ?error_set([functions, <<"diam-test">>, transports, 1, unordered], invalid),
-    ?error_set([functions, <<"diam-test">>, transports, 1, reuseaddr], invalid),
-    ?error_set([functions, <<"diam-test">>, transports, 1, nodelay], invalid),
+    ?ok(ValF(<<"test">>, set_cfg_value([transports, 1, fragment_timer], 200, Function))),
+    ?ok(ValF(<<"test">>, set_cfg_value([transports, 1, recbuf], 424242, Function))),
+    ?ok(ValF(<<"test">>, set_cfg_value([transports, 1, sndbuf], 424242, Function))),
+    ?ok(ValF(<<"test">>, set_cfg_value([transports, 1, unordered], false, Function))),
+    ?ok(ValF(<<"test">>, set_cfg_value([transports, 1, reuseaddr], false, Function))),
+    ?ok(ValF(<<"test">>, set_cfg_value([transports, 1, nodelay], false, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, fragment_timer], invalid, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, recbuf], invalid, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, recbuf], 13, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, sndbuf], invalid, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, sndbuf], 13, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, unordered], invalid, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, reuseaddr], invalid, Function))),
+    ?bad(ValF(<<"test">>, set_cfg_value([transports, 1, nodelay], invalid, Function))),
+    ok.
 
-    ?error_set([handlers, ergw_aaa_nasreq], #{}),
-    ?error_set([handlers, ergw_aaa_nasreq, invalid_option], []),
-    ?error_set([handlers, ergw_aaa_nasreq, accounting], []),
-    ?error_set([handlers, ergw_aaa_nasreq, avp_filter], invalid),
-    ?ok_set([handlers, ergw_aaa_nasreq, accounting], split),
-    ?ok_set([handlers, ergw_aaa_nasreq, accounting], coupled),
-    ?ok_set([handlers, ergw_aaa_nasreq, avp_filter], ['3GPP-IMSI', ['3GPP-MSISDN']]),
+static_handler() ->
+    [{doc, "Test static handler options"}].
+static_handler(_Config)  ->
+    Cfg = ?STATIC_CONFIG,
+    ValF = fun(Opts) -> ergw_aaa_config:validate_handler(ergw_aaa_static, Opts) end,
 
-    ?error_set([services, <<"DIAMETER-Service">>, handler], invalid_handler),
+    ?ok(ValF(Cfg)),
+    ?ok(ValF(ValF(Cfg))),
 
-    ?error_set([services, <<"DIAMETER-Test-Service">>], ?DIAMETER_CONFIG),
-    ?ok_set([services, <<"DIAMETER-Test-Service">>],
-	    maps:put(handler, 'ergw_aaa_nasreq', ?DIAMETER_CONFIG)),
+    ?ok(ValF(#{})),
+    ?ok(ValF([])),
 
-    %% make sure the handler config is passed through to the service
-    ?equal(maps:get(function, ?DIAMETER_CONFIG),
-	   get_cfg_value([services, <<"DIAMETER-Service">>, function], ValidatedCfg)),
-    %% make sure the handler config is also passed through to the session
-    ?match_map(maps:merge(?DIAMETER_CONFIG, ?DIAMETER_SERVICE_OPTS),
-	       get_cfg_value([apps, <<"DIAMETER-Application">>,
-			      authenticate, <<"DIAMETER-Service">>], ValidatedCfg)),
+    %% ?bad(ValF(set_cfg_value([invalid_option], [], Cfg))),
+    %% ?bad(ValF(set_cfg_value([shared_secret], invalid_secret, Cfg))),
+    %% ?ok(ValF(set_cfg_value([shared_secret], <<"secret">>, Cfg))),
+    ok.
 
-    ?error_set([handlers, ergw_aaa_rf], #{}),
-    ?error_set([handlers, ergw_aaa_rf, invalid_option], #{}),
+radius_handler() ->
+    [{doc, "Test radius handler options"}].
+radius_handler(_Config)  ->
+    Cfg = ?RADIUS_ACCT_CONFIG,
+    ValF = fun(Opts) -> ergw_aaa_config:validate_handler(ergw_aaa_radius, Opts) end,
+
+    ?ok(ValF(Cfg)),
+    ?ok(ValF(ValF(Cfg))),
+
+    ?bad(ValF(#{})),
+    ?bad(ValF(set_cfg_value([invalid_option], [], Cfg))),
+    ?bad(ValF(set_cfg_value([server], invalid_id, Cfg))),
+    ?bad(ValF(set_cfg_value([server], invalid_id, Cfg))),
+    ?bad(ValF(set_cfg_value([server], {"undefined.example.net",1812,<<"secret">>}, Cfg))),
+    ?bad(ValF(set_cfg_value([server], {invalid_ip,1812,<<"secret">>}, Cfg))),
+    ?bad(ValF(set_cfg_value([server], {{127,0,0,1},invalid_port,<<"secret">>}, Cfg))),
+    ?bad(ValF(set_cfg_value([server], {{127,0,0,1},1812,invalid_secret}, Cfg))),
+    ?bad(ValF(set_cfg_value([async], invalid, Cfg))),
+    ?bad(ValF(set_cfg_value([retries], invalid, Cfg))),
+    ?bad(ValF(set_cfg_value([timeout], invalid, Cfg))),
+
+    ?ok(ValF(set_cfg_value([server], {"localhost",1812,<<"secret">>}, Cfg))),
+    ?ok(ValF(set_cfg_value([async], true, Cfg))),
+    ?ok(ValF(set_cfg_value([async], false, Cfg))),
+    ?ok(ValF(set_cfg_value([retries], 1, Cfg))),
+    ?ok(ValF(set_cfg_value([timeout], 1000, Cfg))),
+
+    ?ok(ValF(set_cfg_value([vendor_dicts], [], Cfg))),
+    ?ok(ValF(set_cfg_value([vendor_dicts], [ituma], Cfg))),
+    ?ok(ValF(set_cfg_value([vendor_dicts], [52315], Cfg))),
+    ?bad(ValF(set_cfg_value([vendor_dicts], [atom], Cfg))),
+    ?bad(ValF(set_cfg_value([vendor_dicts], atom, Cfg))),
+    ?bad(ValF(set_cfg_value([vendor_dicts], 52315, Cfg))),
+    ?bad(ValF(set_cfg_value([vendor_dicts], ituma, Cfg))),
 
     % termination cause mapping tests config
-    ?ok_set([handlers, ergw_aaa_nasreq, termination_cause_mapping], #{normal => 1}),
-    ?error_set([handlers, ergw_aaa_nasreq, termination_cause_mapping], invalid),
-    ?ok_set([handlers, ergw_aaa_radius, termination_cause_mapping], #{normal => 1}),
-    ?error_set([handlers, ergw_aaa_radius, termination_cause_mapping], invalid),
-    ?ok_set([handlers, ergw_aaa_rf, termination_cause_mapping], #{normal => 1}),
-    ?error_set([handlers, ergw_aaa_rf, termination_cause_mapping], invalid),
-    ?ok_set([handlers, ergw_aaa_ro, termination_cause_mapping], #{normal => 1}),
-    ?error_set([handlers, ergw_aaa_ro, termination_cause_mapping], invalid),
+    ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
+    ok.
+
+
+nasreq_handler() ->
+    [{doc, "Test nasreq handler options"}].
+nasreq_handler(_Config)  ->
+    Cfg = ?DIAMETER_CONFIG,
+    ValF = fun(Opts) -> ergw_aaa_config:validate_handler(ergw_aaa_nasreq, Opts) end,
+
+    ?ok(ValF(Cfg)),
+    ?ok(ValF(ValF(Cfg))),
+
+    ?bad(ValF(#{})),
+
+    ?bad(ValF(set_cfg_value([invalid_option], [], Cfg))),
+    ?bad(ValF(set_cfg_value([accounting], [], Cfg))),
+    ?bad(ValF(set_cfg_value([avp_filter], invalid, Cfg))),
+    ?ok(ValF(set_cfg_value([accounting], split, Cfg))),
+    ?ok(ValF(set_cfg_value([accounting], coupled, Cfg))),
+    ?ok(ValF(set_cfg_value([avp_filter], ['3GPP-IMSI', ['3GPP-MSISDN']], Cfg))),
+
+    % termination cause mapping tests config
+    ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
+    ok.
+
+rf_handler() ->
+    [{doc, "Test rf handler options"}].
+rf_handler(_Config)  ->
+    Cfg = ?RF_CONFIG,
+    ValF = fun(Opts) -> ergw_aaa_config:validate_handler(ergw_aaa_rf, Opts) end,
+
+    ?ok(ValF(Cfg)),
+    ?ok(ValF(ValF(Cfg))),
+
+    ?bad(ValF(#{})),
+    ?bad(ValF(set_cfg_value([invalid_option], #{}, Cfg))),
+
+    % termination cause mapping tests config
+    ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
+    ok.
+
+ro_handler() ->
+    [{doc, "Test ro handler options"}].
+ro_handler(_Config)  ->
+    Cfg = ?RF_CONFIG,
+    ValF = fun(Opts) -> ergw_aaa_config:validate_handler(ergw_aaa_ro, Opts) end,
+
+    ?ok(ValF(Cfg)),
+    ?ok(ValF(ValF(Cfg))),
+
+    ?bad(ValF(#{})),
+    ?bad(ValF(set_cfg_value([invalid_option], #{}, Cfg))),
+
+    % termination cause mapping tests config
+    ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
+    ok.
+
+service() ->
+    [{doc, "Test service options"}].
+service(_Config)  ->
+    %% load functions
+    Functions =
+	[{ergw_aaa_static, ?STATIC_CONFIG},
+	 {ergw_aaa_radius, ?RADIUS_ACCT_CONFIG},
+	 {ergw_aaa_nasreq, ?DIAMETER_CONFIG},
+	 {ergw_aaa_rf, ?RF_CONFIG},
+	 {ergw_aaa_ro, ?RF_CONFIG}],
+    lists:foreach(
+      fun({K, V}) ->
+	      Opts = ergw_aaa_config:validate_handler(K, V),
+	      ergw_aaa:add_config(handlers, K, Opts)
+      end, Functions),
+
+    ValF = fun ergw_aaa_config:validate_service/2,
+
+    ?ok(ValF(<<"Default">>, [{handler, 'ergw_aaa_static'}])),
+    ?ok(ValF(<<"RADIUS-Service">>, [{handler, 'ergw_aaa_radius'}])),
+    ?ok(ValF(<<"DIAMETER-Service">>, [{handler, 'ergw_aaa_nasreq'}])),
+    ?ok(ValF(<<"RF-Service">>, maps:put(handler, 'ergw_aaa_rf', ?RF_CONFIG))),
+    ?ok(ValF(<<"RO-Service">>, maps:put(handler, 'ergw_aaa_ro', ?RF_CONFIG))),
+
+    ?bad(ValF(<<"RADIUS-Service">>, [{handler, 'invalid_handler'}])),
+    ?bad(ValF(<<"RADIUS-Service">>, ?RADIUS_AUTH_CONFIG)),
+    ?ok(ValF(<<"RADIUS-Service">>,
+	     maps:put(handler, 'ergw_aaa_radius', ?RADIUS_AUTH_CONFIG))),
+
+
+    ?bad(ValF(<<"DIAMETER-Service">>, [{handler, 'invalid_handler'}])),
+    ?bad(ValF(<<"DIAMETER-Service">>, ?DIAMETER_CONFIG)),
+    ?ok(ValF(<<"DIAMETER-Service">>,
+	     maps:put(handler, 'ergw_aaa_nasreq', ?DIAMETER_CONFIG))),
+
+    %% make sure the handler config is passed through to the service
+    ?match_map(?STATIC_CONFIG, ValF(<<"Default">>, [{handler, 'ergw_aaa_static'}])),
+    ?match_map(?DIAMETER_CONFIG, ValF(<<"DIAMETER-Service">>, [{handler, 'ergw_aaa_nasreq'}])),
+    ?match_map(?RADIUS_ACCT_CONFIG, ValF(<<"RADIUS-Service">>, [{handler, 'ergw_aaa_radius'}])),
+    ok.
+
+app() ->
+    [{doc, "Test the app options"}].
+app(_Config)  ->
+    %% load functions
+    Functions =
+	[{ergw_aaa_static, ?STATIC_CONFIG},
+	 {ergw_aaa_radius, ?RADIUS_ACCT_CONFIG},
+	 {ergw_aaa_nasreq, ?DIAMETER_CONFIG},
+	 {ergw_aaa_rf, ?RF_CONFIG},
+	 {ergw_aaa_ro, ?RF_CONFIG}],
+    lists:foreach(
+      fun({K, V}) ->
+	      Opts = ergw_aaa_config:validate_handler(K, V),
+	      ergw_aaa:add_config(handlers, K, Opts)
+      end, Functions),
+
+    %% load services
+    Services =
+	[{<<"Default">>,          #{handler => 'ergw_aaa_static'}},
+	 {<<"RADIUS-Service">>,   #{handler => 'ergw_aaa_radius'}},
+	 {<<"DIAMETER-Service">>, #{handler => 'ergw_aaa_nasreq'}},
+	 {<<"RF-Service">>,       maps:put(handler, 'ergw_aaa_rf', ?RF_CONFIG)},
+	 {<<"RO-Service">>,       maps:put(handler, 'ergw_aaa_ro', ?RF_CONFIG)}],
+    lists:foreach(
+      fun({K, V}) ->
+	      Opts = ergw_aaa_config:validate_service(K, V),
+	      ergw_aaa:add_config(services, K, Opts)
+      end, Services),
+
+    RADIUS =
+	#{init =>
+	      [<<"Default">>],
+	  authenticate =>
+	      [{<<"RADIUS-Service">>,
+		maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS)},
+	       {<<"Default">>, #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
+	  authorize => [],
+	  start => [],
+	  interim => [],
+	  stop => []},
+    DIAMETER =
+	#{init => [<<"Default">>],
+	  authenticate =>
+	      [{<<"DIAMETER-Service">>, ?DIAMETER_SERVICE_OPTS}],
+	  authorize => [],
+	  start => [],
+	  interim => [],
+	  stop => []},
+    ValF = fun ergw_aaa_config:validate_app/2,
+
+    ?ok(ValF(<<"RADIUS-Application">>, RADIUS)),
+    ?ok(ValF(<<"RADIUS-Application">>, ValF(<<"RADIUS-Application">>, RADIUS))),
+
+    %% make sure the handler config is also passed through to the session
+    RadiusOpts = ValF(<<"RADIUS-Application">>, RADIUS),
+    ?match_map(?STATIC_CONFIG, get_cfg_value([init, <<"Default">>], RadiusOpts)),
+    ?match_map(maps:merge(?RADIUS_SERVICE_OPTS, ?RADIUS_AUTH_CONFIG),
+	       get_cfg_value([authenticate, <<"RADIUS-Service">>], RadiusOpts)),
+
+    ?ok(ValF(<<"DIAMETER-Application">>, DIAMETER)),
+    ?ok(ValF(<<"DIAMETER-Application">>, ValF(<<"DIAMETER-Application">>, DIAMETER))),
+
+    %% make sure the handler config is also passed through to the session
+    ?match_map(maps:merge(?DIAMETER_CONFIG, ?DIAMETER_SERVICE_OPTS),
+	       get_cfg_value([authenticate, <<"DIAMETER-Service">>],
+			     ValF(<<"DIAMETER-Application">>, DIAMETER))),
     ok.

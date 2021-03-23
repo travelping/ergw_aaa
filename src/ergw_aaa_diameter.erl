@@ -129,16 +129,16 @@ validate_capability_error(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
 validate_function(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_function/2, Opts,
-				     ?DefaultFunctionOptions, map).
+    ergw_aaa_config:validate_options(fun validate_function/2, Opts, ?DefaultFunctionOptions).
 
 validate_function(transports, Opts) when ?non_empty_opts(Opts) ->
-    lists:map(
-      ergw_aaa_config:validate_options(fun validate_transport/2, _,
-				       ?DefaultTransportOptions, map), Opts);
+    lists:map(ergw_aaa_config:validate_options(
+		fun validate_transport/2, _, ?DefaultTransportOptions), Opts);
 validate_function(K, V)
   when K =:= 'Origin-Host'; K =:= 'Origin-Realm' ->
     validate_capability(K, V);
+validate_function(handler, Value) ->
+    Value;
 validate_function(Opt, Value) ->
     validate_function_error(Opt, Value).
 
@@ -178,7 +178,7 @@ validate_transport_error(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
 validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING, map);
+    ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING);
 validate_termination_cause_mapping(Opts) ->
     erlang:error(badarg, [termination_cause_mapping, Opts]).
 

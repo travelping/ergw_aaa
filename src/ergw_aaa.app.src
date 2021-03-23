@@ -15,8 +15,7 @@
 		  diameter
 		 ]},
   {mod, { ergw_aaa_app, []}},
-  {env, [
-	 {ipctld_port, 7744},
-	 {ipcp_ouraddr, {10,0,0,1}}
+  {env, [{product_name, "erGW-AAA"},
+	 {rate_limits,  #{outstanding_requests => 50, rate => 50}}
 	]}
  ]}.

@@ -19,12 +19,7 @@
 start(_StartType, _StartArgs) ->
     case ergw_aaa_sup:start_link() of
 	{ok, _} = Ret ->
-	    Config = ergw_aaa_config:load_config(),
-		prometheus_declare(),
-	    SrvSupSpecs0 = initialize_handlers(Config, []),
-	    SrvSupSpecs1 = initialize_services(Config, SrvSupSpecs0),
-	    SrvSupSpecs = initialize_functions(Config, SrvSupSpecs1),
-	    ergw_aaa_sup:start_childs(SrvSupSpecs),
+	    prometheus_declare(),
 	    Ret;
 	Other ->
 	    Other
@@ -37,26 +32,7 @@ stop(_State) ->
 %% Internal
 %%===================================================================
 
-initialize_functions(#{functions := Functions}, SupSpecs) ->
-    maps:fold(fun(Function, #{handler := Handler} = Opts, Specs) ->
-		      {ok, SupSpec} = Handler:initialize_function(Function, Opts),
-		      Specs ++ SupSpec
-	      end, SupSpecs, Functions).
-
-initialize_handlers(#{handlers := Handlers}, SupSpecs) ->
-    maps:fold(fun(Handler, Opts, Specs) ->
-		      {ok, SupSpec} = Handler:initialize_handler(Opts),
-		      Specs ++ SupSpec
-	      end, SupSpecs, Handlers).
-
-initialize_services(#{services := Services}, SupSpecs) ->
-    maps:fold(fun(ServiceId, #{handler := Handler} = Opts, Specs) ->
-		      {ok, SupSpec} = Handler:initialize_service(ServiceId, Opts),
-		      Specs ++ SupSpec
-	      end, SupSpecs, Services).
-
 prometheus_declare() ->
     prometheus_gauge:declare([{name, aaa_sessions_total},
 			      {labels, [handler, state]},
 			      {help, "AAA sessions"}]).
-

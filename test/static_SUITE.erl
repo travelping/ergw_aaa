@@ -115,11 +115,12 @@ init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
 
     application:load(ergw_aaa),
-    [application:set_env(ergw_aaa, Key, Opts) || {Key, Opts} <- maps:to_list(?CONFIG)],
+    ergw_aaa_test_lib:clear_app_env(),
 
     meck_init(Config),
 
     {ok, _} = application:ensure_all_started(ergw_aaa),
+    ergw_aaa_test_lib:ergw_aaa_init(?CONFIG),
 
     Config.
 

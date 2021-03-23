@@ -80,13 +80,13 @@ initialize_service(_ServiceId, _Opts) ->
     {ok, []}.
 
 validate_handler(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ?DefaultOptions).
 
 validate_service(_Service, HandlerOpts, Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, HandlerOpts).
 
 validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
-    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts, map).
+    ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts).
 
 session_auth_options('PAP', Session, Attrs) ->
     [{?User_Password , maps:get('Password', Session, <<>>)} | Attrs];
@@ -230,6 +230,8 @@ validate_vendor(ituma) -> ?'Ituma';
 validate_vendor(Vendor) ->
     erlang:error(badarg, [vendor_dicts, Vendor]).
 
+validate_option(handler, ?MODULE) ->
+    ?MODULE;
 validate_option(server, Value) ->
     validate_server_spec(server, Value);
 validate_option(Opt, Value)
@@ -256,7 +258,8 @@ validate_option(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
 validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
-    ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING, map);
+    ergw_aaa_config:validate_options(
+      fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING);
 validate_termination_cause_mapping(Opts) ->
     erlang:error(badarg, [termination_cause_mapping, Opts]).
 
