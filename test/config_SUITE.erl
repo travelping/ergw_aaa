@@ -16,10 +16,11 @@
 -define(ok(Fun), ?match(#{}, (catch Fun))).
 
 -define(STATIC_CONFIG,
-	#{'NAS-Identifier'        => <<"NAS-Identifier">>,
-	  'Acct-Interim-Interval' => 600,
-	  'Framed-Protocol'       => 'PPP',
-	  'Service-Type'          => 'Framed-User'}).
+	#{defaults =>
+	      #{'NAS-Identifier'        => <<"NAS-Identifier">>,
+		'Acct-Interim-Interval' => 600,
+		'Framed-Protocol'       => 'PPP',
+		'Service-Type'          => 'Framed-User'}}).
 
 -define(RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING,
 	#{normal                => 1,
@@ -40,20 +41,24 @@
 	 }).
 
 -define(RADIUS_AUTH_CONFIG,
-	#{server                    => {{127,0,0,1}, 1812, <<"secret">>},
+	#{server                    => #{server => {127,0,0,1},
+					 port => 1812,
+					 secret => <<"secret">>},
 	  retries                   => 3,
 	  timeout                   => 5000,
 	  vendor_dicts              => [],
 	  avp_filter                => #{},
 	  termination_cause_mapping => ?RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING}).
 -define(RADIUS_ACCT_CONFIG,
-	#{server                    => {{0,0,0,0,0,0,0,1}, 1813, <<"secret">>},
+	#{server                    => #{server => {0,0,0,0,0,0,0,1},
+					 port => 1813,
+					 secret => <<"secret">>},
 	  retries                   => 3,
 	  timeout                   => 5000,
 	  vendor_dicts              => [],
 	  avp_filter                => #{},
 	  termination_cause_mapping => ?RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING}).
--define(RADIUS_SERVICE_OPTS, #{}).
+-define(RADIUS_SERVICE_OPTS, #{service => <<"RADIUS-Service">>}).
 
 -define(DIAMETER_TRANSPORT,
 	#{connect_to => <<"aaa://127.0.0.1">>}).
@@ -66,7 +71,7 @@
 -define(DIAMETER_CONFIG,
 	#{function            => <<"diam-test">>,
 	  'Destination-Realm' => <<"test-srv.example.com">>}).
--define(DIAMETER_SERVICE_OPTS, #{}).
+-define(DIAMETER_SERVICE_OPTS, #{service => <<"DIAMETER-Service">>}).
 
 -define(RF_CONFIG,
 	#{function            => <<"diam-test">>,
@@ -97,20 +102,17 @@
 		    maps:put(handler, 'ergw_aaa_ro', ?RF_CONFIG)},
 	  apps =>
 	      #{<<"RADIUS-Application">> =>
-		    #{init =>
-			  [<<"Default">>],
+		    #{init => [#{service => <<"Default">>}],
 		      authenticate =>
-			  [{<<"RADIUS-Service">>,
-			    maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS)},
-			   {<<"Default">>, #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
+			  [maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS),
+			   #{service => <<"Default">>, defaults => #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
 		      authorize => [],
 		      start => [],
 		      interim => [],
 		      stop => []},
 		<<"DIAMETER-Application">> =>
-		    #{init => [<<"Default">>],
-		      authenticate =>
-			  [{<<"DIAMETER-Service">>, ?DIAMETER_SERVICE_OPTS}],
+		    #{init => [#{service => <<"Default">>}],
+		      authenticate => [?DIAMETER_SERVICE_OPTS],
 		      authorize => [],
 		      start => [],
 		      interim => [],
@@ -277,7 +279,7 @@ radius_handler(_Config)  ->
     ?bad(ValF(set_cfg_value([retries], invalid, Cfg))),
     ?bad(ValF(set_cfg_value([timeout], invalid, Cfg))),
 
-    ?ok(ValF(set_cfg_value([server], {"localhost",1812,<<"secret">>}, Cfg))),
+    ?ok(ValF(set_cfg_value([server], #{server => "localhost", port => 1812, secret => <<"secret">>}, Cfg))),
     ?ok(ValF(set_cfg_value([async], true, Cfg))),
     ?ok(ValF(set_cfg_value([async], false, Cfg))),
     ?ok(ValF(set_cfg_value([retries], 1, Cfg))),
@@ -425,20 +427,17 @@ app(_Config)  ->
       end, Services),
 
     RADIUS =
-	#{init =>
-	      [<<"Default">>],
+	#{init => [#{service => <<"Default">>}],
 	  authenticate =>
-	      [{<<"RADIUS-Service">>,
-		maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS)},
-	       {<<"Default">>, #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
+	      [maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS),
+	       #{service => <<"Default">>, defaults => #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
 	  authorize => [],
 	  start => [],
 	  interim => [],
 	  stop => []},
     DIAMETER =
-	#{init => [<<"Default">>],
-	  authenticate =>
-	      [{<<"DIAMETER-Service">>, ?DIAMETER_SERVICE_OPTS}],
+	#{init => [#{service => <<"Default">>}],
+	  authenticate => [?DIAMETER_SERVICE_OPTS],
 	  authorize => [],
 	  start => [],
 	  interim => [],
@@ -450,15 +449,15 @@ app(_Config)  ->
 
     %% make sure the handler config is also passed through to the session
     RadiusOpts = ValF(<<"RADIUS-Application">>, RADIUS),
-    ?match_map(?STATIC_CONFIG, get_cfg_value([init, <<"Default">>], RadiusOpts)),
+    ?match_map(?STATIC_CONFIG, get_cfg_value([init, 1], RadiusOpts)),
     ?match_map(maps:merge(?RADIUS_SERVICE_OPTS, ?RADIUS_AUTH_CONFIG),
-	       get_cfg_value([authenticate, <<"RADIUS-Service">>], RadiusOpts)),
+	       get_cfg_value([authenticate, 1], RadiusOpts)),
 
     ?ok(ValF(<<"DIAMETER-Application">>, DIAMETER)),
     ?ok(ValF(<<"DIAMETER-Application">>, ValF(<<"DIAMETER-Application">>, DIAMETER))),
 
     %% make sure the handler config is also passed through to the session
     ?match_map(maps:merge(?DIAMETER_CONFIG, ?DIAMETER_SERVICE_OPTS),
-	       get_cfg_value([authenticate, <<"DIAMETER-Service">>],
+	       get_cfg_value([authenticate, 1],
 			     ValF(<<"DIAMETER-Application">>, DIAMETER))),
     ok.

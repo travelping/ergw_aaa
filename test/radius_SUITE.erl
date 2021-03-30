@@ -21,12 +21,16 @@
 -define(SERVICE, <<"aaa-test">>).
 
 -define(STATIC_CONFIG,
-	#{'NAS-Identifier'       => <<"NAS">>,
-	  'Framed-Protocol'      => 'PPP',
-	  'Service-Type'         => 'Framed-User'}).
+	#{defaults =>
+	      #{'NAS-Identifier'  => <<"NAS">>,
+		'Framed-Protocol' => 'PPP',
+		'Service-Type'    => 'Framed-User'}}).
 
 -define(RADIUS_CONFIG,
-	#{server => {{127,0,0,1}, 1812, <<"secret">>}}).
+	#{server =>
+	      #{server => {127,0,0,1},
+		port => 1812,
+		secret => <<"secret">>}}).
 
 -define(CONFIG,
 	#{rate_limits =>
@@ -39,18 +43,24 @@
 		    #{handler => 'ergw_aaa_static'},
 		<<"RADIUS-Auth">> =>
 		    #{handler => 'ergw_aaa_radius',
-		      server =>  {{127,0,0,1}, 1812, <<"secret">>}},
+		      server =>
+			  #{server => {127,0,0,1},
+			    port => 1812,
+			    secret => <<"secret">>}},
 		<<"RADIUS-Acct">> =>
 		    #{handler => 'ergw_aaa_radius',
-		      server => {{127,0,0,1}, 1813, <<"secret">>}}},
+		      server =>
+			  #{server => {127,0,0,1},
+			    port => 1813,
+			    secret => <<"secret">>}}},
 	  apps =>
 	      #{default =>
-		    #{init         => [<<"Default">>],
-		      authenticate => [<<"RADIUS-Auth">>],
-		      authorize    => [<<"RADIUS-Auth">>],
-		      start        => [<<"RADIUS-Acct">>],
-		      interim      => [<<"RADIUS-Acct">>],
-		      stop         => [<<"RADIUS-Acct">>]}
+		    #{init         => [#{service => <<"Default">>}],
+		      authenticate => [#{service => <<"RADIUS-Auth">>}],
+		      authorize    => [#{service => <<"RADIUS-Auth">>}],
+		      start        => [#{service => <<"RADIUS-Acct">>}],
+		      interim      => [#{service => <<"RADIUS-Acct">>}],
+		      stop         => [#{service => <<"RADIUS-Acct">>}]}
 	       }
 	 }).
 
@@ -335,11 +345,11 @@ maps_update_with([H|T], Fun, Map) ->
     maps:update_with(H, fun(M) -> maps_update_with(T, Fun, M) end, Map).
 
 add_opts(Map, Opts) when is_map(Opts) ->
-    lists:keymap(fun(X) -> maps:merge(X, Opts) end, 2, Map);
+    lists:map(fun(X) -> maps:merge(X, Opts) end, Map);
 add_opts(Map, []) ->
     Map;
 add_opts(Map, [{Par, Val}| T]) ->
-    Map1 = lists:keymap(fun(X) -> maps:put(Par, Val, X) end, 2, Map),
+    Map1 = lists:map(fun(X) -> maps:put(Par, Val, X) end, Map),
     add_opts(Map1, T).
 
 simple(Config, Opts) ->

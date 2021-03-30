@@ -31,9 +31,10 @@
 -define('Origin-Realm', <<"example.com">>).
 
 -define(STATIC_CONFIG,
-	#{'NAS-Identifier'       => <<"NAS">>,
-	  'Framed-Protocol'      => 'PPP',
-	  'Service-Type'         => 'Framed-User'}).
+	#{defaults =>
+	      #{'NAS-Identifier'  => <<"NAS">>,
+		'Framed-Protocol' => 'PPP',
+		'Service-Type'    => 'Framed-User'}}).
 
 -define(DIAMETER_TRANSPORTS,
 	[#{connect_to => <<"aaa://127.0.10.10">>},
@@ -88,23 +89,25 @@
 		     },
 	  apps =>
 	      #{default =>
-		    #{init => [<<"Default">>],
+		    #{init => [#{service => <<"Default">>}],
 		      authenticate => [],
 		      authorize => [],
 		      start => [],
 		      interim => [],
 		      stop => [],
 		      {gy, 'CCR-Initial'} =>
-			  [{<<"Ro">>, #{tx_timeout => 1000,
-					max_retries => 2,
-					answer_if_down => <<"OCS-Hold">>,
-					answer_if_timeout => <<"OCS-Hold">>}}],
+			  [#{service => <<"Ro">>,
+			     tx_timeout => 1000,
+			     max_retries => 2,
+			     answer_if_down => <<"OCS-Hold">>,
+			     answer_if_timeout => <<"OCS-Hold">>}],
 		      {gy, 'CCR-Update'} =>
-			  [{<<"Ro">>, #{tx_timeout => 1000,
-					answer_if_down => <<"OCS-Hold">>,
-					answer_if_timeout => <<"OCS-Hold">>}}],
+			  [#{service => <<"Ro">>,
+			     tx_timeout => 1000,
+			     answer_if_down => <<"OCS-Hold">>,
+			     answer_if_timeout => <<"OCS-Hold">>}],
 		      {gy, 'CCR-Terminate'} =>
-			  [<<"Ro">>]}
+			  [#{service => <<"Ro">>}]}
 	       }
 	 }).
 

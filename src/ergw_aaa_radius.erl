@@ -189,6 +189,21 @@ handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
 %%% Options Validation
 %%%===================================================================
 
+-define(is_opts(X), (is_list(X) orelse is_map(X))).
+
+mandatory_keys(Keys, Map) when is_map(Map) ->
+    lists:foreach(
+      fun(K) ->
+	      V = maps:get(K, Map, undefined),
+	      if V =:= [] orelse
+		 (is_map(V) andalso map_size(V) == 0) orelse
+		 V =:= undefined ->
+			 erlang:error(badarg, [missing, K]);
+		 true ->
+		      ok
+	      end
+      end, Keys).
+
 validate_ip(Opt, Host) when is_list(Host) ->
     case gethostbyname(Host) of
 	{ok, #hostent{h_addr_list = [IP | _]}} ->
@@ -204,11 +219,14 @@ validate_ip(_Opt, {_,_,_,_,_,_,_,_} = IP) ->
 validate_ip(Opt, IP) ->
     erlang:error(badarg, [Opt, IP]).
 
-validate_server_spec(Opt, {IP, Port, Secret} = Value)
-  when is_integer(Port), is_binary(Secret) ->
-    validate_ip(Opt, IP),
-    Value;
-validate_server_spec(Opt, Value) ->
+validate_server_opt(server, IP) ->
+    validate_ip(server, IP);
+validate_server_opt(port, Port)
+  when is_integer(Port), Port > 0, Port < 65536 ->
+    Port;
+validate_server_opt(secret, Secret) when is_binary(Secret) ->
+    Secret;
+validate_server_opt(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
 validate_avp_filters(Id, M)
@@ -232,8 +250,12 @@ validate_vendor(Vendor) ->
 
 validate_option(handler, ?MODULE) ->
     ?MODULE;
-validate_option(server, Value) ->
-    validate_server_spec(server, Value);
+validate_option(service, Value) ->
+    Value;
+validate_option(server, Opts0) when ?is_opts(Opts0)->
+    Opts = ergw_aaa_config:to_map(Opts0),
+    mandatory_keys([server, port, secret], Opts),
+    ergw_aaa_config:validate_options(fun validate_server_opt/2, Opts, []);
 validate_option(Opt, Value)
   when (Opt =:= server_name orelse Opt =:= client_name)
        andalso is_binary(Value) ->
@@ -257,7 +279,7 @@ validate_option(termination_cause_mapping, Value) ->
 validate_option(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
-validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
+validate_termination_cause_mapping(Opts) when ?is_opts(Opts) ->
     ergw_aaa_config:validate_options(
       fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING);
 validate_termination_cause_mapping(Opts) ->
@@ -716,8 +738,8 @@ framed_protocol('GPRS-PDP-Context')  -> 7;
 framed_protocol('TP-CAPWAP')         -> 16#48f90001;
 framed_protocol(_)                   -> 1.
 
-radius_response(Procedure, {ok, Response, RequestAuthenticator}, #{server := {_, _, Secret}},
-		Session, Events, State) ->
+radius_response(Procedure, {ok, Response, RequestAuthenticator},
+		#{server := #{secret := Secret}}, Session, Events, State) ->
     radius_reply(Procedure,
       eradius_lib:decode_request(Response, Secret, RequestAuthenticator), Session, Events, State);
 radius_response(_Procedure, Response, _, Session, Events, State) ->
@@ -891,13 +913,14 @@ radius_accounting_opts() ->
 		       ?Acct_Status_Type,
 		       ?Event_Timestamp]).
 
-send_request(Req, Session, #{server := NAS, retries := Retries, timeout := Timeout} = Opts)
-  when is_tuple(NAS)->
+send_request(Req, Session, #{server := #{server := IP, port := Port, secret := Secret},
+			     retries := Retries, timeout := Timeout} = Opts) ->
     Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
     RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
 			{server_name, maps:get(server_name, Opts, Id)},
 			{retries, Retries},
 			{timeout, Timeout}],
+    NAS = {IP, Port, Secret},
     eradius_client:send_request(NAS, Req, RadiusClientOpts).
 
 get_state_atom(#{'State' := State}) ->

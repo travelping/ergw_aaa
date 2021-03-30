@@ -298,6 +298,8 @@ validate_option(handler, ?MODULE) ->
     ?MODULE;
 validate_option(function, Value) ->
     Value;
+validate_option(service, Value) ->
+    Value;
 validate_option(accounting, coupled = Value) ->
     Value;
 validate_option(accounting, split = Value) ->

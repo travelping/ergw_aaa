@@ -77,6 +77,8 @@ set_cfg_value([H | T], Value, Config) ->
 %%     Prop = proplists:get_value(H, Config, []),
 %%     lists:keystore(H, 1, Config, {H, add_cfg_value(T, Value, Prop)}).
 
+get_opt(Key, List) when is_integer(Key), is_list(List) ->
+    lists:nth(Key, List);
 get_opt(Key, List) when is_list(List) ->
     proplists:get_value(Key, List);
 get_opt(Key, Map) when is_map(Map) ->

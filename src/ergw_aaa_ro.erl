@@ -276,6 +276,8 @@ validate_option(handler, ?MODULE) ->
     ?MODULE;
 validate_option(function, Value) ->
     Value;
+validate_option(service, Value) ->
+    Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Host', [Value]) when is_binary(Value) ->
