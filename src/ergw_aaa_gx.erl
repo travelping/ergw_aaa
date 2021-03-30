@@ -243,6 +243,8 @@ validate_option(handler, ?MODULE) ->
     ?MODULE;
 validate_option(function, Value) ->
     Value;
+validate_option(service, Value) ->
+    Value;
 validate_option('Destination-Host', Value) when is_binary(Value) ->
     [Value];
 validate_option('Destination-Host', [Value]) when is_binary(Value) ->
@@ -251,9 +253,9 @@ validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(answers, Value) when is_map(Value) ->
     Value;
-validate_option(answer_if_down, Value) when is_atom(Value) ->
+validate_option(answer_if_down, Value) ->
     Value;
-validate_option(answer_if_timeout, Value) when is_atom(Value) ->
+validate_option(answer_if_timeout, Value) ->
     Value;
 validate_option(avp_filter, Value) when is_list(Value) ->
     Value;

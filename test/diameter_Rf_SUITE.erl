@@ -25,9 +25,10 @@
 -define('Origin-Realm', <<"example.com">>).
 
 -define(STATIC_CONFIG,
-	#{'NAS-Identifier'       => <<"NAS">>,
-	  'Framed-Protocol'      => 'PPP',
-	  'Service-Type'         => 'Framed-User'}).
+	#{defaults =>
+	      #{'NAS-Identifier'  => <<"NAS">>,
+		'Framed-Protocol' => 'PPP',
+		'Service-Type'    => 'Framed-User'}}).
 
 -define(DIAMETER_TRANSPORT,
 	#{connect_to => <<"aaa://127.0.0.1">>}).
@@ -55,15 +56,15 @@
 		    #{handler => 'ergw_aaa_rf'}},
 	  apps =>
 	    #{default =>
-		    #{init => [<<"Default">>],
+		    #{init => [#{service => <<"Default">>}],
 		      authenticate => [],
 		      authorize => [],
 		      start => [],
 		      interim => [],
 		      stop => [],
-		      {rf, 'Initial'}   => [<<"Rf">>],
-		      {rf, 'Update'}    => [<<"Rf">>],
-		      {rf, 'Terminate'} => [<<"Rf">>]
+		      {rf, 'Initial'}   => [#{service => <<"Rf">>}],
+		      {rf, 'Update'}    => [#{service => <<"Rf">>}],
+		      {rf, 'Terminate'} => [#{service => <<"Rf">>}]
 		     }
 	       }
        }).

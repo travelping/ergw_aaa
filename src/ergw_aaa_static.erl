@@ -45,7 +45,7 @@ validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
 invoke(_Service, Procedure, Session, Events, #{answers := Answers, answer := Answer}, State) ->
     handle_response(Procedure, maps:get(Answer, Answers, #{}), Session, Events, State);
 invoke(_Service, _Procedure, Session, Events, Opts, State) ->
-    SOpts = maps:without(?OptKeys, Opts),
+    SOpts = maps:get(defaults, Opts, #{}),
     {ok, maps:merge(Session, SOpts), Events, State}.
 
 %% handle_response/6
@@ -56,15 +56,25 @@ handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
 %%% Options Validation
 %%%===================================================================
 
-%% TODO: only permit session options
+-define(is_opts(X), (is_list(X) orelse is_map(X))).
+
+validate_option(handler, Value) ->
+    Value;
+validate_option(service, Value) ->
+    Value;
 validate_option(answers, Value) when is_map(Value) ->
     Value;
-validate_option(answer, Value) when is_atom(Value) ->
+validate_option(answer, Value) ->
     Value;
-validate_option(_Opt, Value) ->
-    Value.
-%% validate_option(Opt, Value) ->
-%%     erlang:error(badarg, [Opt, Value]).
+validate_option(defaults, Opts) when ?is_opts(Opts) ->
+    ergw_aaa_config:validate_options(fun validate_session_default/2, Opts, []);
+validate_option(Opt, Value) ->
+    erlang:error(badarg, [Opt, Value]).
+
+validate_session_default(Opt, Value) when is_atom(Opt) ->
+    Value;
+validate_session_default(Opt, Value) ->
+    erlang:error(badarg, [Opt, Value]).
 
 %%===================================================================
 %% internal helpers

@@ -20,11 +20,12 @@
 -define(HUT, ergw_aaa_static).
 
 -define(STATIC_CONFIG,
-	#{'NAS-Identifier'          => <<"NAS">>,
-	  'Framed-Protocol'         => 'PPP',
-	  'Service-Type'            => 'Framed-User',
-	  'Node-Id'                 => <<"PGW-001">>,
-	  'Charging-Rule-Base-Name' => <<"m2m0001">>}).
+	#{defaults =>
+	      #{'NAS-Identifier'          => <<"NAS">>,
+		'Framed-Protocol'         => 'PPP',
+		'Service-Type'            => 'Framed-User',
+		'Node-Id'                 => <<"PGW-001">>,
+		'Charging-Rule-Base-Name' => <<"m2m0001">>}}).
 
 -define(CONFIG,
 	#{handlers =>
@@ -88,17 +89,17 @@
 
 	  apps =>
 	      #{default =>
-		    #{init => [<<"Default">>],
+		    #{init => [#{service => <<"Default">>}],
 		      authenticate => [],
 		      authorize => [],
 		      start => [],
 		      interim => [],
 		      stop => [],
-		      {gx, 'CCR-Initial'}   => [{<<"Default">>, #{answer => <<"Initial-Gx">>}}],
-		      {gx, 'CCR-Update'}    => [{<<"Default">>, #{answer => <<"Update-Gx">>}}],
-		      {gx, 'CCR-Terminate'} => [{<<"Default">>, #{answer => <<"Final-Gx">>}}],
-		      {gy, 'CCR-Initial'}   => [{<<"Default">>, #{answer => <<"Initial-Gy">>}}],
-		      {gy, 'CCR-Update'}    => [{<<"Default">>, #{answer => <<"Update-Gy">>}}],
+		      {gx, 'CCR-Initial'}   => [#{service => <<"Default">>, answer => <<"Initial-Gx">>}],
+		      {gx, 'CCR-Update'}    => [#{service => <<"Default">>, answer => <<"Update-Gx">>}],
+		      {gx, 'CCR-Terminate'} => [#{service => <<"Default">>, answer => <<"Final-Gx">>}],
+		      {gy, 'CCR-Initial'}   => [#{service => <<"Default">>, answer => <<"Initial-Gy">>}],
+		      {gy, 'CCR-Update'}    => [#{service => <<"Default">>, answer => <<"Update-Gy">>}],
 		      {gy, 'CCR-Terminate'} => []
 		      }
 	       }

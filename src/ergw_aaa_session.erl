@@ -412,11 +412,11 @@ services(init, App) ->
     Procedures =
 	maps:fold(
 	  fun(_, Svcs, S0) ->
-		  lists:foldl(fun({Svc, _}, S1) -> S1#{Svc => #{}} end, S0, Svcs)
+		  lists:foldl(fun(#{service := Svc}, S1) -> S1#{Svc => #{service => Svc}} end, S0, Svcs)
 	  end, #{}, maps:remove(init, App)),
     Session = maps:get(init, App, []),
-    {Keys, _} = lists:unzip(Session),
-    Session ++ maps:to_list(maps:without(Keys, Procedures));
+    Keys = lists:foldl(fun(#{service := Svc}, Acc) -> [Svc | Acc] end, [], Session),
+    Session ++ maps:values(maps:without(Keys, Procedures));
 services(Procedure, App) ->
     maps:get(Procedure, App, []).
 
@@ -435,8 +435,8 @@ pipeline(Procedure, DataIn, EventsIn, Opts, [Head|Tail]) ->
 	    Other
     end.
 
-step({Service, SvcOpts}, Procedure, #data{handlers = HandlersS,
-					  session = Session0} = Data, Events, Opts) ->
+step(#{service := Service} = SvcOpts, Procedure,
+     #data{handlers = HandlersS, session = Session0} = Data, Events, Opts) ->
     Svc = ergw_aaa:get_service(Service),
     StepOpts = maps:merge(Opts, SvcOpts),
     Handler = maps:get(handler, Svc),

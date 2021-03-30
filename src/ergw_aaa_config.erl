@@ -134,20 +134,17 @@ validate_app_procs_option(App, Procedure, Services)
 validate_app_procs_option(App, Procedure, Services) ->
     erlang:error(badarg, [App, Procedure, Services]).
 
-validate_app_procs_svc(App, Procedure, Service)
-  when not is_tuple(Service) ->
-    validate_app_procs_svc(App, Procedure, {Service, #{}});
-validate_app_procs_svc(App, Procedure, {Service, Opts})
-  when is_map(Opts) ->
+validate_app_procs_svc(App, Procedure, #{service := Service} = Opts) ->
     case ergw_aaa:get_service(Service) of
 	#{handler := Handler} = SvcOpts ->
-	    {Service, validate_apply(Handler, validate_procedure, [App, Procedure, Service, SvcOpts, Opts])};
+	    validate_apply(Handler, validate_procedure,
+			   [App, Procedure, Service, SvcOpts, Opts]);
 	_ ->
 	    erlang:error(badarg, [App, Procedure, Service])
     end;
-validate_app_procs_svc(App, Procedure, {Service, Opts})
+validate_app_procs_svc(App, Procedure, Opts)
   when is_list(Opts) ->
-    validate_app_procs_svc(App, Procedure, {Service, to_map(Opts)});
+    validate_app_procs_svc(App, Procedure, to_map(Opts));
 validate_app_procs_svc(App, Procedure, Service) ->
     erlang:error(badarg, [App, Procedure, Service]).
 
