@@ -24,6 +24,7 @@
 @inherits diameter_rfc4005_nasreq
 @inherits diameter_rfc4006_cc
 @inherits diameter_3gpp_base
+@inherits diameter_travelping
 
 @messages
 
@@ -131,6 +132,10 @@
               [ 3GPP-Negotiated-DSCP ]
               [ TWAN-Identifier ]
               [ 3GPP-User-Location-Info-Time ]
+              [ TP-NAT-IP-Address ]
+              [ TP-NAT-Pool-Id ]
+              [ TP-NAT-Port-Start ]
+              [ TP-NAT-Port-End ]
             * [ AVP ]
 
       ACA ::= <Diameter Header: 271, PXY>

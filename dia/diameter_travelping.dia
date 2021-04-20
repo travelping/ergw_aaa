@@ -1,0 +1,20 @@
+;; Copyright 2021, Travelping GmbH <info@travelping.com>
+
+;; This program is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License
+;; as published by the Free Software Foundation; either version
+;; 2 of the License, or (at your option) any later version.
+
+;; It contains custom Travelping AVPs related to NAT-binding
+
+@id     1
+@name   diameter_travelping
+@prefix diameter_travelping
+@vendor 18681 Travelping
+
+@avp_types
+
+   TP-NAT-IP-Address             16    OctetString     V
+   TP-NAT-Pool-Id                27     UTF8String     V
+   TP-NAT-Port-Start             28     Unsigned32     V
+   TP-NAT-Port-End               29     Unsigned32     V
