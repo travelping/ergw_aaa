@@ -170,7 +170,13 @@ abort_session_request(gy, SessionId, DH, DR) ->
 	    'Destination-Realm' => DR,
 	    'Destination-Host' => DH,
 	    'Auth-Application-Id' => ?DIAMETER_APP_ID_RO},
-    diameter:call(?MODULE, diameter_gy, [ 'ASR' | ASR ], [detach]).
+    diameter:call(?MODULE, diameter_gy, [ 'ASR' | ASR ], [detach]);
+abort_session_request(nasreq, SessionId, DH, DR) ->
+    ASR = #{'Session-Id' => SessionId,
+	    'Destination-Realm' => DR,
+	    'Destination-Host' => DH,
+	    'Auth-Application-Id' => ?DIAMETER_APP_ID_NASREQ},
+    diameter:call(?MODULE, nasreq, [ 'ASR' | ASR ], [detach]).
 
 %%===================================================================
 %% DIAMETER handler callbacks

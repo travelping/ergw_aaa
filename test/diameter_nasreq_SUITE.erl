@@ -12,10 +12,12 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
 -define(HUT, ergw_aaa_nasreq).
 -define(SERVICE, <<"diam-test">>).
+-define(API, nasreq).
 
 -define('Origin-Host', <<"127.0.0.1">>).
 -define('Origin-Realm', <<"example.com">>).
@@ -76,7 +78,8 @@ common() ->
      acct_interim_interval,
      attrs_3gpp,
      handle_failure,
-     handle_answer_error].
+     handle_answer_error,
+     abort_session_request].
 
 groups() ->
     [{coupled, [], common()},
@@ -376,6 +379,34 @@ simple(Config, TermOpts) ->
 		       {1, 'STR'}, {1, {'STA', 2001}}
 		      ]],
 
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+abort_session_request() ->
+    [{doc, "Stop NASREQ session with ASR"}].
+abort_session_request(Config) ->
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(), #{'Framed-IP-Address' => {10,10,10,10}}),
+    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+    {ok, SessionOpts, _} = ergw_aaa_session:start(Session, #{}, []),
+    ?equal(ok, ergw_aaa_session:interim(Session, #{})),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
+    SessionId = maps:get('Diameter-Session-Id', SessionOpts),
+    ?equal(ok, diameter_test_server:abort_session_request(nasreq, SessionId, ?'Origin-Host', ?'Origin-Realm')),
+
+    receive
+	#aaa_request{procedure = {?API, 'ASR'}} = Request ->
+	    ergw_aaa_session:response(Request, ok, #{}, #{})
+    after 1000 ->
+	    ct:fail("no ASR")
+    end,
+
+    ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
+
+    %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
