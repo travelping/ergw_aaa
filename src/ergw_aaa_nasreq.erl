@@ -28,6 +28,7 @@
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
 -export([get_state_atom/1]).
+-export([to_session/3, from_session/2]).
 %%
 %% diameter callbacks
 -export([peer_up/3,
@@ -68,6 +69,8 @@
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
+
+-define(API, nasreq).
 
 -record(state, {pending = #{}      :: #{atom() => reference()},
 		state = init       :: atom(),
@@ -287,6 +290,10 @@ handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     ergw_aaa_diameter_srv:retry_request(Reason, SvcName, Peer, CallOpts).
 
+%% handle_request/3
+handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
+  when Command =:= 'ASR'; Command =:= 'RAR' ->
+    handle_common_request(Command, Avps, Peer);
 handle_request(_Packet, _SvcName, _Peer) ->
     erlang:error({unexpected, ?MODULE, ?LINE}).
 
@@ -541,3 +548,94 @@ create_STR(Session, Opts) ->
 
 get_state_atom(#state{state = State}) ->
     State.
+
+handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
+    {Result, ReplyAvps0} =
+	case ergw_aaa_session_reg:lookup(SessionId) of
+	    Session when is_pid(Session) ->
+		ergw_aaa_session:request(Session, ?MODULE, {?API, Command}, Avps);
+	    _ ->
+		{{error, unknown_session}, #{}}
+	end,
+
+    #diameter_caps{origin_host = {OH,_},
+		   origin_realm = {OR,_},
+		   origin_state_id = {OSid, _}} = Caps,
+
+    ReplyAvps1 = filter_reply_avps(Command, ReplyAvps0),
+    ReplyAvps2 =
+	ReplyAvps1#{'Origin-Host' => OH,
+		    'Origin-Realm' => OR,
+		    'Origin-State-Id' => OSid,
+		    'Session-Id' => SessionId},
+    ReplyCode = diameter_reply_code(Command),
+    ReplyAvps = diameter_reply_avps(Result, ReplyAvps2),
+    ?LOG(error, "~p reply Avps: ~p", [Command, ReplyAvps]),
+    {reply, [ReplyCode | ReplyAvps]}.
+
+filter_reply_avps('RAR', Avps) ->
+    % https://tools.ietf.org/html/rfc4005#section-3.4
+    Permited = [
+        'Session-Id',
+        'Result-Code',
+        'Origin-Host',
+        'Origin-Realm',
+        'User-Name',
+        'Origin-AAA-Protocol',
+        'Origin-State-Id',
+        'Error-Message',
+        'Error-Reporting-Host',
+        'Failed-AVP',
+        'Redirected-Host',
+        'Redirected-Host-Usage',
+        'Redirected-Host-Cache-Time',
+        'Service-Type',
+        'Configuration-Token',
+        'Idle-Timeout',
+        'Authorization-Lifetime',
+        'Auth-Grace-Period',
+        'Re-Auth-Request-Type',
+        'State',
+        'Class',
+        'Reply-Message',
+        'Prompt',
+        'Proxy-Info'
+    ],
+    maps:with(Permited, Avps);
+filter_reply_avps('ASR', Avps) ->
+    % https://tools.ietf.org/html/rfc4005#section-3.8
+    Permited = [
+        'Session-Id',
+        'Result-Code',
+        'Origin-Host',
+        'Origin-Realm',
+        'User-Name',
+        'Origin-AAA-Protocol',
+        'Origin-State-Id',
+        'State',
+        'Error-Message',
+        'Error-Reporting-Host',
+        'Failed-AVP',
+        'Redirected-Host',
+        'Redirected-Host-Usage',
+        'Redirected-Max-Cache-Time',
+        'Proxy-Info'
+    ],
+    maps:with(Permited, Avps);
+filter_reply_avps(_, Avps) ->
+    Avps.
+
+diameter_reply_code('ASR') -> 'ASA';
+diameter_reply_code('RAR') -> 'RAA'.
+
+diameter_reply_avps({ok, Reply}, _) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
+
+diameter_reply_avps(ok, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'};
+
+diameter_reply_avps({error, unknown_session}, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNKNOWN_SESSION_ID'};
+
+diameter_reply_avps(_, Reply) ->
+    Reply#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_UNABLE_TO_COMPLY'}.
