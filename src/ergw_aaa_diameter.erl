@@ -210,9 +210,11 @@ transport_module(_) -> unknown.
 transport_config(tcp, Type, Raddr, Port, Opts) ->
     [Type, {raddr, Raddr}, {rport, Port}
      | maps:to_list(maps:with([fragment_timer, reuseaddr, recbuf, sndbuf, nodelay], Opts))];
-transport_config(sctp, Type, Raddr, Port, Opts) ->
-    [Type, {raddr, Raddr}, {rport, Port}
-     | maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, unordered], Opts))].
+transport_config(sctp, Type, Raddr, Port, Opts0) ->
+    Opts =
+	[Type, {raddr, Raddr}, {rport, Port}
+	| maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, nodelay, unordered], Opts0))],
+    proplists:substitute_aliases([{nodelay, sctp_nodelay}], Opts).
 
 svc_set(Key, Value, Opts)
   when is_atom(Key), is_list(Value) ->
