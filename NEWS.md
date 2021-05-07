@@ -3,6 +3,20 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.11 - 7 May 2021
+----------------------------
+
+**Features** :rocket:
+* [#137](https://github.com/travelping/ergw_aaa/pull/137) Add `nodelay` support for `SCTP`
+
+**Dependencies** :gear:
+* [#124](https://github.com/travelping/ergw_aaa/pull/138) Start use [prometheus](https://github.com/deadtrickster/prometheus.erl.gi) from `master` branch
+> Started use 'prometheus' from master by reason that provided fixes
+> for speed up for fetching metrics which were merged into master but were not released
+> * [prometheus#124](https://github.com/deadtrickster/prometheus.erl/pull/124) improve efficiency of label translation in text format
+> * [prometheus#121](https://github.com/deadtrickster/prometheus.erl/pull/121) replace regex to escape special chars with simple binary comprehension
+> * [prometheus#120](https://github.com/deadtrickster/prometheus.erl/pull/120) speedup collection of counters and histograms
+
 Version 3.6.10 - 16 March 2021
 ----------------------------
 
