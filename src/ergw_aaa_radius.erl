@@ -384,8 +384,8 @@ radius_session_options(Type, RadiusSession, Attrs) ->
 
 radius_session_options(_, 'Class', [], Attrs) ->
     Attrs;
-radius_session_options(_, 'Class', [H|T], Attrs) ->
-    [{?Class, H}|radius_session_options('Class', T, Attrs)];
+radius_session_options(Type, 'Class', [H|T], Attrs) ->
+    [{?Class, H}|radius_session_options(Type, 'Class', T, Attrs)];
 radius_session_options(auth, 'RADIUS-State', State, Attrs) ->
     [{?State, State}|Attrs];
 radius_session_options(_, _Key, _Value, Attrs) ->
