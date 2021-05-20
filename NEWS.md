@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.12 - 20 May 2021
+----------------------------
+
+**Bugfixes** :bug:
+* [#141](https://github.com/travelping/ergw_aaa/pull/141) Fix parsing of `Class` `RADIUS` attribute
+
 Version 3.6.11 - 7 May 2021
 ----------------------------
 
