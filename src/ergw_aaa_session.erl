@@ -222,7 +222,7 @@ handle_event({call, From}, {unset, Options}, _State, Data = #data{session = Sess
 handle_event(info, {'EXIT', Owner, Reason},
 	     _State, #data{owner = Owner} = Data) ->
     ?LOG(error, "Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
-    handle_owner_exit(Data),
+    terminate_action(Data),
     {stop, normal};
 
 handle_event(info, {'EXIT', _From, _Reason}, _State, _Data) ->
@@ -289,14 +289,16 @@ handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts},
 	    {keep_state, Data, [{reply, From, Reply}]}
     end;
 
-handle_event(cast, terminate, _State, _Data) ->
-    ?LOG(info, "Handling terminate request: ~p", [_Data]),
+handle_event(cast, terminate, _State, Data) ->
+    ?LOG(info, "Handling terminate request: ~p", [Data]),
+    ct:pal("Handling terminate request: ~p", [Data]),
+    terminate_action(Data),
     {stop, normal};
 
 handle_event(info, {'DOWN', _Ref, process, Owner, Info},
 	     _State, #data{owner = Owner} = Data) ->
     ?LOG(error, "Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
-    handle_owner_exit(Data),
+    terminate_action(Data),
     {stop, normal};
 
 handle_event(info, {'$reply', Promise, Handler, Msg, Opts} = _Info,
@@ -339,9 +341,8 @@ prepare_next_session_id(Session) ->
     AcctAppId = maps:get('AAA-Application-Id', Session, default),
     Session#{'Session-Id' => ergw_aaa_session_seq:inc(AcctAppId)}.
 
-handle_owner_exit(Data) ->
-    Opts = #{now => erlang:monotonic_time()},
-    action(stop, Opts, Data).
+terminate_action(Data) ->
+    exec(terminate, #{'Termination-Cause' => error}, #{}, Data).
 
 maps_merge_with(K, Fun, V, Map) ->
     maps:update_with(K, maps:fold(Fun, V, _), V, Map).
@@ -408,15 +409,20 @@ update_accounting_state(stop, Session, #{now := Now}) ->
 update_accounting_state(_Procedure, Session, _Opts) ->
     Session.
 
-services(init, App) ->
+services(Procedure, App)
+  when Procedure =:= init;
+       Procedure =:= terminate ->
     Procedures =
 	maps:fold(
 	  fun(_, Svcs, S0) ->
 		  lists:foldl(fun(#{service := Svc}, S1) -> S1#{Svc => #{service => Svc}} end, S0, Svcs)
-	  end, #{}, maps:remove(init, App)),
-    Session = maps:get(init, App, []),
+	  end, #{}, maps:remove(Procedure, App)),
+    Session = maps:get(Procedure, App, []),
     Keys = lists:foldl(fun(#{service := Svc}, Acc) -> [Svc | Acc] end, [], Session),
-    Session ++ maps:values(maps:without(Keys, Procedures));
+    maps:fold(
+      fun(_, #{service := Svc} = V, S) ->
+	      [maps:merge(ergw_aaa:get_service(Svc), V) | S]
+      end, Session, maps:without(Keys, Procedures));
 services(Procedure, App) ->
     maps:get(Procedure, App, []).
 

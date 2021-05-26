@@ -146,11 +146,13 @@ invoke(_Service, start, Session0, Events, Opts, #{'State' := stopped} = State) -
 invoke(_Service, interim, Session, Events, Opts, #{'State' := started} = State) ->
     accounting(?RStatus_Type_Update, [], Session, Events, Opts, State);
 
-invoke(_Service, stop, Session, Events, Opts, #{'State' := started} = State) ->
+invoke(_Service, Procedure, Session, Events, Opts, #{'State' := started} = State)
+  when Procedure =:= stop; Procedure =:= terminate ->
     accounting(?RStatus_Type_Stop, [], Session, Events, Opts, State#{'State' => stopped});
 
 invoke(_Service, Procedure, Session, Events, _Opts, State)
-  when Procedure =:= start; Procedure =:= interim; Procedure =:= stop ->
+  when Procedure =:= start; Procedure =:= interim;
+       Procedure =:= stop; Procedure =:= terminate ->
     {ok, Session, Events, State};
 
 invoke(Service, Procedure, Session, Events, _Opts, State) ->

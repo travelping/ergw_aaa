@@ -87,7 +87,8 @@ all() ->
      abort_session_request,
      handle_failure,
      handle_answer_error,
-     re_auth_request
+     re_auth_request,
+     terminate
     ].
 
 init_per_suite(Config0) ->
@@ -417,7 +418,43 @@ re_auth_request(Config) ->
     meck_validate(Config),
     ok.
 
+terminate() ->
+    [{doc, "Simulate unexpected owner termination"}].
+terminate(Config) ->
+    Session = init_session(#{}, Config),
+    GxOpts =
+	#{'3GPP-IMSI' => <<"IMSI">>},
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
+    ?equal([], get_session_stats()),
+
+    {ok, _, _} = ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, []),
+    ?equal([{ergw_aaa_gx, started, 1}], get_session_stats()),
+
+    ?match(ok, ergw_aaa_session:terminate(SId)),
+    wait_for_session(ergw_aaa_gx, started, 0, 10),
+
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    % check that client has sent CCR
+    ?equal(2, proplists:get_value(stats({'CCR', send}), Statistics)),
+    % check that client has received CCA
+    ?equal(2, proplists:get_value(stats({'CCA', recv, {'Result-Code', 2001}}), Statistics)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+stats('CCR') -> {16777238, 272, 1};
+stats('CCA') -> {16777238, 272, 0};
+stats(Tuple) when is_tuple(Tuple) ->
+    setelement(1, Tuple, stats(element(1, Tuple)));
+stats(V) -> V.

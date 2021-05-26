@@ -79,7 +79,8 @@ all() ->
      async,
      secondary_rat_usage_data_report,
      handle_failure,
-     handle_answer_error
+     handle_answer_error,
+     terminate
     ].
 
 init_per_suite(Config0) ->
@@ -574,3 +575,36 @@ handle_answer_error(Config) ->
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
+
+terminate() ->
+    [{doc, "Simulate unexpected owner termination"}].
+terminate(Config) ->
+    Session = init_session(#{}, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    ?match(ok, ergw_aaa_session:terminate(SId)),
+    wait_for_session(ergw_aaa_rf, started, 0, 10),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(2, proplists:get_value(stats({'ACR', send}), Stats1)),
+    ?equal(2, proplists:get_value(stats({'ACA', recv, {'Result-Code',2001}}), Stats1)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+stats('ACR') -> {3, 271, 1};
+stats('ACA') -> {3, 271, 0};
+stats(Tuple) when is_tuple(Tuple) ->
+    setelement(1, Tuple, stats(element(1, Tuple)));
+stats(V) -> V.

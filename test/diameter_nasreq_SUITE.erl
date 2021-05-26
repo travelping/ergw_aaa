@@ -79,7 +79,8 @@ common() ->
      attrs_3gpp,
      handle_failure,
      handle_answer_error,
-     abort_session_request].
+     abort_session_request,
+     terminate].
 
 groups() ->
     [{coupled, [], common()},
@@ -408,6 +409,40 @@ abort_session_request(Config) ->
     ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
 
     %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+terminate() ->
+    [{doc, "Simulate unexpected owner termiantion"}].
+terminate(Config) ->
+   Stats0 = get_stats(?SERVICE),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>}),
+
+    {ok, _, _} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
+    ?match(ok, ergw_aaa_session:terminate(Session)),
+    wait_for_session(ergw_aaa_nasreq, started, 0, 10),
+
+
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    ct:pal("Statistics: ~p", [Statistics]),
+    [?equal(Cnt, stats(Msg, Config, Statistics)) ||
+	{Cnt, Msg} <- [{1, 'AAR'}, {1, {'AAA', 2001}},
+		       {2, 'ACR'}, {2, {'ACA', 2001}},
+		       {1, 'STR'}, {1, {'STA', 2001}}
+		      ]],
+
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.

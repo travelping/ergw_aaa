@@ -121,10 +121,20 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session, Events, Opts,
     Request = make_CCR(RecType, Session, Opts, State),
     await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
+invoke(_Service, terminate, Session, Events, Opts,
+       #state{state = started} = State0) ->
+    ?LOG(debug, "Session Termination: ~p", [Session]),
+    State = inc_request_number(State0#state{state = stopped}),
+    RecType = ?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST',
+    Request = make_CCR(RecType, Session, Opts, State),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
+
 invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
   when Procedure =:= 'CCR-Initial';
        Procedure =:= 'CCR-Update';
        Procedure =:= 'CCR-Terminate' ->
+    {ok, Session, Events, State};
+invoke(_Service, terminate, Session, Events, _Opts, State) ->
     {ok, Session, Events, State};
 
 invoke(Service, Procedure, Session, Events, _Opts, State) ->
@@ -618,12 +628,21 @@ to_session(_, _, _, SessEv) ->
 %%       'CC-Request-Type'     => Type,
 %%       'CC-Request-Number'   => ReqNum}.
 
+termination_cause(Session, Avps) ->
+    Cause = maps:get('Termination-Cause', Session, ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'),
+    Avps#{'Termination-Cause' => Cause}.
+
 make_CCR(Type, Session, Opts, #state{request_number = ReqNumber}) ->
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
     Avps1 = Avps0#{'Auth-Application-Id' => ?DIAMETER_APP_ID_GX,
 		   'CC-Request-Type'     => Type,
 		   'CC-Request-Number'   => ReqNumber},
-    Avps = from_session(Session, Avps1),
+    Avps2 = if Type =:=	?'DIAMETER_GX_CC-REQUEST-TYPE_TERMINATION_REQUEST' ->
+		    termination_cause(Session, Avps1);
+	       true ->
+		    Avps1
+	    end,
+    Avps = from_session(Session, Avps2),
     ['CCR' | Avps ].
 
 get_state_atom(#state{state = State}) ->

@@ -14,7 +14,7 @@
 -export([meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1]).
 -export([set_cfg_value/3, get_cfg_value/2]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
--export([get_session_stats/0, reset_session_stats/0]).
+-export([get_session_stats/0, wait_for_session/4, reset_session_stats/0]).
 -export([outstanding_reqs/0]).
 -export([clear_app_env/0, ergw_aaa_init/1]).
 
@@ -207,3 +207,20 @@ reset_session_stats() ->
     [prometheus_gauge:remove(default, aaa_sessions_total, [Handler, State]) ||
      {[{"handler", Handler}, {"state", State}], _} <-
      prometheus_gauge:values(default, aaa_sessions_total)].
+
+wait_for_session(_Service, _State, _Instances, 0) ->
+    ct:fail(timeout);
+wait_for_session(Service, State, Instances, WaitCnt) ->
+    Stats = get_session_stats(),
+    L = lists:filter(
+	  fun({Srv, SrvState, SrvCnt}) ->
+		  Srv =:= Service andalso
+		      SrvState =:= State andalso
+		      SrvCnt =:= Instances end, Stats),
+    case L of
+	[] ->
+	    ct:sleep(100),
+	    wait_for_session(Service, State, Instances, WaitCnt - 1);
+	_ ->
+	    ok
+    end.

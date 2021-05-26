@@ -142,10 +142,24 @@ invoke(_Service, {_, 'Terminate'}, Session0, Events, Opts,
     {Request, State} = create_ACR(RecType, Session, Opts, State3),
     await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
+invoke(_Service, terminate, Session0, Events, Opts,
+       #state{state = started} = State0) ->
+    ?LOG(debug, "Session Terminate: ~p", [Session0]),
+    State1 = close_service_data_containers(Session0, State0#state{state = stopped}),
+    State2 = traffic_data_containers(Session0, State1),
+    State3 = process_secondary_rat_usage_data_reports(Session0, State2),
+    Session = maps:without([service_data, traffic_data,
+			    'RAN-Secondary-RAT-Usage-Report'], Session0),
+    RecType = ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
+    {Request, State} = create_ACR(RecType, Session, Opts, State3),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
+
 invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
   when Procedure =:= 'Initial';
        Procedure =:= 'Update';
        Procedure =:= 'Terminate' ->
+    {ok, Session, Events, State};
+invoke(_Service, terminate, Session, Events, _Opts, State) ->
     {ok, Session, Events, State};
 
 invoke(Service, Procedure, Session, Events, _Opts, State) ->
