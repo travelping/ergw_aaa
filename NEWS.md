@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 3.6.13 - 26 May 2021
+----------------------------
+
+**Bugfixes** :bug:
+* [#144](https://github.com/travelping/ergw_aaa/pull/144) Fix `nodelay` `SCTP`
+
 Version 3.6.12 - 20 May 2021
 ----------------------------
 
