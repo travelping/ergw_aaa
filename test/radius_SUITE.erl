@@ -76,7 +76,8 @@ all() ->
      accounting_async,
      attrs_3gpp,
      avp_filter,
-     vendor_dicts].
+     vendor_dicts,
+     terminate].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -99,18 +100,29 @@ end_per_suite(Config) ->
 
 init_per_testcase(accounting_async, Config) ->
     meck_reset(Config),
+    check_stats_per_testcase(),
     meck:new(eradius_client, [passthrough, no_link]),
     Config;
 init_per_testcase(_, Config) ->
     meck_reset(Config),
+    check_stats_per_testcase(),
     Config.
 
 end_per_testcase(accounting_async, _Config) ->
     reset_session_stats(),
+    check_stats_per_testcase(),
     meck:unload(eradius_client),
     ok;
 end_per_testcase(_, _Config) ->
+    check_stats_per_testcase(),
     ok.
+
+check_stats_per_testcase() ->
+    case get_session_stats() of
+	[] -> ok;
+	[{ergw_aaa_radius, started, 0}] -> ok;
+	Other -> ct:fail(Other)
+    end.
 
 %%%===================================================================
 %%% Test cases
@@ -252,6 +264,8 @@ attrs_3gpp(Config) ->
 
     ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
 
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, stop, [])),
+
     %% make sure nothing crashed
     meck_validate(Config),
     ok.
@@ -322,6 +336,29 @@ vendor_dicts(Config) ->
 
     meck_validate(Config),
     application:set_env(ergw_aaa, apps, OrigApps),
+    ok.
+
+terminate() ->
+    [{doc, "Simulate unexpected owner termiantion"}].
+terminate(Config) ->
+    eradius_test_handler:ready(),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>,
+			'Framed-Interface-Id' => {0,0,0,0,0,0,0,1}}),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+
+    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+
+    ?match(ok, ergw_aaa_session:terminate(Session)),
+    wait_for_session(ergw_aaa_radius, started, 0, 10),
+
+    meck_validate(Config),
     ok.
 
 %%%===================================================================

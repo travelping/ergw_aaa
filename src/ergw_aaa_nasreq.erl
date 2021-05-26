@@ -146,9 +146,10 @@ invoke(_Service, interim, Session, Events, Opts, #state{state = started} = State
     Request = create_ACR(RecType, Session, Opts, State),
     await_response(send_request(App, Request, Opts), 'ACR', Session, Events, State, Opts);
 
-invoke(_Service, stop, Session, Events, Opts,
-       #state{state = started, authorized = Authorized} = State0) ->
-    ?LOG(debug, "Session Stop: ~p", [Session]),
+invoke(_Service, Procedure, Session, Events, Opts,
+       #state{state = started, authorized = Authorized} = State0)
+  when Procedure =:= stop; Procedure =:= terminate ->
+    ?LOG(debug, "Session ~s: ~p", [Procedure, Session]),
     State1 = inc_record_number(State0#state{state = stopped}),
     RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
     App = acct_app_alias(Opts),
@@ -166,7 +167,10 @@ invoke(_Service, stop, Session, Events, Opts,
     end;
 
 invoke(_Service, Procedure, Session, Events, _Opts, State)
-  when Procedure =:= start; Procedure =:= interim; Procedure =:= stop ->
+  when Procedure =:= start;
+       Procedure =:= interim;
+       Procedure =:= stop;
+       Procedure =:= terminate ->
     {ok, Session, Events, State};
 
 invoke(Service, Procedure, Session, Events, _Opts, State) ->
@@ -518,6 +522,10 @@ from_session(_Key, _Value, M) -> M.
 from_session(Session, Avps) ->
     maps:fold(fun from_session/3, Avps, Session).
 
+termination_cause(Session, Avps) ->
+    Cause = maps:get('Termination-Cause', Session, ?'DEFAULT_TERMINATION_CAUSE'),
+    Avps#{'Termination-Cause' => Cause}.
+
 create_AAR(Type, Session, Opts) ->
     Username = maps:get('Username', Session, <<>>),
     Password = maps:get('Password', Session, <<>>),
@@ -535,14 +543,18 @@ create_ACR(Type, Session, #{now := Now} = Opts, #state{record_number = RecNumber
 		   'Accounting-Record-Number' => RecNumber,
 		   'Event-Timestamp' =>
 		       [system_time_to_universal_time(Now + erlang:time_offset(), native)]},
-    Avps = from_session(Session, Avps1),
+    Avps2 = if Type =:=	?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD' ->
+		    termination_cause(Session, Avps1);
+	       true ->
+		    Avps1
+	    end,
+    Avps = from_session(Session, Avps2),
     ['ACR' | Avps].
 
 create_STR(Session, Opts) ->
-    Cause = maps:get('Termination-Cause', Session, ?'DEFAULT_TERMINATION_CAUSE'),
     Avps0 = maps:with(['Destination-Host', 'Destination-Realm'], Opts),
-    Avps1 = Avps0#{'Termination-Cause' => Cause,
-		   'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'},
+    Avps1 =
+	termination_cause(Session, Avps0#{'Auth-Application-Id' => ?'DIAMETER_APP_ID_NASREQ'}),
     Avps = from_session(Session, Avps1),
     ['STR' | Avps].
 

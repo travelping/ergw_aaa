@@ -129,7 +129,8 @@ all() ->
      handle_failure,
      handle_answer_error,
      handle_authorization_rejected,
-     diameter_metrics].
+     diameter_metrics,
+     terminate].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -902,6 +903,37 @@ diameter_metrics(_Config) ->
     ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_outstanding_requests")),
     ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_available_tokens")).
 
+terminate() ->
+    [{doc, "Simulate unexpected owner termination"}].
+terminate(Config) ->
+    Session = init_session(#{}, Config),
+    GyOpts =
+	#{credits =>
+	      #{1000 => empty,
+		2000 => empty,
+		3000 => empty
+	       }
+	 },
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
+    {ok, _, _} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+    ?equal([{ergw_aaa_ro, started, 1}], get_session_stats()),
+
+    ?match(ok, ergw_aaa_session:terminate(SId)),
+    wait_for_session(ergw_aaa_ro, started, 0, 10),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ?equal(2, proplists:get_value(stats({'CCR', send}), Stats1)),
+    ?equal(2, proplists:get_value(stats({'CCA', recv, {'Result-Code',2001}}), Stats1)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
 %%%======================================================================
 %%% Rate limit test helper to generate the requests in separate processes
 %%%======================================================================
@@ -1047,3 +1079,9 @@ stat_check(Svc, Period, Key, Count, Acc) ->
     timer:sleep(Period),
     Value = proplists:get_value(Key, get_stats(Svc), 0),
     stat_check(Svc, Period, Key, Count-1, [Value | Acc]).
+
+stats('CCR') -> {4, 272, 1};
+stats('CCA') -> {4, 272, 0};
+stats(Tuple) when is_tuple(Tuple) ->
+    setelement(1, Tuple, stats(element(1, Tuple)));
+stats(V) -> V.

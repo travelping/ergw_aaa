@@ -126,6 +126,17 @@ invoke(_Service, {_, 'CCR-Terminate'}, Session, Events, Opts,
     Request = make_CCR(RecType, Session, Opts, State),
     await_response(send_request(Request, Opts), Session, Events, State, Opts);
 
+invoke(_Service, terminate, Session, Events, Opts,
+       #state{state = started} = State0) ->
+    ?LOG(debug, "Session Terminate: ~p", [Session]),
+    %% fake used_credits
+    Used = maps:fold(
+	     fun(RG, _, Acc) -> [{RG, []} | Acc] end, [], maps:get(credits, Session, #{})),
+    State = inc_request_number(State0#state{state = stopped}),
+    RecType = ?'DIAMETER_RO_CC-REQUEST-TYPE_TERMINATION_REQUEST',
+    Request = make_CCR(RecType, Session#{used_credits => Used}, Opts, State),
+    await_response(send_request(Request, Opts), Session, Events, State, Opts);
+
 invoke(_Service, {_, Procedure}, Session, Events, Opts,
        #state{state = SessState} = State)
   when Procedure =:= 'CCR-Update';
@@ -143,6 +154,8 @@ invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
   when Procedure =:= 'CCR-Initial';
        Procedure =:= 'CCR-Update';
        Procedure =:= 'CCR-Terminate' ->
+    {ok, Session, Events, State};
+invoke(_Service, terminate, Session, Events, _Opts, State) ->
     {ok, Session, Events, State};
 
 invoke(Service, Procedure, Session, Events, _Opts, State) ->
