@@ -214,7 +214,10 @@ transport_config(sctp, Type, Raddr, Port, Opts0) ->
     Opts =
 	[Type, {raddr, Raddr}, {rport, Port}
 	| maps:to_list(maps:with([reuseaddr, recbuf, sndbuf, nodelay, unordered], Opts0))],
-    proplists:unfold(proplists:substitute_aliases([{nodelay, sctp_nodelay}], Opts)).
+    [case I of
+        {nodelay, V} -> {sctp_nodelay, V};
+        _ -> I
+    end || I <- Opts].
 
 svc_set(Key, Value, Opts)
   when is_atom(Key), is_list(Value) ->
