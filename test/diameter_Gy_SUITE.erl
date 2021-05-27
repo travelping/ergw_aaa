@@ -175,6 +175,7 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, _Config) ->
+    wait_for_outstanding_reqs(10),
     ok.
 
 %%%===================================================================
@@ -236,6 +237,16 @@ init_session(Session, _Config) ->
 	      %%      }
 	 },
     maps:merge(Defaults, Session).
+
+wait_for_outstanding_reqs(0) ->
+    ct:fail(timeout);
+wait_for_outstanding_reqs(Cnt) ->
+    case outstanding_reqs() of
+	0 -> ok;
+	_ ->
+	    ct:sleep(100),
+	    wait_for_outstanding_reqs(Cnt - 1)
+    end.
 
 %%%===================================================================
 %%% Test cases
@@ -581,19 +592,20 @@ rate_limit(_Config) ->
     SRefs = [begin Ref = make_ref(), spawn(?MODULE, async_session, [Self, Ref]), Ref end
 	     || _ <- lists:seq(1, 60)],
 
-    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
-	     when OkayI >= 40 andalso
-		  LimitI /= 0 andalso
-		  OkayI + LimitI =:= 60,
-	   CollectFun('CCR-Initial', SRefs, #{})),
-    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
-	     when OkayT >= 40 andalso
-		  LimitT /= 0 andalso
-		  OkayT + LimitT =:= 60,
-	   CollectFun('CCR-Terminate', SRefs, #{})),
+    CCRi = CollectFun('CCR-Initial', SRefs, #{}),
+    CCRt = CollectFun('CCR-Terminate', SRefs, #{}),
 
     %% make sure to refill the token buckets, so that the following tests don't fail
     ct:sleep(1100),
+
+    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
+	     when OkayI >= 40 andalso
+		  LimitI /= 0 andalso
+		  OkayI + LimitI =:= 60, CCRi),
+    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
+	     when OkayT >= 40 andalso
+		  LimitT /= 0 andalso
+		  OkayT + LimitT =:= 60, CCRt),
     ok.
 ccr_t_rate_limit() ->
     [{doc, "older version of the rate limit test, does not work, keep for reference"}].
