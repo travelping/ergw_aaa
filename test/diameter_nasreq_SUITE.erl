@@ -354,7 +354,8 @@ simple(Config, TermOpts) ->
 		      #{'Framed-IP-Address' => {10,10,10,10},
 			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
 			'Framed-Pool' => <<"pool-A">>,
-			'Framed-IPv6-Pool' => <<"pool-A">>}),
+			'Framed-IPv6-Pool' => <<"pool-A">>,
+			'NAT-Pool-Id' => <<"nat-A">>}),
 
     {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
     ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
