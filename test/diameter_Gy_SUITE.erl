@@ -172,10 +172,12 @@ end_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     reset_session_stats(),
     meck_reset(Config),
+    ?match(0, outstanding_reqs()),
     Config.
 
 end_per_testcase(_, _Config) ->
     wait_for_outstanding_reqs(10),
+    ets:delete_all_objects(?MODULE),
     ok.
 
 %%%===================================================================
@@ -569,6 +571,10 @@ ccr_retry(Config) ->
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ?CLEAR_TC_INFO(),
+
+    ets:delete_all_objects(?MODULE),
+    ?match(ok, ergw_aaa_session:terminate(SId)),
+    wait_for_session(ergw_aaa_ro, started, 0, 10),
     ok.
 
 rate_limit(_Config) ->
