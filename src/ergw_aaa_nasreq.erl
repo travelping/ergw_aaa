@@ -380,11 +380,16 @@ to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
     Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
     {Session, ergw_aaa_session:ev_set(Trigger, Events)};
 
-to_session(_, 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
-    {Session#{'Framed-IP-Address' => {A,B,C,D}}, Events};
-to_session(_, 'Framed-IPv6-Prefix', [Prefix], {Session, Events}) ->
-    {Session#{'Framed-IPv6-Prefix' => ergw_aaa_diameter:decode_ipv6prefix(Prefix)}, Events};
-
+to_session(_, Key = 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
+    {Session#{Key => {A,B,C,D}}, Events};
+to_session(_, Key = 'Framed-IPv6-Prefix', [Prefix], {Session, Events}) ->
+    {Session#{Key => ergw_aaa_diameter:decode_ipv6prefix(Prefix)}, Events};
+to_session(_, Key = 'Framed-Interface-Id', [IfId], {Session, Events}) ->
+    {Session#{Key => ergw_aaa_3gpp_dict:ip2bin(<<IfId:128>>)}, Events};
+to_session(_, Key = '3GPP-IPv6-DNS-Servers', [Value], {Session, Events}) ->
+    {Session#{Key => ergw_aaa_3gpp_dict:decode(Key, Value)}, Events};
+to_session(_, 'TP-NAT-Pool-Id', [Id], {Session, Events}) ->
+    {Session#{'NAT-Pool-Id' => Id}, Events};
 to_session(_, _, _, SessEv) ->
     SessEv.
 
@@ -495,6 +500,15 @@ from_session('Framed-IP-Address' = Key, Value, M) ->
     M#{Key => [format_address(Value)]};
 from_session('Framed-IPv6-Prefix' = Key, Value, M) ->
     M#{Key => [ergw_aaa_diameter:encode_ipv6prefix(Value)]};
+
+from_session('NAT-IP-Address', Value, M) ->
+    M#{'TP-NAT-IP-Address' => [format_address(Value)]};
+from_session('NAT-Pool-Id', Value, M) ->
+    M#{'TP-NAT-Pool-Id' => [Value]};
+from_session('NAT-Port-Start', Value, M) ->
+    M#{'TP-NAT-Port-Start' => [Value]};
+from_session('NAT-Port-End', Value, M) ->
+    M#{'TP-NAT-Port-End' => [Value]};
 
 from_session('Diameter-Session-Id', SId, M) ->
     M#{'Session-Id' => SId};

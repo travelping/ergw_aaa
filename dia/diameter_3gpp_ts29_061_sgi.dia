@@ -81,6 +81,7 @@
             * [ Proxy-Info ]
             * [ Route-Record ]
               [ 3GPP-IMSI]
+           ;; [ External-Identifier]                          ;; 3GPP TS 29.336 and 3GPP TS 23.003
               [ 3GPP-Charging-Id ]
               [ 3GPP-PDP-Type ]
               [ 3GPP-CG-Address ]
@@ -96,11 +97,12 @@
               [ 3GPP-SGSN-IPv6-Address ]
               [ 3GPP-GGSN-IPv6-Address ]
               [ 3GPP-SGSN-MCC-MNC ]
+              [ 3GPP-User-Location-Info ]
               [ 3GPP-RAT-Type ]
               [ 3GPP-CAMEL-Charging-Info ]
               [ 3GPP-Negotiated-DSCP ]
               [ 3GPP-Allocate-IP-Type ]
-              [ 3GPP-User-Location-Info ]
+              [ TP-NAT-Pool-Id ]
             * [ AVP ]
 
       AAA ::= < Diameter Header: 265, PXY >
