@@ -22,7 +22,9 @@
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include("include/diameter_3gpp_ts29_061_sgi.hrl").
 
-%% RFC: https://tools.ietf.org/html/rfc3588#section-8.15
+%% RFC:
+%% * https://tools.ietf.org/html/rfc3588#section-8.15
+%% * https://www.iana.org/assignments/aaa-parameters/aaa-parameters.xhtml#aaa-parameters-16
 -define(DEFAULT_TERMINATION_CAUSE_MAPPING, [
     {normal, 1},                 % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {administrative, 4},         % ?'DIAMETER_BASE_TERMINATION-CAUSE_ADMINISTRATIVE'
@@ -38,7 +40,8 @@
     {conn_error, 1},             % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {rate_limit, 1},             % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {ocs_hold_end, 1},           % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
-    {peer_reject, 1}             % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {peer_reject, 1},            % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {deleted_by_upf, 19}         % 'NAS_ERROR'
 ]).
 
 -define(VENDOR_ID_3GPP, 10415).
