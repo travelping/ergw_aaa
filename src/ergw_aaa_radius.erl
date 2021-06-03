@@ -50,7 +50,8 @@
     {conn_error, 10},
     {rate_limit, 10},
     {ocs_hold_end, 10},
-    {peer_reject, 10}
+    {peer_reject, 10},
+    {deleted_by_upf, 9}
 ]).
 
 -define(DefaultOptions, [{server, undefined},
