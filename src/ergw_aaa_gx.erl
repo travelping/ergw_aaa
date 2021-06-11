@@ -262,7 +262,7 @@ validate_option('Destination-Host', [Value]) when is_binary(Value) ->
 validate_option('Destination-Realm', Value) when is_binary(Value) ->
     Value;
 validate_option(answers, Value) when is_map(Value) ->
-    Value;
+    ergw_aaa_config:validate_answers(Value);
 validate_option(answer_if_down, Value) ->
     Value;
 validate_option(answer_if_timeout, Value) ->
@@ -293,13 +293,11 @@ handle_cca([Answer |
     handle_cca(Answer, RC, AVPs, Session, Events, Opts, State);
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts, State) ->
-    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
+    Avps = apply_answer_config(Answer, Answers),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State#state{state = peer_down});
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts, State) ->
-    Avps = maps:get(Answer, Answers, #{'Result-Code' =>
-					   [?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED']}),
+    Avps = apply_answer_config(Answer, Answers),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
 handle_cca({error, Reason} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
@@ -375,6 +373,11 @@ filter_reply_avps(_, Avps) ->
     Avps.
 
 %%%===================================================================
+apply_answer_config(Answer, Answers) ->
+    case Answers of
+	#{Answer := #{avps := A}} -> A;
+	_ -> #{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'}
+    end.
 
 assign([Key], Fun, Avps) ->
     Fun(Key, Avps);

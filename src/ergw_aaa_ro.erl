@@ -307,7 +307,7 @@ validate_option('Credit-Control-Failure-Handling', Value)
        Value =:= retry_and_terminate ->
     Value;
 validate_option(answers, Value) when is_map(Value) ->
-    Value;
+    ergw_aaa_config:validate_answers(Value);
 validate_option(answer_if_down, Value)
   when is_binary(Value); Value =:= reject ->
     Value;
@@ -665,23 +665,28 @@ from_session(Session, Avps0) ->
 apply_answer_config(Answer, Answers, State) ->
     apply_answer_config(maps:get(Answer, Answers, undefined), State).
 
-apply_answer_config({ocs_hold, GCUs}, State) ->
-    GCUs1 = lists:map(
-	      fun (#{'Granted-Service-Unit' :=
-			 [#{'CC-Time-Min' := [MinTime],
-			    'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
-		      GSU1 = GSU#{'CC-Time' =>
-				      [MinTime + rand:uniform(MaxTime - MinTime)]},
-		      GCU#{'Granted-Service-Unit' =>
-			       [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
-		  (GCU) ->
-		      GCU
-	      end, GCUs),
-    {#{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
-       'Multiple-Services-Credit-Control' => GCUs1},
-     State#state{state = ocs_hold}};
-apply_answer_config(AVPs, State)
-  when is_map(AVPs) ->
+apply_answer_config(#{avps := AVPs0, state := ocs_hold}, State) ->
+    AVPs =
+	case AVPs0 of
+	    #{'Multiple-Services-Credit-Control' := GCUs0} when is_list(GCUs0) ->
+		GCUs =
+		    lists:map(
+		      fun (#{'Granted-Service-Unit' :=
+				 [#{'CC-Time-Min' := [MinTime],
+				    'CC-Time-Max' := [MaxTime]}] = [GSU]} = GCU) ->
+			      GSU1 = GSU#{'CC-Time' =>
+					      [MinTime + rand:uniform(MaxTime - MinTime)]},
+			      GCU#{'Granted-Service-Unit' =>
+				       [maps:without(['CC-Time-Min', 'CC-Time-Max'], GSU1)]};
+			  (GCU) ->
+			      GCU
+		      end, GCUs0),
+		AVPs0#{'Multiple-Services-Credit-Control' => GCUs};
+	    _ ->
+		AVPs0
+	end,
+    {AVPs, State#state{state = ocs_hold}};
+apply_answer_config(#{avps := AVPs}, State) ->
     {AVPs, State};
 apply_answer_config(undefined, State) ->
     AVPs = #{'Result-Code' => ?'DIAMETER_BASE_RESULT-CODE_AUTHORIZATION_REJECTED'},
