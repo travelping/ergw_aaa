@@ -35,54 +35,61 @@
 		    #{handler => 'ergw_aaa_static',
 		      answers =>
 			  #{<<"Initial-Gy">> =>
-				#{'Result-Code' => 2001,
-				  'Multiple-Services-Credit-Control' =>
-				      [#{'Envelope-Reporting' => [0],
-					 'Granted-Service-Unit' =>
-					     [#{'CC-Time' => [3600],
-						'CC-Total-Octets' => [102400]}],
-					 'Rating-Group' => [3000],
-					 'Result-Code' => [2001],
-					 'Time-Quota-Threshold' => [60],
-					 'Volume-Quota-Threshold' => [10240]}
-				      ]
+				#{avps =>
+				      #{'Result-Code' => 2001,
+					'Multiple-Services-Credit-Control' =>
+					    [#{'Envelope-Reporting' => [0],
+					       'Granted-Service-Unit' =>
+						   [#{'CC-Time' => [3600],
+						      'CC-Total-Octets' => [102400]}],
+					       'Rating-Group' => [3000],
+					       'Result-Code' => [2001],
+					       'Time-Quota-Threshold' => [60],
+					       'Volume-Quota-Threshold' => [10240]}
+					    ]
+				       }
 				 },
 			    <<"Update-Gy">> =>
-				#{'Result-Code' => 5003},
+				#{avps => #{'Result-Code' => 5003}},
 			    <<"Initial-Gx">> =>
-				#{'Result-Code' => 2001,
-				  'Charging-Rule-Install' =>
-				      [#{'Charging-Rule-Definition' =>
-					     [#{'Charging-Rule-Name' => <<"m2m-gx">>,
-						'Rating-Group' => [3000],
-						'Flow-Information' =>
-						    [#{'Flow-Description' => [<<"permit out ip from any to assigned">>],
-						       'Flow-Direction'   => [1]    %% DownLink
-						      },
-						     #{'Flow-Description' => [<<"permit out ip from any to assigned">>],
-						       'Flow-Direction'   => [2]    %% UpLink
-						      }],
-						'Metering-Method'  => [1],
-						'Precedence' => [100]
-					       }],
-					 'Charging-Rule-Name' =>
-					     [<<"m2m-r0001">>, <<"m2m-r0001">>],
-					 'Charging-Rule-Base-Name' =>
-					     [<<"m2m0001">>]
-					}
-				      ]
+				#{avps =>
+				      #{'Result-Code' => 2001,
+					'Charging-Rule-Install' =>
+					    [#{'Charging-Rule-Definition' =>
+						   [#{'Charging-Rule-Name' => <<"m2m-gx">>,
+						      'Rating-Group' => [3000],
+						      'Flow-Information' =>
+							  [#{'Flow-Description' => [<<"permit out ip from any to assigned">>],
+							     'Flow-Direction'   => [1]    %% DownLink
+							    },
+							   #{'Flow-Description' => [<<"permit out ip from any to assigned">>],
+							     'Flow-Direction'   => [2]    %% UpLink
+							    }],
+						      'Metering-Method'  => [1],
+						      'Precedence' => [100]
+						     }],
+					       'Charging-Rule-Name' =>
+						   [<<"m2m-r0001">>, <<"m2m-r0001">>],
+					       'Charging-Rule-Base-Name' =>
+						   [<<"m2m0001">>]
+					      }
+					    ]
+				       }
 				 },
 			    <<"Update-Gx">> =>
-				#{'Result-Code' => 2001,
-				  'Charging-Rule-Remove' =>
-				      [#{'Charging-Rule-Name' =>
-					     [<<"m2m-r0001">>],
-					 'Charging-Rule-Base-Name' =>
-					     [<<"m2m0001">>]
-					}
-				      ]
+				#{avps =>
+				      #{'Result-Code' => 2001,
+					'Charging-Rule-Remove' =>
+					    [#{'Charging-Rule-Name' =>
+						   [<<"m2m-r0001">>],
+					       'Charging-Rule-Base-Name' =>
+						   [<<"m2m0001">>]
+					      }
+					    ]
+				       }
 				 },
-			    <<"Final-Gx">> => #{'Result-Code' => 5003}
+			    <<"Final-Gx">> =>
+				#{avps => #{'Result-Code' => 5003}}
 			   }
 		     }
 	       },

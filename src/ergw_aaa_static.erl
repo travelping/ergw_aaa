@@ -43,7 +43,12 @@ validate_procedure(_Application, _Procedure, _Service, ServiceOpts, Opts) ->
     ergw_aaa_config:validate_options(fun validate_option/2, Opts, ServiceOpts).
 
 invoke(_Service, Procedure, Session, Events, #{answers := Answers, answer := Answer}, State) ->
-    handle_response(Procedure, maps:get(Answer, Answers, #{}), Session, Events, State);
+    AVPs =
+	case Answers of
+	    #{Answer := #{avps := A}} -> A;
+	    _ -> #{}
+	end,
+    handle_response(Procedure, AVPs, Session, Events, State);
 invoke(_Service, _Procedure, Session, Events, Opts, State) ->
     SOpts = maps:get(defaults, Opts, #{}),
     {ok, maps:merge(Session, SOpts), Events, State}.
@@ -63,7 +68,7 @@ validate_option(handler, Value) ->
 validate_option(service, Value) ->
     Value;
 validate_option(answers, Value) when is_map(Value) ->
-    Value;
+    ergw_aaa_config:validate_answers(Value);
 validate_option(answer, Value) ->
     Value;
 validate_option(defaults, Opts) when ?is_opts(Opts) ->

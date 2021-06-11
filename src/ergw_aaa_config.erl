@@ -13,7 +13,8 @@
 -export([validate_options/3,
 	 validate_option/2, validate_function/2,
 	 validate_handler/2, validate_service/2,
-	 validate_app/2, validate_rate_limit/2]).
+	 validate_app/2, validate_rate_limit/2,
+	 validate_answers/1]).
 -export([to_map/1]).
 
 -define(is_opts(X), (is_list(X) orelse is_map(X))).
@@ -161,3 +162,18 @@ validate_rate_limit_option(_RateLimit, rate, Rate)
     Rate;
 validate_rate_limit_option(RateLimit, Opt, Value) ->
     erlang:error(badarg, [RateLimit, Opt, Value]).
+
+validate_answers(Answers) when is_map(Answers) ->
+    maps:map(fun validate_answer/2, Answers).
+
+validate_answer(_, V) when is_map(V) ->
+    validate_options(fun validate_answer_opt/2, V, []);
+validate_answer(K, V) ->
+    erlang:error(badarg, [K, V]).
+
+validate_answer_opt(avps, AVPs) when is_map(AVPs) ->
+    AVPs;
+validate_answer_opt(state, ocs_hold = V) ->
+    V;
+validate_answer_opt(K, V) ->
+    erlang:error(badarg, [K, V]).

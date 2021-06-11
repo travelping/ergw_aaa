@@ -76,17 +76,21 @@
 		    #{handler => 'ergw_aaa_ro',
 		      answers =>
 			  #{<<"OCS-Hold">> =>
-				{ocs_hold,
-				 [#{'Envelope-Reporting' => [0],
-				    'Granted-Service-Unit' =>
-					[#{'CC-Time-Min' => [1800], 'CC-Time-Max' => [1900]}],
-				    'Rating-Group' => [1000],
-				    'Result-Code' => [2001],
-				    'Time-Quota-Threshold' => [60]}
-				 ]
-				}
-			   }}
-		     },
+				#{avps =>
+				      #{'Result-Code' => 2001,
+					'Multiple-Services-Credit-Control' =>
+					    [#{'Envelope-Reporting' => [0],
+					       'Granted-Service-Unit' =>
+						   [#{'CC-Time-Min' => [1800],
+						      'CC-Time-Max' => [1900]}],
+					       'Rating-Group' => [1000],
+					       'Result-Code' => [2001],
+					       'Time-Quota-Threshold' => [60]}]},
+				  state => ocs_hold
+				 }
+			   }
+		     }
+	       },
 	  apps =>
 	      #{default =>
 		    #{init => [#{service => <<"Default">>}],
