@@ -63,10 +63,10 @@ setopts(Opts0) when is_map(Opts0)->
 setopts(Opts) when is_list(Opts) ->
     setopts(ergw_aaa_config:to_map(Opts)).
 
-setopt(rate_limits = Opt, Value0) ->
-    Value = ergw_aaa_config:validate_options(
-	      fun ergw_aaa_config:validate_rate_limit/2, Value0, []),
-    application:set_env(ergw_aaa, Opt, Value);
+setopt(rate_limit = Opt, {Key, Value0}) ->
+    Value = ergw_aaa_config:validate_rate_limit(Key, Value0),
+    Limits = application:get_env(ergw_aaa, rate_limits, #{}),
+    application:set_env(ergw_aaa, rate_limits, maps:put(Key, Value, Limits));
 setopt(Opt, Value0) ->
     Value = ergw_aaa_config:validate_option(Opt, Value0),
     application:set_env(ergw_aaa, Opt, Value).

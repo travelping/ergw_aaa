@@ -149,8 +149,10 @@ validate_app_procs_svc(App, Procedure, Opts)
 validate_app_procs_svc(App, Procedure, Service) ->
     erlang:error(badarg, [App, Procedure, Service]).
 
-validate_rate_limit(RateLimit, Opts) when ?is_opts(Opts) ->
-    validate_options(validate_rate_limit_option(RateLimit, _, _), Opts, ?DefaultRateLimit);
+validate_rate_limit(K = default, Opts) when ?is_opts(Opts) ->
+    validate_options(validate_rate_limit_option(K, _, _), Opts, ?DefaultRateLimit);
+validate_rate_limit(Peer, Opts) when is_binary(Peer), ?is_opts(Opts) ->
+    validate_options(validate_rate_limit_option(Peer, _, _), Opts, ?DefaultRateLimit);
 validate_rate_limit(RateLimit, Opts) ->
     erlang:error(badarg, [RateLimit, Opts]).
 

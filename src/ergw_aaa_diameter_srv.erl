@@ -301,13 +301,13 @@ get_peer(Host, Peers) ->
 	    true ->
 		maps:get(Host, Peers);
 	    _ ->
-		RateLimits = application:get_env(ergw_aaa, rate_limits, #{}),
 		#{outstanding_requests := Capacity, rate := Rate} =
-		    if is_map_key(Host, RateLimits) ->
-			    maps:get(Host, RateLimits);
-		       is_map_key(default, RateLimits) ->
-			    maps:get(default, RateLimits);
-		       true ->
+		    case application:get_env(ergw_aaa, rate_limits, undefined) of
+			Limits when is_map_key(Host, Limits) ->
+			    maps:get(Host, Limits);
+			#{default := Default} ->
+			    Default;
+			_ ->
 			    #{outstanding_requests => 50, rate => 50}
 		    end,
 		#peer{capacity = Capacity, rate = Rate}
