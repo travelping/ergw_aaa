@@ -28,7 +28,7 @@
 
 -define(RADIUS_CONFIG,
 	#{server =>
-	      #{server => {127,0,0,1},
+	      #{host => {127,0,0,1},
 		port => 1812,
 		secret => <<"secret">>}}).
 
@@ -44,13 +44,13 @@
 		<<"RADIUS-Auth">> =>
 		    #{handler => 'ergw_aaa_radius',
 		      server =>
-			  #{server => {127,0,0,1},
+			  #{host => {127,0,0,1},
 			    port => 1812,
 			    secret => <<"secret">>}},
 		<<"RADIUS-Acct">> =>
 		    #{handler => 'ergw_aaa_radius',
 		      server =>
-			  #{server => {127,0,0,1},
+			  #{host => {127,0,0,1},
 			    port => 1813,
 			    secret => <<"secret">>}}},
 	  apps =>

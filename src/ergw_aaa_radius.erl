@@ -207,7 +207,8 @@ mandatory_keys(Keys, Map) when is_map(Map) ->
 	      end
       end, Keys).
 
-validate_ip(Opt, Host) when is_list(Host) ->
+validate_host(Opt, Host)
+  when is_list(Host);  is_binary(Host) ->
     case gethostbyname(Host) of
 	{ok, #hostent{h_addr_list = [IP | _]}} ->
 	    IP;
@@ -215,15 +216,15 @@ validate_ip(Opt, Host) when is_list(Host) ->
 	    ?LOG(error, "can't resolve remote RADIUS server name '~s'", [Host]),
 	    erlang:error(badarg, [Opt, Host])
     end;
-validate_ip(_Opt, {_,_,_,_} = IP) ->
+validate_host(_Opt, {_,_,_,_} = IP) ->
     IP;
-validate_ip(_Opt, {_,_,_,_,_,_,_,_} = IP) ->
+validate_host(_Opt, {_,_,_,_,_,_,_,_} = IP) ->
     IP;
-validate_ip(Opt, IP) ->
+validate_host(Opt, IP) ->
     erlang:error(badarg, [Opt, IP]).
 
-validate_server_opt(server, IP) ->
-    validate_ip(server, IP);
+validate_server_opt(host, IP) ->
+    validate_host(host, IP);
 validate_server_opt(port, Port)
   when is_integer(Port), Port > 0, Port < 65536 ->
     Port;
@@ -257,7 +258,7 @@ validate_option(service, Value) ->
     Value;
 validate_option(server, Opts0) when ?is_opts(Opts0)->
     Opts = ergw_aaa_config:to_map(Opts0),
-    mandatory_keys([server, port, secret], Opts),
+    mandatory_keys([host, port, secret], Opts),
     ergw_aaa_config:validate_options(fun validate_server_opt/2, Opts, []);
 validate_option(Opt, Value)
   when (Opt =:= server_name orelse Opt =:= client_name)
@@ -356,7 +357,9 @@ system_time_to_universal_time(Time, TimeUnit) ->
     calendar:gregorian_seconds_to_datetime(Secs + ?SECONDS_FROM_0_TO_1970).
 -endif.
 
-gethostbyname(Name) ->
+gethostbyname(Name) when is_binary(Name) ->
+    gethostbyname(binary_to_list(Name));
+gethostbyname(Name) when is_list(Name) ->
     case inet:gethostbyname(Name, inet6) of
 	{error, nxdomain} ->
 	    inet:gethostbyname(Name, inet);
@@ -916,7 +919,7 @@ radius_accounting_opts() ->
 		       ?Acct_Status_Type,
 		       ?Event_Timestamp]).
 
-send_request(Req, Session, #{server := #{server := IP, port := Port, secret := Secret},
+send_request(Req, Session, #{server := #{host := IP, port := Port, secret := Secret},
 			     retries := Retries, timeout := Timeout} = Opts) ->
     Id = maps:get('NAS-Identifier', Session, <<"NAS">>),
     RadiusClientOpts = [{client_name, maps:get(client_name, Opts, Id)},
