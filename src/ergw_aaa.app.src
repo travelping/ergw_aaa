@@ -16,6 +16,6 @@
 		 ]},
   {mod, { ergw_aaa_app, []}},
   {env, [{product_name, "erGW-AAA"},
-	 {rate_limits,  #{outstanding_requests => 50, rate => 50}}
+	 {rate_limits,  #{default => #{outstanding_requests => 50, rate => 50}}}
 	]}
  ]}.

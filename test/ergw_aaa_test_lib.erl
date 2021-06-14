@@ -103,10 +103,10 @@ ergw_aaa_init(Config) ->
 ergw_aaa_init(product_name, #{product_name := PN0}) ->
     PN = ergw_aaa_config:validate_option(product_name, PN0),
     ergw_aaa:setopt(product_name, PN);
-ergw_aaa_init(rate_limits, #{rate_limits := Limits0}) ->
-    Limits = ergw_aaa_config:validate_options(
-	       fun ergw_aaa_config:validate_rate_limit/2, Limits0, []),
-    ergw_aaa:setopt(rate_limits, Limits);
+ergw_aaa_init(rate_limits, #{rate_limits := Limits}) when is_list(Limits) ->
+    lists:foreach(ergw_aaa:setopt(rate_limit, _), Limits);
+ergw_aaa_init(rate_limits, #{rate_limits := Limits}) when is_map(Limits) ->
+    lists:foreach(ergw_aaa:setopt(rate_limit, _), maps:to_list(Limits));
 ergw_aaa_init(handlers, #{handlers := Handlers0}) ->
     Handlers = ergw_aaa_config:validate_options(
 		 fun ergw_aaa_config:validate_handler/2, Handlers0, []),
