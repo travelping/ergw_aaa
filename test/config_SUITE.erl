@@ -41,7 +41,7 @@
 	 }).
 
 -define(RADIUS_AUTH_CONFIG,
-	#{server                    => #{server => {127,0,0,1},
+	#{server                    => #{host => {127,0,0,1},
 					 port => 1812,
 					 secret => <<"secret">>},
 	  retries                   => 3,
@@ -50,7 +50,7 @@
 	  avp_filter                => #{},
 	  termination_cause_mapping => ?RADIUS_DEFAULT_TERMINATION_CAUSE_MAPPING}).
 -define(RADIUS_ACCT_CONFIG,
-	#{server                    => #{server => {0,0,0,0,0,0,0,1},
+	#{server                    => #{host => {0,0,0,0,0,0,0,1},
 					 port => 1813,
 					 secret => <<"secret">>},
 	  retries                   => 3,
@@ -279,7 +279,8 @@ radius_handler(_Config)  ->
     ?bad(ValF(set_cfg_value([retries], invalid, Cfg))),
     ?bad(ValF(set_cfg_value([timeout], invalid, Cfg))),
 
-    ?ok(ValF(set_cfg_value([server], #{server => "localhost", port => 1812, secret => <<"secret">>}, Cfg))),
+    ?ok(ValF(set_cfg_value([server], #{host => "localhost", port => 1812, secret => <<"secret">>}, Cfg))),
+    ?ok(ValF(set_cfg_value([server], #{host => <<"localhost">>, port => 1812, secret => <<"secret">>}, Cfg))),
     ?ok(ValF(set_cfg_value([async], true, Cfg))),
     ?ok(ValF(set_cfg_value([async], false, Cfg))),
     ?ok(ValF(set_cfg_value([retries], 1, Cfg))),
