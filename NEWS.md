@@ -3,6 +3,55 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.0.0 - 25 June 2021
+----------------------------
+
+**Features** :rocket:
+* [#152](https://github.com/travelping/ergw_aaa/pull/152) Handle `NAT` `IEs` in `DIAMETER` `NASREQ`
+* [#154](https://github.com/travelping/ergw_aaa/pull/154) Add `deleted_by_upf` for default termination cause mapping
+* [#158](https://github.com/travelping/ergw_aaa/pull/158) Change rate limit config
+
+**Bugfixes** :bug:
+* [#148](https://github.com/travelping/ergw_aaa/pull/148) Fix nodelay `SCTP`
+* [#149](https://github.com/travelping/ergw_aaa/pull/149) Add terminate step to all handlers
+* [#157](https://github.com/travelping/ergw_aaa/pull/157) Change answers in config from tuple to `K/V`
+
+**Dependencies** :gear:
+* [#159](https://github.com/travelping/ergw_aaa/pull/159) Updated dependencies: [eradius](https://github.com/travelping/eradius/releases/tag/2.2.2), [prometheus.erl](https://github.com/deadtrickster/prometheus.erl/releases/tag/v4.8.1)
+*[#153](https://github.com/travelping/ergw_aaa/pull/153) Switch back to official `DIAMETER` compiler plugin
+
+Version 3.6.14 - 26 May 2021
+----------------------------
+
+**Bugfixes** :bug:
+* [#146](https://github.com/travelping/ergw_aaa/pull/146) Fix `nodelay` `SCTP`
+
+Version 3.6.13 - 26 May 2021
+----------------------------
+
+**Bugfixes** :bug:
+* [#144](https://github.com/travelping/ergw_aaa/pull/144) Fix `nodelay` `SCTP`
+
+Version 3.6.12 - 20 May 2021
+----------------------------
+
+**Bugfixes** :bug:
+* [#141](https://github.com/travelping/ergw_aaa/pull/141) Fix parsing of `Class` `RADIUS` attribute
+
+Version 3.6.11 - 7 May 2021
+----------------------------
+
+**Features** :rocket:
+* [#137](https://github.com/travelping/ergw_aaa/pull/137) Add `nodelay` support for `SCTP`
+
+**Dependencies** :gear:
+* [#124](https://github.com/travelping/ergw_aaa/pull/138) Start use [prometheus](https://github.com/deadtrickster/prometheus.erl.gi) from `master` branch
+> Started use 'prometheus' from master by reason that provided fixes
+> for speed up for fetching metrics which were merged into master but were not released
+> * [prometheus#124](https://github.com/deadtrickster/prometheus.erl/pull/124) improve efficiency of label translation in text format
+> * [prometheus#121](https://github.com/deadtrickster/prometheus.erl/pull/121) replace regex to escape special chars with simple binary comprehension
+> * [prometheus#120](https://github.com/deadtrickster/prometheus.erl/pull/120) speedup collection of counters and histograms
+
 Version 3.6.10 - 16 March 2021
 ----------------------------
 
