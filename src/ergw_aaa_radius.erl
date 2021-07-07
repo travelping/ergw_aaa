@@ -559,8 +559,10 @@ session_options('3GPP-IMEISV', Value, Attrs) ->
     [{?X_3GPP_IMEISV, Value}|Attrs];
 session_options('3GPP-RAT-Type' = Key, Value, Attrs) ->
     [{?X_3GPP_RAT_Type, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
-session_options('3GPP-User-Location-Info', Value, Attrs) ->
+session_options('3GPP-User-Location-Info', Value, Attrs) when is_binary(Value) ->
     [{?X_3GPP_User_Location_Info, Value}|Attrs];
+session_options('User-Location-Info' = Key, Value, Attrs) when is_map(Value) ->
+    [{?X_3GPP_User_Location_Info, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-MS-TimeZone' = Key, Value, Attrs) ->
     [{?X_3GPP_MS_TimeZone, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-Camel-Charging', Value, Attrs) ->

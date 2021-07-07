@@ -12,6 +12,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
+-include_lib("gtplib/include/gtp_packet.hrl").
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
 
@@ -254,7 +255,13 @@ attrs_3gpp(Config) ->
 	      '3GPP-SGSN-IPv6-Address'  => {16#fd96, 16#dcd2, 16#efdb, 16#41c4, 0, 0, 0, 16#1000},
 	      '3GPP-GGSN-IPv6-Address'  => {16#fd96, 16#dcd2, 16#efdb, 16#41c4, 0, 0, 0, 16#2000},
 	      '3GPP-Selection-Mode'     => 0,
-	      '3GPP-User-Location-Info' => <<24,98,242,16,64,163,98,242,16,1,156,232,0>>,
+	      'User-Location-Info' =>
+		  #{'ext-macro-eNB' =>
+			#ext_macro_enb{plmn_id = {<<"001">>, <<"001">>},
+				       id = rand:uniform(16#1fffff)},
+		    'TAI' =>
+			#tai{plmn_id = {<<"001">>, <<"001">>},
+			     tac = rand:uniform(16#ffff)}},
 	      'Called-Station-Id'       => <<"some.station.gprs">>,
 	      'Calling-Station-Id'      => <<"543148000012345">>,
 	      'Framed-IP-Address'       => {0,0,0,0},

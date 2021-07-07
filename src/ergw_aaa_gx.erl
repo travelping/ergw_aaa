@@ -484,9 +484,14 @@ from_session(Key, Value, Avps)
        Key =:= '3GPP-Charging-Characteristics';
        Key =:= '3GPP-SGSN-MCC-MNC';
        Key =:= '3GPP-MS-TimeZone';
-       Key =:= '3GPP-User-Location-Info';
        Key =:= '3GPP-RAT-Type' ->
     Avps#{Key => [ergw_aaa_diameter:'3gpp_from_session'(Key, Value)]};
+
+%% '3GPP-User-Location-Info'
+from_session(Key, Value, Avps)
+  when Key =:= 'User-Location-Info';
+       Key =:= '3GPP-User-Location-Info' ->
+    Avps#{'3GPP-User-Location-Info' => [ergw_aaa_diameter:'3gpp_from_session'(Key, Value)]};
 
 %% 'AN-Trusted'
 %% 'RAT-Type'

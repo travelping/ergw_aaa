@@ -492,7 +492,6 @@ from_session('3GPP-Charging-Id' = Key, Value, Avps0) ->
 %% '3GPP-Charging-Characteristics'
 %% '3GPP-SGSN-MCC-MNC'
 %% '3GPP-MS-TimeZone'
-%% '3GPP-User-Location-Info'
 %% '3GPP-RAT-Type'
 from_session(Key, Value, Avps)
   when Key =:= '3GPP-PDP-Type';
@@ -503,9 +502,15 @@ from_session(Key, Value, Avps)
        Key =:= '3GPP-Charging-Characteristics';
        Key =:= '3GPP-SGSN-MCC-MNC';
        Key =:= '3GPP-MS-TimeZone';
-       Key =:= '3GPP-User-Location-Info';
        Key =:= '3GPP-RAT-Type' ->
     optional([?SI_PSI, Key], ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps);
+
+%% '3GPP-User-Location-Info'
+from_session(Key, Value, Avps)
+  when Key =:= 'User-Location-Info';
+       Key =:= '3GPP-User-Location-Info' ->
+    optional([?SI_PSI, '3GPP-User-Location-Info'],
+	     ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps);
 
 %% Add '3GPP-IMSI' to both places commonly used : in the AVP root (e.g. Nokia) and in 
 %% 'Subscription-Id' (3GPP) then filter out the one you don't need with AVP filter
