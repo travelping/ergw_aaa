@@ -301,6 +301,13 @@ build_transport_caps(_, _, Caps) ->
        Key =:= '3GPP-Secondary-RAT-Usage' ->
     ergw_aaa_3gpp_dict:encode(Key, Value);
 
+'3gpp_from_session'('3GPP-User-Location-Info', Value)
+  when is_binary(Value) ->
+    Value;
+'3gpp_from_session'('User-Location-Info' = Key, Value)
+  when is_map(Value) ->
+    ergw_aaa_3gpp_dict:encode(Key, Value);
+
 '3gpp_from_session'(Key, Value)
   when Key =:= '3GPP-Charging-Id';
        Key =:= '3GPP-Camel-Charging';
@@ -309,7 +316,6 @@ build_transport_caps(_, _, Caps) ->
        Key =:= '3GPP-GGSN-MCC-MNC';
        Key =:= '3GPP-SGSN-MCC-MNC';
        Key =:= '3GPP-IMEISV';
-       Key =:= '3GPP-User-Location-Info';
        Key =:= '3GPP-Packet-Filter';
        Key =:= '3GPP-Negotiated-DSCP' ->
     Value.

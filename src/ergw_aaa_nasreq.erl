@@ -477,10 +477,15 @@ from_session(Key, Value, M)
        Key =:= '3GPP-GGSN-MCC-MNC';
        Key =:= '3GPP-SGSN-MCC-MNC';
        Key =:= '3GPP-IMEISV';
-       Key =:= '3GPP-User-Location-Info';
        Key =:= '3GPP-Packet-Filter';
        Key =:= '3GPP-Negotiated-DSCP' ->
     M#{Key => [ergw_aaa_diameter:'3gpp_from_session'(Key, Value)]};
+
+%% '3GPP-User-Location-Info'
+from_session(Key, Value, M)
+  when Key =:= 'User-Location-Info';
+       Key =:= '3GPP-User-Location-Info' ->
+    M#{'3GPP-User-Location-Info' => [ergw_aaa_diameter:'3gpp_from_session'(Key, Value)]};
 
 from_session('Service-Type' = Key, Value, M) ->
     M#{Key => [service_type(Value)]};
