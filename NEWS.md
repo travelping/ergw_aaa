@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.1.0 - 9 July 2021
+----------------------------
+
+**Features** :rocket:
+
+* [#160](https://github.com/travelping/ergw_aaa/pull/160) Handle structured `User-Location-Info` data
+
 Version 4.0.0 - 25 June 2021
 ----------------------------
 
