@@ -12,7 +12,8 @@
 		  regine,
 		  eradius,
 		  prometheus,
-		  diameter
+		  diameter,
+		  gtplib
 		 ]},
   {mod, { ergw_aaa_app, []}},
   {env, [{product_name, "erGW-AAA"},
