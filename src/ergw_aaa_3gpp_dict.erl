@@ -163,6 +163,12 @@ encode('User-Location-Info', #{'CGI' := CGI})
 encode('User-Location-Info', _Value) ->
     <<>>;
 
+encode(Key, {MCC, MNC})
+  when Key =:= '3GPP-IMSI-MCC-MNC';
+       Key =:= '3GPP-GGSN-MCC-MNC';
+       Key =:= '3GPP-SGSN-MCC-MNC' ->
+    <<MCC/binary, MNC/binary>>;
+
 encode(_Key, Value) ->
     Value.
 
