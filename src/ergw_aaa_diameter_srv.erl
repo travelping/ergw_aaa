@@ -400,7 +400,8 @@ filter_avps(AVPs, []) ->
 
 %% When conditions are the last element of the path, and we're filtering a
 %% list of AVP structures. Delete all structures matching the conditions
-filter_avp([#{}| _] = AVPs, [Conditions]) when is_list(Conditions) ->
+filter_avp([#{}| _] = AVPs, [Conditions])
+  when is_list(Conditions) orelse is_map(Conditions)->
     [M || M <- AVPs, not check_avp_conditions(M, Conditions)];
 %% When conditions are not the last element of the path and we're filtering
 %% a list of AVP structures. Return all non-matching and continue filtering
@@ -418,7 +419,8 @@ filter_avp(#{} = AVPs, [Next | Rest]) when is_map_key(Next, AVPs) ->
 %% When conditions are not the last element of the path and we're filtering
 %% a sigle AVP structure. Follow the path to filter if the conditions are
 %% met, otherwise return the structure
-filter_avp(#{} = AVPs, [Conditions| Rest]) when is_list(Conditions) ->
+filter_avp(#{} = AVPs, [Conditions| Rest])
+  when is_list(Conditions) orelse is_map(Conditions) ->
     case check_avp_conditions(AVPs, Conditions) of
 	true ->
 	    filter_avp(AVPs, Rest);
@@ -428,6 +430,8 @@ filter_avp(#{} = AVPs, [Conditions| Rest]) when is_list(Conditions) ->
 filter_avp(AVPs, _) ->
     AVPs.
 
+check_avp_conditions(AVPs, Conditions) when is_map(Conditions) ->
+    check_avp_conditions(AVPs, maps:to_list(Conditions));
 check_avp_conditions(AVPs, [{AVP, Value} | Rest]) when is_map_key(AVP, AVPs) ->
     case match_avp_value(Value, maps:get(AVP, AVPs)) of
 	true -> check_avp_conditions(AVPs, Rest);
@@ -452,7 +456,7 @@ match_avp_value(ConditionVal, AVPVal)
     AVPVal == binary_to_integer(ConditionVal);
 match_avp_value(ConditionVal, AVPVal)
   when is_binary(ConditionVal) andalso is_atom(AVPVal) ->
-    AVPVal == binary_to_existing_atom(ConditionVal, utf8);
+    AVPVal == binary_to_atom(ConditionVal, utf8);
 match_avp_value(ConditionVal, AVPVal)
   when is_binary(ConditionVal) andalso is_list(AVPVal) ->
     AVPVal == binary_to_list(ConditionVal);

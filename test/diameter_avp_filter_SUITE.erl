@@ -213,10 +213,10 @@ conditional_instance(_Config) ->
 	['Subscription-Id', [{'Subscription-Id-Type', <<"1">>}]]
     ],
     {Before, After} = do_filter_test(Filter),
-    
+
     ?equal(undefined, maps:get('3GPP-IMSI', Before, undefined)),
     ?equal(2, length(maps:get('Subscription-Id', Before))),
-    
+
     ?match(#{'3GPP-IMSI' := [_], 'Subscription-Id' := [#{'Subscription-Id-Type' := 0}]}, After),
     ok.
     
@@ -225,26 +225,26 @@ conditional_instance(_Config) ->
 %% '3GPP-User-Location-Info' from 'PS-Information' if the 'SGSN-Address'
 %% value matches. The SGSN-Address is optional and also it is provided
 %% in tuple format. This test confirms IP address match when the filter
-%% is provided in binary format.
+%% is provided in binary format. Also verifies condition in map format.
 %%====================================================================
 conditional_instance_ip_match(_Config) ->
     Filter = [
 	[
 	    'Service-Information',
 	    'PS-Information',
-	    [{'SGSN-Address', <<"192.168.1.1">>}],
+	    #{'SGSN-Address' => <<"192.168.1.1">>},
 	    '3GPP-User-Location-Info'
 	]
     ],
     {Before, After} = do_filter_test(Filter),
-	
+
     ?match(#{'Service-Information' := [#{'PS-Information' := [#{'3GPP-User-Location-Info' := _ }]}]}, Before),
 
     #{'Service-Information' := [#{'PS-Information' := [PSInfoAfter]}]} = After,
     ?equal(undefined, maps:get('3GPP-User-Location-Info', PSInfoAfter, undefined)),
 
     ok.
-	
+
 %%====================================================================
 %% Conditionally filter multiple instance AVP : delete the MSCC
 %% instance, based on the 'Rating-Group' value, defined in binary
@@ -258,9 +258,9 @@ conditional_instance_value_match(_Config) ->
 
     ?match(#{'Multiple-Services-Credit-Control' := [_]}, Before),
     ?equal(undefined, maps:get('Multiple-Services-Credit-Control', After, undefined)),
-	
+
     ok.
-	
+
 %%====================================================================
 %% Ignore single element path with matching condition list in the root
 %% AVP structure. i.e. send the message with the other paths filtered
