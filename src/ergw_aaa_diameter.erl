@@ -289,10 +289,13 @@ build_transport_caps(_, _, Caps) ->
 '3gpp_from_session'(Key, Value)
   when Key =:= '3GPP-PDP-Type';
        Key =:= '3GPP-GPRS-Negotiated-QoS-Profile';
+       Key =:= '3GPP-IMSI-MCC-MNC';
+       Key =:= '3GPP-GGSN-MCC-MNC';
        Key =:= '3GPP-NSAPI';
        Key =:= '3GPP-Session-Stop-Indicator';
        Key =:= '3GPP-Selection-Mode';
        Key =:= '3GPP-Charging-Characteristics';
+       Key =:= '3GPP-SGSN-MCC-MNC';
        Key =:= '3GPP-IPv6-DNS-Servers';
        Key =:= '3GPP-Teardown-Indicator';
        Key =:= '3GPP-RAT-Type';
@@ -312,9 +315,6 @@ build_transport_caps(_, _, Caps) ->
   when Key =:= '3GPP-Charging-Id';
        Key =:= '3GPP-Camel-Charging';
        Key =:= '3GPP-IMSI';
-       Key =:= '3GPP-IMSI-MCC-MNC';
-       Key =:= '3GPP-GGSN-MCC-MNC';
-       Key =:= '3GPP-SGSN-MCC-MNC';
        Key =:= '3GPP-IMEISV';
        Key =:= '3GPP-Packet-Filter';
        Key =:= '3GPP-Negotiated-DSCP' ->

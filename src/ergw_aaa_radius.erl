@@ -531,10 +531,10 @@ session_options('3GPP-SGSN-Address', Value, Attrs) ->
     [{?X_3GPP_SGSN_Address, Value}|Attrs];
 session_options('3GPP-GGSN-Address', Value, Attrs) ->
     [{?X_3GPP_GGSN_Address, Value}|Attrs];
-session_options('3GPP-IMSI-MCC-MNC', Value, Attrs) ->
-    [{?X_3GPP_IMSI_MCC_MNC, Value}|Attrs];
-session_options('3GPP-GGSN-MCC-MNC', Value, Attrs) ->
-    [{?X_3GPP_GGSN_MCC_MNC, Value}|Attrs];
+session_options('3GPP-IMSI-MCC-MNC' = Key, Value, Attrs) ->
+    [{?X_3GPP_IMSI_MCC_MNC, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
+session_options('3GPP-GGSN-MCC-MNC' = Key, Value, Attrs) ->
+    [{?X_3GPP_GGSN_MCC_MNC, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-NSAPI' = Key, Value, Attrs) ->
     [{?X_3GPP_NSAPI, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-Session-Stop-Indicator' = Key, Value, Attrs) ->
@@ -551,8 +551,8 @@ session_options('3GPP-GGSN-IPv6-Address', Value, Attrs) ->
     [{?X_3GPP_GGSN_IPv6_Address, Value}|Attrs];
 session_options('3GPP-IPv6-DNS-Servers' = Key, Value, Attrs) ->
     [{?X_3GPP_IPv6_DNS_Servers, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
-session_options('3GPP-SGSN-MCC-MNC', Value, Attrs) ->
-    [{?X_3GPP_SGSN_MCC_MNC, Value}|Attrs];
+session_options('3GPP-SGSN-MCC-MNC' = Key, Value, Attrs) ->
+    [{?X_3GPP_SGSN_MCC_MNC, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-Teardown-Indicator' = Key, Value, Attrs) ->
     [{?X_3GPP_Teardown_Indicator, ergw_aaa_3gpp_dict:encode(Key, Value)}|Attrs];
 session_options('3GPP-IMEISV', Value, Attrs) ->
