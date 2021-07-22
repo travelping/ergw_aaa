@@ -3,6 +3,17 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.1.2 - 22 July 2021
+----------------------------
+
+**Features** :rocket:
+
+* [#166](https://github.com/travelping/ergw_aaa/pull/166) Fix handling of structured data in `MCC-MNC` `3GPP` values
+
+**Documentations** :books:
+
+* [#165](https://github.com/travelping/ergw_aaa/pull/165) Add radius `AVP` filter readme
+
 Version 4.1.1 - 14 July 2021
 ----------------------------
 
