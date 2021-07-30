@@ -394,6 +394,10 @@ to_session(_, Key = '3GPP-IPv6-DNS-Servers', [Value], {Session, Events}) ->
     {Session#{Key => ergw_aaa_3gpp_dict:decode(Key, Value)}, Events};
 to_session(_, 'TP-NAT-Pool-Id', [Id], {Session, Events}) ->
     {Session#{'NAT-Pool-Id' => Id}, Events};
+to_session(_, 'Framed-Pool', [Id], {Session, Events}) ->
+    {Session#{'Framed-Pool' => Id}, Events};
+to_session(_, 'Framed-IPv6-Pool', [Id], {Session, Events}) ->
+    {Session#{'Framed-IPv6-Pool' => Id}, Events};
 to_session(_, _, _, SessEv) ->
     SessEv.
 
