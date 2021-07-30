@@ -867,7 +867,8 @@ to_session_opts(_Attr, Key, Value, SOpts)
       Key =:= 'Idle-Timeout';
       Key =:= 'Framed-IP-Address';
       Key =:= 'Framed-IPv6-Prefix';
-      Key =:= 'Framed-Interface-Id';
+      Key =:= 'Framed-Pool';
+      Key =:= 'Framed-IPv6-Pool';
       %% Microsoft MPPE Keys
       Key =:= 'MS-MPPE-Send-Key';
       Key =:= 'MS-MPPE-Recv-Key';
