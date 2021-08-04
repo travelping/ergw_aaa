@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.1.3 - 4 August 2021
+----------------------------
+
+**Features** :rocket:
+
+* [#168](https://github.com/travelping/ergw_aaa/pull/168) `FNASREQ`/`RADIUS` IP pool to session
+
 Version 4.1.2 - 22 July 2021
 ----------------------------
 
