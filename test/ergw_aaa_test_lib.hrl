@@ -27,6 +27,6 @@
 -import(ergw_aaa_test_lib, [meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1,
 			    set_cfg_value/3, get_cfg_value/2,
 			    get_stats/1, diff_stats/2, wait_for_diameter/2,
-			    outstanding_reqs/0, get_session_stats/0, wait_for_session/4,
+			    outstanding_reqs/0, get_session_stats/0, get_session_stats/2, wait_for_session/4,
 			    reset_session_stats/0]).
 -endif.
