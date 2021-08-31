@@ -17,6 +17,7 @@
 -include_lib("diameter/include/diameter_gen_base_rfc6733.hrl").
 -include_lib("gtplib/include/gtp_packet.hrl").
 -include("ergw_aaa_test_lib.hrl").
+-include("../include/ergw_aaa_session.hrl").
 
 -define(HUT, ergw_aaa_radius).
 -define(SERVICE, <<"aaa-test">>).
@@ -73,6 +74,7 @@ all() ->
     [compat,
      simple,
      simple_normal_terminate,
+     disconnect_request,
      accounting,
      accounting_async,
      attrs_3gpp,
@@ -119,9 +121,8 @@ end_per_testcase(_, _Config) ->
     ok.
 
 check_stats_per_testcase() ->
-    case get_session_stats() of
-	[] -> ok;
-	[{ergw_aaa_radius, started, 0}] -> ok;
+    case get_session_stats(ergw_aaa_radius, started) of
+	0 -> ok;
 	Other -> ct:fail(Other)
     end.
 
@@ -157,6 +158,43 @@ simple_normal_terminate() ->
 simple_normal_terminate(Config) ->
     simple(Config, #{'Termination-Cause' => "User Request"}).
 
+disconnect_request() ->
+	[{doc, "Check if we can terminate a session with a disconnect request"}].
+disconnect_request(Config) ->
+    eradius_test_handler:ready(),
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
+						     #{'Framed-IP-Address' => {10,10,10,10}}),
+
+    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
+
+    ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
+
+    DiscPid = send_async_disconnect(Session),
+
+    %% simulate handling of ASR in ergw context
+    receive
+        #aaa_request{procedure = {_, 'ASR'}} = Request ->
+        ergw_aaa_session:response(Request, ok, #{}, #{})
+    after
+        1000 ->
+            ct:fail("no disconnect")
+    end,
+
+    ?match(#radius_request{cmd=discack}, get_async_disconnect_response(DiscPid)),
+
+    ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
 accounting() ->
     [{doc, "Check that we can successfully send ACR's and get ACA's"}].
 accounting(Config) ->
@@ -166,19 +204,19 @@ accounting(Config) ->
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
 
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 
     %% make sure nothing crashed
     meck_validate(Config),
@@ -194,19 +232,19 @@ accounting_async(Config) ->
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
 
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:interim(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 
     %% wait for async requests
     ct:sleep(5000),
@@ -269,7 +307,7 @@ attrs_3gpp(Config) ->
     ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, stop, [])),
 
@@ -360,7 +398,7 @@ terminate(Config) ->
 
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match(ok, ergw_aaa_session:terminate(Session)),
     wait_for_session(ergw_aaa_radius, started, 0, 10),
@@ -410,20 +448,50 @@ simple(Config, Opts) ->
     {ok, SOut, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
     ?match(#{'MS-Primary-DNS-Server' := {8,8,8,8}}, SOut),
 
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 
     ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
 	   Events),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
 
-    ?equal([{ergw_aaa_radius, started, 1}], get_session_stats()),
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
 
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
     TermOpts = #{'Termination-Cause' => maps:get(reason, Opts, ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT')},
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
 
-    ?equal([{ergw_aaa_radius, started, 0}], get_session_stats()),
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 
     meck_validate(Config),
     ok.
+
+send_async_disconnect(Session) ->
+    spawn(fun() ->
+            {ok, SessionId} = ergw_aaa_session:get(Session, 'Session-Id'),
+            Attrs = [{?Acct_Session_Id, io_lib:format("~40.16.0B", [SessionId])}],
+            {ok, R, A} = eradius_client:send_request(
+                {{127,0,0,1}, 3799, "secret"},
+                #radius_request{cmd = discreq,
+                attrs = Attrs,
+                msg_hmac = false},
+            []),
+            Resp = eradius_lib:decode_request(R, <<"secret">>, A),
+            receive
+                {get_response, Pid} ->
+                Pid ! {disconnect_response, Resp}
+            after
+                5000 ->
+                    ok
+        end
+    end).
+
+get_async_disconnect_response(ReqPid) ->
+    ReqPid ! {get_response, self()},
+    receive
+        {disconnect_response, Resp} ->
+            Resp
+    after
+        1000 ->
+            timeout
+    end.

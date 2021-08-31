@@ -291,7 +291,6 @@ handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts},
 
 handle_event(cast, terminate, _State, Data) ->
     ?LOG(info, "Handling terminate request: ~p", [Data]),
-    ct:pal("Handling terminate request: ~p", [Data]),
     terminate_action(Data),
     {stop, normal};
 
@@ -339,7 +338,9 @@ to_session(Session) when is_map(Session) ->
 %%===================================================================
 prepare_next_session_id(Session) ->
     AcctAppId = maps:get('AAA-Application-Id', Session, default),
-    Session#{'Session-Id' => ergw_aaa_session_seq:inc(AcctAppId)}.
+    NewSessionId = ergw_aaa_session_seq:inc(AcctAppId),
+    ergw_aaa_session_reg:register(NewSessionId),
+    Session#{'Session-Id' => NewSessionId}.
 
 terminate_action(Data) ->
     exec(terminate, #{'Termination-Cause' => error}, #{}, Data).

@@ -14,7 +14,7 @@
 %% AAA API
 -export([validate_handler/1, validate_service/3, validate_procedure/5,
 	 initialize_handler/1, initialize_service/2, invoke/6, handle_response/6]).
--export([to_session/3]).
+-export([to_session/3, from_session/2]).
 -export([get_state_atom/1]).
 
 -include("ergw_aaa_internal.hrl").
@@ -337,6 +337,9 @@ to_session(_, Key, Value, {Session, Events, State})
     {maps:put(Key, Value, Session), Events, State};
 to_session(_, _, _, SessEvSt) ->
     SessEvSt.
+
+from_session(Session, Attrs) ->
+    session_options(Session, Attrs).
 
 %%%===================================================================
 

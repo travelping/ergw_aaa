@@ -204,8 +204,10 @@ get_session_stats() ->
 
 get_session_stats(Handler, State) ->
     case prometheus_gauge:value(default, aaa_sessions_total, [Handler, State]) of
-	 undefined -> 0;
-	 Value -> Value
+        undefined ->
+            0;
+        Value ->
+            Value
     end.
 
 reset_session_stats() ->
