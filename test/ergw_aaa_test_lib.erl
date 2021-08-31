@@ -14,7 +14,7 @@
 -export([meck_init/1, meck_reset/1, meck_unload/1, meck_validate/1]).
 -export([set_cfg_value/3, get_cfg_value/2]).
 -export([get_stats/1, diff_stats/2, wait_for_diameter/2]).
--export([get_session_stats/0, wait_for_session/4, reset_session_stats/0]).
+-export([get_session_stats/0, get_session_stats/2, wait_for_session/4, reset_session_stats/0]).
 -export([outstanding_reqs/0]).
 -export([clear_app_env/0, ergw_aaa_init/1]).
 
@@ -201,6 +201,12 @@ get_session_stats() ->
     lists:sort([{Handler, State, Value} ||
      {[{"handler", Handler}, {"state", State}], Value} <-
      prometheus_gauge:values(default, aaa_sessions_total)]).
+
+get_session_stats(Handler, State) ->
+    case prometheus_gauge:value(default, aaa_sessions_total, [Handler, State]) of
+	 undefined -> 0;
+	 Value -> Value
+    end.
 
 reset_session_stats() ->
     %% there seems to be no easier way doing this ...
