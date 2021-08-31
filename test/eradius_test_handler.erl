@@ -15,7 +15,7 @@ start() ->
     application:set_env(eradius, radius_callback, ?MODULE),
     application:set_env(eradius, session_nodes, local),
     application:set_env(eradius, one, [{{"ONE", []}, [{"127.0.0.1", "secret"}]}]),
-    application:set_env(eradius, servers, [{one, {"127.0.0.1", [1812, 1813]}}]),
+    application:set_env(eradius, servers, [{one, {"127.0.0.1", [1812, 1813, 3799]}}]),
     application:ensure_all_started(eradius).
 
 stop() ->
@@ -56,5 +56,7 @@ radius_request(#radius_request{cmd = request, attrs = Attrs} = _Req, _Nasprop, _
 	end;
 radius_request(#radius_request{cmd = accreq} = _Req, _Nasprop, _Args) ->
     {reply, #radius_request{cmd = accresp}};
+radius_request(#radius_request{cmd = discreq} = Req, Nasprop, Args) ->
+    ergw_aaa_radius_handler:radius_request(Req, Nasprop, Args);
 radius_request(_Req, _Nasprop, _Args) ->
     {reply, #radius_request{cmd = accept}}.
