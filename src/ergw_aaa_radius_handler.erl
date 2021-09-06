@@ -1,4 +1,4 @@
-%% Copyright 2016-2019, Travelping GmbH <info@travelping.com>
+%% Copyright 2016-2021, Travelping GmbH <info@travelping.com>
 
 %% This program is free software; you can redistribute it and/or
 %% modify it under the terms of the GNU General Public License
@@ -22,24 +22,24 @@
 %%===================================================================
 %% API
 %%===================================================================
-radius_request(#radius_request{cmd=discreq, attrs=Attrs}, _NasProp, _Args) ->
-    #{?Acct_Session_Id := HexSessionId} = maps:from_list([{Id, V} || {#attribute{id=Id}, V} <- Attrs]),
+radius_request(#radius_request{cmd = discreq, attrs = Attrs} = Req, _NasProp, _Args) ->
+    #{?Acct_Session_Id := HexSessionId} = maps:from_list([{Id, V} || {#attribute{id = Id}, V} <- Attrs]),
     Cmd = case ergw_aaa_session_reg:lookup(to_session_id(HexSessionId)) of
         Session when is_pid(Session) ->
-            %% NOTE : Strictly speaking 'ASR' is a wrong name for radius disconnect.
-            %%        It may be considered in the future to rename the ergw API to
-            %%        something more generic (which may require change in termination
-            %%        cause mapping as well).
-            ergw_aaa_session:request(Session, ergw_aaa_radius, {?API, 'ASR'}, #{}),
+                %% NOTE : Strictly speaking 'ASR' is a wrong name for radius disconnect.
+                %%        It may be considered in the future to rename the ergw API to
+                %%        something more generic (which may require change in termination
+                %%        cause mapping as well).
+                ergw_aaa_session:request(Session, ergw_aaa_radius, {?API, 'ASR'}, #{}),
                 discack;
         _ ->
                 discnak
         end,
-    {reply, #radius_request{cmd=Cmd}};
+    {reply, Req#radius_request{cmd = Cmd}};
 
-radius_request(#radius_request{}=Request, _NasProp, _Args) ->
+radius_request(#radius_request{} = Request, _NasProp, _Args) ->
     ?LOG(warning, "Unhandled radius request: ~p", [Request]),
-    noreply.
+    {reply, Request}.
 
 to_session_id(HexSessionId) ->
     H = fun(N) when N < 58  -> N - 48;

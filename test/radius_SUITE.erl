@@ -133,7 +133,6 @@ check_stats_per_testcase() ->
 compat() ->
     [{doc, "Check that the old API is still working"}].
 compat(Config) ->
-    eradius_test_handler:ready(),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
@@ -161,7 +160,6 @@ simple_normal_terminate(Config) ->
 disconnect_request() ->
 	[{doc, "Check if we can terminate a session with a disconnect request"}].
 disconnect_request(Config) ->
-    eradius_test_handler:ready(),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
@@ -198,7 +196,6 @@ disconnect_request(Config) ->
 accounting() ->
     [{doc, "Check that we can successfully send ACR's and get ACA's"}].
 accounting(Config) ->
-    eradius_test_handler:ready(),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
 						     #{'Framed-IP-Address' => {10,10,10,10}}),
@@ -225,7 +222,6 @@ accounting(Config) ->
 accounting_async() ->
     [{doc, "Check that Start / Stop msg work in async mode"}].
 accounting_async(Config) ->
-    eradius_test_handler:ready(),
     OrigApps = set_service_pars([{async, true}, {retries, 1}, {timeout, 1000}]),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(),
@@ -267,7 +263,6 @@ accounting_async(Config) ->
 attrs_3gpp() ->
     [{doc, "Check encoding of 3GPP attributes"}].
 attrs_3gpp(Config) ->
-    eradius_test_handler:ready(),
 
     Attrs = #{
 	      '3GPP-GGSN-Address'       => {199,255,4,125},
@@ -318,7 +313,6 @@ attrs_3gpp(Config) ->
 avp_filter() ->
     [{doc, "AVP filter"}].
 avp_filter(Config) ->
-    eradius_test_handler:ready(),
 
     %% turn avp_filter into internal format...
     Opts = ergw_aaa_radius:validate_procedure(default, all, all,
@@ -343,7 +337,6 @@ avp_filter(Config) ->
 vendor_dicts() ->
     [{doc, "Vendor Dicts"}].
 vendor_dicts(Config) ->
-    eradius_test_handler:ready(),
 
     %% turn avp_filter into internal format...
     Opts = ergw_aaa_radius:validate_procedure(default, all, all,
@@ -386,7 +379,6 @@ vendor_dicts(Config) ->
 terminate() ->
     [{doc, "Simulate unexpected owner termiantion"}].
 terminate(Config) ->
-    eradius_test_handler:ready(),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(
 		      self(),
@@ -435,7 +427,6 @@ add_opts(Map, [{Par, Val}| T]) ->
     add_opts(Map1, T).
 
 simple(Config, Opts) ->
-    eradius_test_handler:ready(),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(
 		      self(),
