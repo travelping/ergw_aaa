@@ -18,11 +18,12 @@
 
 start(_StartType, _StartArgs) ->
     case ergw_aaa_sup:start_link() of
-	{ok, _} = Ret ->
-	    prometheus_declare(),
-	    Ret;
-	Other ->
-	    Other
+        {ok, _} = Ret ->
+            prometheus_declare(),
+            maybe_load_radius_callback(),
+            Ret;
+        Other ->
+            Other
     end.
 
 stop(_State) ->
@@ -36,3 +37,11 @@ prometheus_declare() ->
     prometheus_gauge:declare([{name, aaa_sessions_total},
 			      {labels, [handler, state]},
 			      {help, "AAA sessions"}]).
+
+maybe_load_radius_callback() ->
+    case application:get_env(eradius, radius_callback, false) of
+        false ->
+            ok;
+        Callback ->
+            ok = eradius:modules_ready([Callback])
+    end.
