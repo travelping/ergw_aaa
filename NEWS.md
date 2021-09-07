@@ -3,6 +3,16 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.1.4 - 7 September 2021
+----------------------------
+
+**Features** :rocket:
+
+* [#171](https://github.com/travelping/ergw_aaa/pull/171) `RADIUS` disconnect
+
+**Dependencies** :gear:
+* [#170](https://github.com/travelping/ergw_aaa/pull/170) Update [eradius](https://github.com/travelping/eradius) to [2.2.4](https://github.com/travelping/eradius/releases/tag/2.2.4)
+
 Version 4.1.3 - 4 August 2021
 ----------------------------
 
