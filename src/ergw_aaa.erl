@@ -65,15 +65,15 @@
 -define(APP_KEY,      apps).
 
 %% Only returns capacity and outstanding.
--spec( peer_info() -> peer_info() ).
-peer_info() -> maps:fold( fun peer_record_map/3, #{}, ergw_aaa_diameter_srv:get_peers_info() ).
+-spec(peer_info() -> peer_info()).
+peer_info() -> maps:fold(fun peer_record_map/3, #{}, ergw_aaa_diameter_srv:get_peers_info()).
 
 %% Only knows how to adjust down outstanding.
--spec( peer_info_adjust(peer_info()) -> ok ).
-peer_info_adjust( Peer_info ) ->
-	Peers_info = ergw_aaa_diameter_srv:get_peers_info(),
-	F = fun(Key, Value, _Acc) -> peer_info_adjust( Key, Value, maps:find(Key, Peers_info) ) end,
-	maps:fold( F, ignore, Peer_info ),
+-spec(peer_info_adjust(peer_info()) -> ok).
+peer_info_adjust(PeerInfo) ->
+	Peers = ergw_aaa_diameter_srv:get_peers_info(),
+	F = fun(Key, Value, _Acc) -> peer_info_adjust(Key, Value, maps:find(Key, Peers)) end,
+	maps:fold(F, ignore, PeerInfo),
 	ok.
 
 setopts(Opts0) when is_map(Opts0)->
@@ -147,15 +147,15 @@ add_config(Key, Name, Opts) ->
     end.
 
 
-peer_info_adjust( Host, #{outstanding := Expected}, {ok, #peer{outstanding=Current}} )
+peer_info_adjust(Host, #{outstanding := Expected}, {ok, #peer{outstanding = Current}})
 		when Expected < Current
 		->
-	Peer = {ignore, #diameter_caps{origin_host={ignore, Host}}},
-	[ergw_aaa_diameter_srv:finish_request(undefined, Peer) || _ <- lists:seq(1, Current-Expected)],
+	Peer = {ignore, #diameter_caps{origin_host = {ignore, Host}}},
+	[ergw_aaa_diameter_srv:finish_request(undefined, Peer) || _ <- lists:seq(1, Current - Expected)],
 	ok;
-peer_info_adjust( Host, Value, Peer ) ->
-	?LOG( error, "~p:~p ~p, ~p, ~p", [?MODULE, ?FUNCTION_NAME, Host, Value, Peer] ).
+peer_info_adjust(Host, Value, Peer) ->
+	?LOG(error, "~p:~p ~p, ~p, ~p", [?MODULE, ?FUNCTION_NAME, Host, Value, Peer]).
 
 
-peer_record_map( Key, #peer{capacity=C, outstanding=O}, Acc ) -> Acc#{Key => #{capacity => C, outstanding => O}};
-peer_record_map( _Key, _Value, Acc ) -> Acc.
+peer_record_map(Key, #peer{capacity = C, outstanding = O}, Acc) -> Acc#{Key => #{capacity => C, outstanding => O}};
+peer_record_map(_Key, _Value, Acc) -> Acc.

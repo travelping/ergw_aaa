@@ -1,6 +1,6 @@
 %% Test ergw_aaa.erl
 
--module( ergw_aaa_SUITE ).
+-module(ergw_aaa_SUITE).
 
 %% Test cases
 -export( [
@@ -23,40 +23,40 @@ all() -> [
 	peer_info_adjust
 ].
 
-end_per_suite( _Config ) ->
-	application:stop( ergw_aaa ),
-	application:unload( ergw_aaa ).
+end_per_suite(_Config) ->
+	application:stop(ergw_aaa),
+	application:unload(ergw_aaa).
 
-init_per_suite( Config ) ->
-	{ok, _} = application:ensure_all_started( ergw_aaa ),
+init_per_suite(Config) ->
+	{ok, _} = application:ensure_all_started(ergw_aaa),
 	Config.
 
 %% Test cases
 peer_info( _Config ) ->
 	Host = ahost,
-	Peer = peer( "peer_info", Host ),
-	ok = ergw_aaa_diameter_srv:start_request( "SvcName", Peer ),
+	Peer = peer("peer_info", Host),
+	ok = ergw_aaa_diameter_srv:start_request("SvcName", Peer),
 
-	Peer_info = ergw_aaa:peer_info(),
+	PeerInfo = ergw_aaa:peer_info(),
 
-	#{Host := Info} = Peer_info,
+	#{Host := Info} = PeerInfo,
 	#{capacity := _C, outstanding := _O} = Info.
 
-peer_info_adjust( _Config ) ->
+peer_info_adjust(_Config) ->
 	Host = ahost,
-	Peer = peer( "peer_info_adjust", Host ),
-	ok = ergw_aaa_diameter_srv:start_request( "SvcName", Peer ),
+	Peer = peer("peer_info_adjust", Host),
+	ok = ergw_aaa_diameter_srv:start_request("SvcName", Peer),
 	#{Host := #{outstanding := O}} = ergw_aaa:peer_info(),
-	New_outstanding = O - 1,
-	New_peer_info = #{Host => #{outstanding => New_outstanding}},
+	Expected = O - 1,
+	New = #{Host => #{outstanding => Expected}},
 
-	ergw_aaa:peer_info_adjust( New_peer_info ),
+	ergw_aaa:peer_info_adjust(New),
 
-	#{Host := #{outstanding := New_outstanding}} = ergw_aaa:peer_info().
+	#{Host := #{outstanding := Expected}} = ergw_aaa:peer_info().
 
 
 %%===================================================================
 %% Internal
 %%===================================================================
 
-peer( Name, Host ) -> {Name, #diameter_caps{origin_host={ignore, Host}}}.
+peer(Name, Host) -> {Name, #diameter_caps{origin_host = {ignore, Host}}}.
