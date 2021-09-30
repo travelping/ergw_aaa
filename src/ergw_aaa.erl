@@ -72,8 +72,9 @@ peer_info() -> maps:fold( fun peer_record_map/3, #{}, ergw_aaa_diameter_srv:get_
 -spec( peer_info_adjust(peer_info()) -> ok ).
 peer_info_adjust( Peer_info ) ->
 	Peers_info = ergw_aaa_diameter_srv:get_peers_info(),
-	F = fun(Key, Value) -> peer_info_adjust( Key, Value, maps:find(Key, Peers_info) ) end,
-	maps:foreach( F, Peer_info ).
+	F = fun(Key, Value, _Acc) -> peer_info_adjust( Key, Value, maps:find(Key, Peers_info) ) end,
+	maps:fold( F, ignore, Peer_info ),
+	ok.
 
 setopts(Opts0) when is_map(Opts0)->
     Opts = maps:map(fun ergw_aaa_config:validate_option/2, Opts0),
@@ -150,7 +151,8 @@ peer_info_adjust( Host, #{outstanding := Expected}, {ok, #peer{outstanding=Curre
 		when Expected < Current
 		->
 	Peer = {ignore, #diameter_caps{origin_host={ignore, Host}}},
-	[ergw_aaa_diameter_srv:finish_request(undefined, Peer) || _ <- lists:seq(1, Current-Expected)];
+	[ergw_aaa_diameter_srv:finish_request(undefined, Peer) || _ <- lists:seq(1, Current-Expected)],
+	ok;
 peer_info_adjust( Host, Value, Peer ) ->
 	?LOG( error, "~p:~p ~p, ~p, ~p", [?MODULE, ?FUNCTION_NAME, Host, Value, Peer] ).
 
