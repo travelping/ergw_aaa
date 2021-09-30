@@ -10,7 +10,10 @@
 -compile({parse_transform, cut}).
 
 %% API
--export([setopts/1, setopt/2,
+-export([
+	peer_info/0,
+	peer_info_adjust/1,
+	setopts/1, setopt/2,
 	 add_function/2, add_handler/2, add_service/2, add_application/2,
 	 get_function/1, get_handler/1, get_service/1, get_application/1]).
 
@@ -18,6 +21,7 @@
 -export([add_config/3]).
 -endif.
 
+-type peer_info() :: map().
 -type session() :: map().
 -export_type([session/0]).
 
@@ -47,6 +51,10 @@
 			  Opts :: map(), StateIn :: term()) ->
     {ok | atom(), Result :: term(), session(), StateOut :: term()}.
 
+-include_lib("diameter/include/diameter.hrl").
+-include_lib("kernel/include/logger.hrl").
+-include( "ergw_aaa_internal.hrl" ).
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -55,6 +63,17 @@
 -define(HANDLER_KEY,  handlers).
 -define(SERVICE_KEY,  services).
 -define(APP_KEY,      apps).
+
+%% Only returns capacity and outstanding.
+-spec( peer_info() -> peer_info() ).
+peer_info() -> maps:fold( fun peer_record_map/3, #{}, ergw_aaa_diameter_srv:get_peers_info() ).
+
+%% Only knows how to adjust down outstanding.
+-spec( peer_info_adjust(peer_info()) -> ok ).
+peer_info_adjust( Peer_info ) ->
+	Peers_info = ergw_aaa_diameter_srv:get_peers_info(),
+	F = fun(Key, Value) -> peer_info_adjust( Key, Value, maps:find(Key, Peers_info) ) end,
+	maps:foreach( F, Peer_info ).
 
 setopts(Opts0) when is_map(Opts0)->
     Opts = maps:map(fun ergw_aaa_config:validate_option/2, Opts0),
@@ -125,3 +144,16 @@ add_config(Key, Name, Opts) ->
        true ->
 	    application:set_env(ergw_aaa, Key, maps:put(Name, Opts, M))
     end.
+
+
+peer_info_adjust( Host, #{outstanding := Expected}, {ok, #peer{outstanding=Current}} )
+		when Expected < Current
+		->
+	Peer = {ignore, #diameter_caps{origin_host={ignore, Host}}},
+	[ergw_aaa_diameter_srv:finish_request(undefined, Peer) || _ <- lists:seq(1, Current-Expected)];
+peer_info_adjust( Host, Value, Peer ) ->
+	?LOG( error, "~p:~p ~p, ~p, ~p", [?MODULE, ?FUNCTION_NAME, Host, Value, Peer] ).
+
+
+peer_record_map( Key, #peer{capacity=C, outstanding=O}, Acc ) -> Acc#{Key => #{capacity => C, outstanding => O}};
+peer_record_map( _Key, _Value, Acc ) -> Acc.
