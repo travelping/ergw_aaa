@@ -7,11 +7,13 @@
 # DIAMETER metrics
 
 The following metrics exist:
-| Name                                       | Type      | Labels         | Description                            |
-|--------------------------------------------|-----------|----------------|----------------------------------------|
-| aaa_sessions_total                         | gauge     | handler, state | AAA of active sessions                 |
-| ergw_aaa_diameter_outstanding_requests     | gauge     | name, type     | The number of outstanding requests     |
-| ergw_aaa_diameter_available_tokens         | gauge     | name, type     | The number of available tokens         |
+| Name                                        | Type      | Labels         | Description                                                                                                      |
+|---------------------------------------------|-----------|----------------|------------------------------------------------------------------------------------------------------------------|
+| aaa_sessions_total                          | gauge     | handler, state | AAA of active sessions                                                                                           |
+| ergw_aaa_diameter_outstanding_requests      | gauge     | name, type     | The number of outstanding requests                                                                               |
+| ergw_aaa_diameter_available_tokens          | gauge     | name, type     | The number of available tokens                                                                                   |
+| ergw_aaa_diameter_no_tokens_available_total | counter   | name           | The number of times a request to a peer was abort because no tokens where left                                   |
+| ergw_aaa_diameter_no_capacity_left_total    | counter   | name           | The number of times a request to a peer was abort because the maximum number of outstanding requests was reached |
 
 # DIAMETER session metrics
 

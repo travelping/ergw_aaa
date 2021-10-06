@@ -16,6 +16,7 @@
 -export([outstanding_reqs/0]).
 
 -include("ergw_aaa_test_lib.hrl").
+-include("../src/ergw_aaa_internal.hrl").
 
 %%%===================================================================
 %%% Meck support functions
@@ -160,7 +161,7 @@ diff_stats(S1, S2) ->
 
 outstanding_reqs() ->
     lists:foldl(
-      fun({_, O, _, _, _, _, _}, S) -> S + O end, 0, ergw_aaa_diameter_srv:peers()).
+      fun({_, O, _, _, _, _, _, _}, S) -> S + O end, 0, ergw_aaa_diameter_srv:peers()).
 
 
 get_session_stats() ->

@@ -19,15 +19,21 @@
 
 -ignore_xref([gather/0, collect_metrics/2]).
 
--import(prometheus_model_helpers, [create_mf/5, gauge_metric/2]).
+-import(prometheus_model_helpers, [create_mf/5, gauge_metric/2, counter_metric/2]).
 
 -define(METRIC_NAME_PREFIX, "ergw_aaa_diameter_").
 
 -define(OUTSTANDING, outstanding_requests).
 -define(TOKENS, available_tokens).
+-define(NO_TOKENS, no_tokens_available_total).
+-define(NO_CAPACITY, no_capacity_left_total).
 
 -define(METRICS, [{?OUTSTANDING, gauge, "The number of outstanding requests"},
-                  {?TOKENS, gauge, "The number of available tokens"}]).
+		  {?TOKENS, gauge, "The number of available tokens"},
+		  {?NO_TOKENS, counter,
+		   "The number of times a request to a peer was abort because no tokens where left"},
+		  {?NO_CAPACITY, counter,
+		   "The number of times a request to a peer was abort because the maximum number of outstanding requests was reached"}]).
 
 %%====================================================================
 %% Collector API
@@ -55,7 +61,9 @@ collect_metrics(_, {Type, Fun, Stats}) ->
     end.
 
 metric(gauge, Labels, Value) ->
-    gauge_metric(Labels, Value).
+    gauge_metric(Labels, Value);
+metric(counter, Labels, Value) ->
+    counter_metric(Labels, Value).
 
 %%%===================================================================
 %%% Internal functions
@@ -64,21 +72,31 @@ metric(gauge, Labels, Value) ->
 gather() ->
     Init =
 	#{?OUTSTANDING => #{},
-	  ?TOKENS => #{}
+	  ?TOKENS => #{},
+	  ?NO_TOKENS => #{},
+	  ?NO_CAPACITY => #{}
 	 },
     maps:fold(
       fun(Name, #peer{outstanding = Outstanding,
 		      capacity = Capacity,
 		      rate = Rate,
-		      tokens = Tokens},
-	  #{?OUTSTANDING := OutstandingMap, ?TOKENS := RateMap} = Stats) ->
-	      Limit = [{name, Name}, {type, limit}],
-	      Used = [{name, Name}, {type, used}],
+		      tokens = Tokens,
+		      stats = #peer_stats{
+				 no_tokens   = NoTokens,
+				 no_capacity = NoCapacity}
+		     },
+	  #{?OUTSTANDING := OutstandingMap, ?TOKENS := RateMap,
+	    ?NO_TOKENS := NoTokensStats, ?NO_CAPACITY := NoCapacityStats} = Stats) ->
+	      NameLabel = [{name, Name}],
+	      Limit = [{type, limit}|NameLabel],
+	      Used = [{type, used}|NameLabel],
 	      Stats#{
 		     ?OUTSTANDING :=
 			 OutstandingMap#{Limit => Capacity, Used => Outstanding},
 		     ?TOKENS :=
-			 RateMap#{Limit => Rate, Used => Tokens}
+			 RateMap#{Limit => Rate, Used => Tokens},
+		     ?NO_TOKENS := NoTokensStats#{NameLabel => NoTokens},
+		     ?NO_CAPACITY := NoCapacityStats#{NameLabel => NoCapacity}
 		    };
 	 (_, _, Stats) ->
 	      Stats
