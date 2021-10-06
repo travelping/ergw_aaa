@@ -18,11 +18,17 @@
 
 -define(AAA_ERR(Level), #aaa_err{level=Level,where={?FILE, ?LINE}}).
 
+-record(peer_stats, {
+    no_tokens   = 0,
+    no_capacity = 0
+}).
+
 -record(peer, {
     outstanding = 0,
     capacity    = 50,
     last_ts     = undefined,
     rate        = 10,          %% requests per second
     interval    = 0,           %% refill interval in microseconds
-    tokens      = 0
+    tokens      = 0,
+    stats       = #peer_stats{}
 }).

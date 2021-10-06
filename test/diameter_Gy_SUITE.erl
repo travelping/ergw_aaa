@@ -899,8 +899,11 @@ diameter_metrics() ->
 diameter_metrics(_Config) ->
     ?equal(ok, prometheus_registry:register_collector(ergw_aaa, ergw_aaa_prometheus_collector)),
     Metrics = prometheus_text_format:format(ergw_aaa),
+    ct:pal("Metrics: ~s", [Metrics]),
     ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_outstanding_requests")),
-    ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_available_tokens")).
+    ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_available_tokens")),
+    ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_no_tokens_available_total")),
+    ?match({match, _}, re:run(Metrics, "ergw_aaa_diameter_no_capacity_left_total")).
 
 %%%======================================================================
 %%% Rate limit test helper to generate the requests in separate processes
