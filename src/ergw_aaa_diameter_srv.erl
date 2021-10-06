@@ -254,12 +254,22 @@ handle_cast({peer_down, _SvcName, {PeerRef, _}}, #state{peers = Peers} = State) 
 handle_cast(stop, State) ->
     {stop, normal, State}.
 
-handle_info({'DOWN', MRef, _Type, Pid, Info}, #state{peers = Peers0} = State0)
+handle_info({'DOWN', MRef, _Type, Pid, Info}, #state{peers = Peers0} = State)
   when is_map_key(MRef, Peers0) ->
-    ?LOG(alert, "got down for pending request ~0p with ~p", [maps:get(MRef, Peers0), Info]),
-    State = State0#state{peers = maps:without([Pid, MRef], Peers0)},
+    ?LOG(alert, "got down for pending request ~0p (~p) with ~p",
+	 [maps:get(MRef, Peers0), Pid, Info]),
+
+    {_, _, PeerRef, Caps} = maps:get(MRef, Peers0),
+    {Result, Peers} = release_peer(PeerRef, Caps, maps:without([Pid, MRef], Peers0)),
+    case Result of
+	{error, Error} ->
+	    ?LOG(critical, "release peer failed with ~0p", [Error]),
+	    ok;
+	ok ->
+	    ok
+    end,
     ets:match_delete(?MODULE, {{'_', Pid}, MRef}),
-    {noreply, State};
+    {noreply, State#state{peers = Peers}};
 
 handle_info({'DOWN', MRef, _Type, Pid, _Info}, State) ->
     ets:match_delete(?MODULE, {{'_', Pid}, MRef}),
@@ -371,25 +381,33 @@ start_request_h(SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}} = Caps
 	    {ok, Peers4}
     end.
 
-finish_request_h(_SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}}}, RPid, Peers0a) ->
-    Peers0 = case Peers0a of
-		 #{RPid := MRef} ->
-		     demonitor(MRef),
-		     maps:without([RPid, MRef], Peers0a);
-		 _ ->
-		     Peers0a
-	     end,
-    Peers1 = case Peers0 of
-		 #{PeerRef := _} -> maps:update_with(PeerRef, _ - 1, Peers0);
-		 _               -> Peers0
-	     end,
-    Peer = get_peer(OH, Peers1),
+release_peer_ref(PeerRef, Peers) when is_map_key(PeerRef, Peers) ->
+    maps:update_with(PeerRef, _ - 1, Peers);
+release_peer_ref(_PeerRef, Peers) ->
+    Peers.
+
+release_peer_oh(#diameter_caps{origin_host = {_, OH}}, Peers) ->
+    Peer = get_peer(OH, Peers),
     case Peer of
 	#peer{outstanding = Cnt} when Cnt > 0 ->
-	    {ok, Peers1#{OH => Peer#peer{outstanding = Cnt - 1}}};
+	    {ok, Peers#{OH => Peer#peer{outstanding = Cnt - 1}}};
 	_ ->
-	    {{error, underflow}, Peers1#{OH => Peer}}
+	    {{error, underflow}, Peers#{OH => Peer}}
     end.
+
+release_peer(PeerRef, Caps, Peers) ->
+    release_peer_oh(Caps, release_peer_ref(PeerRef, Peers)).
+
+finish_request_h(_SvcName, {PeerRef, Caps}, RPid, Peers0) ->
+    Peers =
+	case Peers0 of
+	    #{RPid := MRef} ->
+		demonitor(MRef),
+		maps:without([RPid, MRef], Peers0);
+	    _ ->
+		Peers0
+	end,
+    release_peer(PeerRef, Caps, Peers).
 
 %% AVP filtering
 %% See /docs/diameter_avp_filter.md in the source tree for functionality
