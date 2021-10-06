@@ -335,22 +335,22 @@ qos_from_session('Allocation-Retention-Priority' = Key, ARP, Info) ->
 
 qos_from_session('Max-Requested-Bandwidth-UL' = Key, MBR, Info)
   when MBR > ?UINT32MAX ->
-    Info#{Key => ?UINT32MAX, 'Extended-Max-Requested-BW-UL' => [MBR div 1000]};
+    Info#{Key => [?UINT32MAX], 'Extended-Max-Requested-BW-UL' => [MBR div 1000]};
 qos_from_session('Max-Requested-Bandwidth-DL' = Key, MBR, Info)
   when MBR > ?UINT32MAX ->
-    Info#{Key => ?UINT32MAX, 'Extended-Max-Requested-BW-DL' => [MBR div 1000]};
+    Info#{Key => [?UINT32MAX], 'Extended-Max-Requested-BW-DL' => [MBR div 1000]};
 qos_from_session('Guaranteed-Bitrate-UL' = Key, GBR, Info)
   when GBR > ?UINT32MAX ->
-    Info#{Key => ?UINT32MAX, 'Extended-GBR-UL' => [GBR div 1000]};
+    Info#{Key => [?UINT32MAX], 'Extended-GBR-UL' => [GBR div 1000]};
 qos_from_session('Guaranteed-Bitrate-DL' = Key, GBR, Info)
   when GBR > ?UINT32MAX ->
-    Info#{Key => ?UINT32MAX, 'Extended-GBR-DL' => [GBR div 1000]};
+    Info#{Key => [?UINT32MAX], 'Extended-GBR-DL' => [GBR div 1000]};
 qos_from_session('APN-Aggregate-Max-Bitrate-UL' = Key, AMBR, Info)
   when AMBR > ?UINT32MAX ->
-    Info#{Key => ?UINT32MAX, 'Extended-APN-AMBR-UL' => [AMBR div 1000]};
+    Info#{Key => [?UINT32MAX], 'Extended-APN-AMBR-UL' => [AMBR div 1000]};
 qos_from_session('APN-Aggregate-Max-Bitrate-DL' = Key, AMBR, Info)
   when AMBR > ?UINT32MAX ->
-    Info#{Key => ?UINT32MAX, 'Extended-APN-AMBR-DL' => [AMBR div 1000]};
+    Info#{Key => [?UINT32MAX], 'Extended-APN-AMBR-DL' => [AMBR div 1000]};
 
 qos_from_session(Key, Value, Info)
   when Key == 'QoS-Class-Identifier';
