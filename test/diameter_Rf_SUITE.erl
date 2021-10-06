@@ -46,7 +46,9 @@
 -define(DIAMETER_SERVICE_OPTS, []).
 
 -define(CONFIG,
-	[{functions, [?DIAMETER_FUNCTION]},
+	[{rate_limits,
+	  [{default, [{outstanding_requests, 5}, {rate, 20}]}]},
+	{functions, [?DIAMETER_FUNCTION]},
 	 {handlers,
 	  [{ergw_aaa_static, ?STATIC_CONFIG},
 	   {ergw_aaa_rf, ?DIAMETER_RF_CONFIG}
@@ -85,7 +87,9 @@ all() ->
      async,
      secondary_rat_usage_data_report,
      handle_failure,
-     handle_answer_error
+     handle_answer_error,
+     rate_limit,
+     encode_error
     ].
 
 init_per_suite(Config0) ->
@@ -579,3 +583,147 @@ handle_answer_error(Config) ->
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
     ok.
+
+rate_limit() ->
+    [{doc, "Test rate limiting"}].
+rate_limit(_Config) ->
+    Self = self(),
+
+    CollectFun =
+	fun CollectFun(_, [], Acc) ->
+		Acc;
+	    CollectFun(Key, [H|T], Acc) ->
+		receive
+		    {H, Key, {R, _, _}} ->
+			maps:update_with(R, fun(X) -> X + 1 end, 1, CollectFun(Key, T, Acc))
+		after 2000 ->
+			error
+		end
+	end,
+
+    %% make sure the token bucket is completely filled, previous test might have drained it
+    ct:sleep(2000),
+
+    %% with 1 peers, a rate limit at 20 req/s and 2 retries (= 3 attempts max) we should
+    %% be able to get 20 requests through
+    SRefs = [begin Ref = make_ref(), spawn(?MODULE, async_session, [Self, Ref]), Ref end
+	     || _ <- lists:seq(1, 60)],
+
+    CCRi = CollectFun('Initial', SRefs, #{}),
+    CCRt = CollectFun('Terminate', SRefs, #{}),
+
+    %% make sure to refill the token buckets, so that the following tests don't fail
+    ct:sleep(1100),
+
+    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
+	     when OkayI >= 20 andalso
+		  LimitI /= 0 andalso
+		  OkayI + LimitI =:= 60, CCRi),
+    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
+	     when OkayT >= 20 andalso
+		  LimitT /= 0 andalso
+		  OkayT + LimitT =:= 60, CCRt),
+
+    %% make sure to refill the token buckets, so that the following tests don't fail
+    ct:sleep(1100),
+    ok.
+
+encode_error() ->
+    [{doc, "Check that a message encode error does not leave the "
+      "outstanding requests counter for the peer incremented"}].
+encode_error(Config) ->
+    BrokenQoS =
+	#{
+	  'QoS-Information' =>
+	      #{
+		%% 32bit overflow, will fail to encode
+		'QoS-Class-Identifier' => 4294968000,
+		'Max-Requested-Bandwidth-DL' => 0,
+		'Max-Requested-Bandwidth-UL' => 0,
+		'Guaranteed-Bitrate-DL' => 0,
+		'Guaranteed-Bitrate-UL' => 0,
+		'Allocation-Retention-Priority' =>
+		    #{'Priority-Level' => 10,
+		      'Pre-emption-Capability' => 1,
+		      'Pre-emption-Vulnerability' => 0},
+		'APN-Aggregate-Max-Bitrate-DL' => 84000000,
+		'APN-Aggregate-Max-Bitrate-UL' => 8640000
+	       }
+	 },
+    Session = init_session(BrokenQoS, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    R = ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+    ct:pal("R: ~p", [R]),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(1, proplists:get_value({{3, 271, 1}, send, error}, Stats1)),
+
+    %% there should be not outstanding requests
+    ?match(0, outstanding_reqs()),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+%%%======================================================================
+%%% Rate limit test helper to generate the requests in separate processes
+%%%======================================================================
+
+async_session(Owner, Ref) ->
+    async_session(Owner, Ref, 1100).
+
+async_session(Owner, Ref, Delay) ->
+    SOpts = #{now => erlang:monotonic_time()},
+    Session = init_session(#{}, []),
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    IResult = ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+    Owner ! {Ref, 'Initial', IResult},
+
+    timer:sleep(Delay),
+
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    TResult = ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+    Owner ! {Ref, 'Terminate', TResult},
+
+    ok.
+
+%%%===================================================================
+%%% Generic helpers
+%%%===================================================================
+
+stats('ACR') -> {3, 271, 1};
+stats('ACA') -> {3, 271, 0};
+stats(Tuple) when is_tuple(Tuple) ->
+    setelement(1, Tuple, stats(element(1, Tuple)));
+stats(V) -> V.
