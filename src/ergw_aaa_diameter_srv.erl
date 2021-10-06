@@ -20,6 +20,8 @@
 -behaviour(gen_server).
 
 %% API
+%% Allow other modules to get peers from state record/put peers into state record.
+-export([peers_from_state/1, peers_into_state/2]).
 -export([start_link/0, stop/0]).
 -export([peer_down/3, is_first_request/3,
 	 register_service/2, get_service_opts/1]).
@@ -56,6 +58,10 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+peers_from_state(#state{peers = P}) -> P.
+
+peers_into_state(State, Peers) -> State#state{peers = Peers}.
 
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).

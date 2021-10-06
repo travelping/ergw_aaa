@@ -46,14 +46,15 @@ peer_info_adjust(_Config) ->
 	Host = ahost,
 	Peer = peer("peer_info_adjust", Host),
 	ok = ergw_aaa_diameter_srv:start_request("SvcName", Peer),
-	#{Host := #{outstanding := O}} = ergw_aaa:peer_info(),
-	Expected = O - 1,
-	New = #{Host => #{outstanding => Expected}},
+	#{Host := #{capacity := C, outstanding := O}} = ergw_aaa:peer_info(),
+	Capacity = C + 1,
+	Outstanding = O - 1,
+	Expected = #{capacity => Capacity, outstanding => Outstanding},
+	New = #{Host => #{capacity => Capacity, outstanding => Outstanding}},
 
 	ergw_aaa:peer_info_adjust(New),
 
-	#{Host := #{outstanding := Expected}} = ergw_aaa:peer_info().
-
+	#{Host := Expected} = ergw_aaa:peer_info().
 
 %%===================================================================
 %% Internal

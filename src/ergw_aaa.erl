@@ -72,9 +72,12 @@ peer_info() -> maps:fold(fun peer_record_map/3, #{}, ergw_aaa_diameter_srv:get_p
 -spec(peer_info_adjust(peer_info()) -> ok).
 peer_info_adjust(PeerInfo) ->
 	Peers = ergw_aaa_diameter_srv:get_peers_info(),
-	F = fun(Key, Value, _Acc) -> peer_info_adjust(Key, Value, maps:find(Key, Peers)) end,
-	maps:fold(F, ignore, PeerInfo),
-	ok.
+	Existing = maps:with(maps:keys(Peers), PeerInfo),
+	peer_info_adjust_warning(PeerInfo, Existing, maps:size(PeerInfo), maps:size(Existing)),
+	Outstanding = maps:filter(fun peer_info_adjust_outstanding_filter/2, Existing),
+	peer_info_adjust_outstanding(Peers, Outstanding, maps:size(Outstanding)),
+	Capacity = maps:filter(fun peer_info_adjust_capacity_filter/2, Existing),
+	peer_info_adjust_capacity(Capacity, maps:size(Capacity)).
 
 setopts(Opts0) when is_map(Opts0)->
     Opts = maps:map(fun ergw_aaa_config:validate_option/2, Opts0),
@@ -147,14 +150,53 @@ add_config(Key, Name, Opts) ->
     end.
 
 
-peer_info_adjust(Host, #{outstanding := Expected}, {ok, #peer{outstanding = Current}})
+peer_info_adjust_capacity(Capacity, N) when N > 0 ->
+	F = fun(State) -> peer_info_adjust_capacity_replace_state(Capacity, State) end,
+	sys:replace_state(ergw_aaa_diameter_srv, F);
+peer_info_adjust_capacity(_Capacity, _N) ->
+	ok.
+
+peer_info_adjust_capacity_filter(_Key, #{capacity := _}) -> true;
+peer_info_adjust_capacity_filter(_Key, _Value) -> false.
+
+peer_info_adjust_capacity_replace_state(Capacity, State) ->
+	Peers = ergw_aaa_diameter_srv:peers_from_state(State),
+	F =  fun(Host, Peer, Acc) ->
+		peer_info_adjust_capacity_replace_state(Host, Peer, maps:find(Host, Acc), Acc)
+	end,
+	ergw_aaa_diameter_srv:peers_into_state(State, maps:fold(F, Peers, Capacity)).
+
+peer_info_adjust_capacity_replace_state(Host, #{capacity := C}, {ok, Peer}, Acc) ->
+	Acc#{Host => Peer#peer{capacity = C}};
+%% Should not happen, but do not crash sys:replace_state
+peer_info_adjust_capacity_replace_state(Host, Peer, error, Acc) ->
+	?LOG(error, "~p:peer_info_adjust capacity not adjusted, ~p ~p", [?MODULE, Host, Peer]),
+	Acc.
+
+
+peer_info_adjust_outstanding(Peers, Outstanding, N) when N > 0 ->
+	F = fun(Host, Peer, _Acc) -> peer_info_adjust_outstanding_fold(Host, Peer, maps:find(Host, Peers)) end,
+	maps:fold(F, ignore, Outstanding);
+peer_info_adjust_outstanding(_Peers, _Outstanding, _N) ->
+	ok.
+
+peer_info_adjust_outstanding_filter(_Key, #{outstanding := _}) -> true;
+peer_info_adjust_outstanding_filter(_Key, _Value) -> false.
+
+peer_info_adjust_outstanding_fold(Host, #{outstanding := Expected}, {ok, #peer{outstanding = Current}})
 		when Expected < Current
 		->
 	Peer = {ignore, #diameter_caps{origin_host = {ignore, Host}}},
 	[ergw_aaa_diameter_srv:finish_request(undefined, Peer) || _ <- lists:seq(1, Current - Expected)],
 	ok;
-peer_info_adjust(Host, Value, Peer) ->
-	?LOG(error, "~p:~p ~p, ~p, ~p", [?MODULE, ?FUNCTION_NAME, Host, Value, Peer]).
+peer_info_adjust_outstanding_fold(Host, Peer, {ok, _}) ->
+	?LOG(warning, "~p:peer_info_adjust outstanding not adjusted, ~p", [?MODULE, Host, Peer]).
+
+
+peer_info_adjust_warning(_Expected, _Remaining, Size, Size) ->
+	ok;
+peer_info_adjust_warning(Expected, Remaining, _, _)  ->
+	?LOG(warning, "~p:peer_info_adjust unknown peers ignored, ~p", [?MODULE, maps:keys(Expected) -- maps:keys(Remaining)]).
 
 
 peer_record_map(Key, #peer{capacity = C, outstanding = O}, Acc) -> Acc#{Key => #{capacity => C, outstanding => O}};
