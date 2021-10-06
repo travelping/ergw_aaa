@@ -373,6 +373,15 @@ pick_peer_h(Candidates, _SvcName, Peers) ->
     Connection = pick_connection(maps:get(lists:nth(N, Cands), CandMap), Peers),
     {ok, Connection}.
 
+inc_element(Element, Stats) ->
+    %% inc with wrap around to 0 at 2^64
+    setelement(Element, Stats, (element(Element, Stats) + 1) rem (1 bsl 64)).
+
+inc_stats(no_tokens, #peer{stats = Stats} = Peer) ->
+    Peer#peer{stats = inc_element(#peer_stats.no_tokens, Stats)};
+inc_stats(no_capacity, #peer{stats = Stats} = Peer) ->
+    Peer#peer{stats = inc_element(#peer_stats.no_capacity, Stats)}.
+
 start_request_h(SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}} = Caps}, RPid, Peers0) ->
     Peer = get_peer(OH, Peers0),
     ?LOG(debug, "start_request_h: ~p", [PeerRef]),
@@ -380,10 +389,10 @@ start_request_h(SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}} = Caps
 	  capacity    = Cap,
 	  tokens      = Tokens} = Peer,
     if Cnt >= Cap ->
-	    ?LOG(debug, "peer over capacity (~p > ~p)", [Cnt, Cap]),
+	    ?LOG(debug, "peer ~0p over capacity (~p > ~p)", [OH, Cnt, Cap]),
 	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_tokens, Peer)}};
        Tokens == 0 ->
-	    ?LOG(debug, "peer over rate"),
+	    ?LOG(debug, "peer ~0p over rate", [OH]),
 	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_capacity, Peer)}};
        true ->
 	    ?LOG(debug, "outstanding inc: ~p", [Cnt + 1]),
