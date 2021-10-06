@@ -142,11 +142,13 @@ await_response(Promise, Timeout) ->
 
 handle_plain_error(Module, Error, Request, SvcName, CallOpts)
   when is_atom(Module) ->
-    ?LOG(debug, "DIAMETER error in ~p with: ~p. Request: ~p", [Module, Error, Request]),
+    ?LOG(debug, "~p: DIAMETER error in ~0p with: ~0p. Request: ~0p, CallOpts: ~0p",
+	 [self(), Module, Error, Request, CallOpts]),
     erlang:apply(Module, handle_error, [Error, Request, SvcName, undefined, CallOpts]);
 handle_plain_error([Module | Extra], Error, Request, SvcName, CallOpts)
   when is_atom(Module) ->
-    ?LOG(debug, "DIAMETER error in ~p with: ~p. Request: ~p", [Module, Error, Request]),
+    ?LOG(debug, "~p: DIAMETER error in ~0p with: ~0p. Request: ~0p, Extra: ~0p, CallOpts: ~0p",
+	 [self(), Module, Error, Request, Extra, CallOpts]),
     erlang:apply(Module, handle_error,
 		 [Error, Request, SvcName, undefined] ++ Extra ++ [CallOpts]).
 %% we don't currently use #diameter_callback{}
@@ -270,6 +272,7 @@ handle_info({'DOWN', MRef, _Type, Pid, Info}, #state{peers = Peers0} = State)
     case Result of
 	{error, Error} ->
 	    ?LOG(critical, "release peer failed with ~0p", [Error]),
+	    ct:fail("release peer failed with ~0p", [Error]),
 	    ok;
 	ok ->
 	    ok
@@ -372,12 +375,18 @@ pick_peer_h(Candidates, _SvcName, Peers) ->
 
 start_request_h(SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}} = Caps}, RPid, Peers0) ->
     Peer = get_peer(OH, Peers0),
+    ?LOG(debug, "start_request_h: ~p", [PeerRef]),
     #peer{outstanding = Cnt,
 	  capacity    = Cap,
 	  tokens      = Tokens} = Peer,
-    if (Cnt >= Cap orelse Tokens == 0) ->
-	    {{discard, rate_limit}, Peers0#{OH => Peer}};
+    if Cnt >= Cap ->
+	    ?LOG(debug, "peer over capacity (~p > ~p)", [Cnt, Cap]),
+	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_tokens, Peer)}};
+       Tokens == 0 ->
+	    ?LOG(debug, "peer over rate"),
+	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_capacity, Peer)}};
        true ->
+	    ?LOG(debug, "outstanding inc: ~p", [Cnt + 1]),
 	    Peers1 =
 		Peers0#{OH => Peer#peer{outstanding = Cnt + 1, tokens = Tokens - 1}},
 	    Peers2 = maps:update_with(PeerRef, _ + 1, 1, Peers1),
@@ -396,6 +405,7 @@ release_peer_oh(#diameter_caps{origin_host = {_, OH}}, Peers) ->
     Peer = get_peer(OH, Peers),
     case Peer of
 	#peer{outstanding = Cnt} when Cnt > 0 ->
+	    ?LOG(debug, "outstanding dec #1: ~p", [Cnt - 1]),
 	    {ok, Peers#{OH => Peer#peer{outstanding = Cnt - 1}}};
 	_ ->
 	    {{error, underflow}, Peers#{OH => Peer}}
@@ -405,6 +415,7 @@ release_peer(PeerRef, Caps, Peers) ->
     release_peer_oh(Caps, release_peer_ref(PeerRef, Peers)).
 
 finish_request_h(_SvcName, {PeerRef, Caps}, RPid, Peers0) ->
+    ?LOG(debug, "finish_request_h: ~p", [PeerRef]),
     Peers =
 	case Peers0 of
 	    #{RPid := MRef} ->

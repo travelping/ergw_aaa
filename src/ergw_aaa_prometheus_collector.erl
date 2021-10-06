@@ -11,12 +11,11 @@
 -include_lib("prometheus/include/prometheus.hrl").
 -include("ergw_aaa_internal.hrl").
 
--export([
-    deregister_cleanup/1,
-    collect_mf/2,
-    collect_metrics/2,
-    gather/0
-]).
+-export([deregister_cleanup/1,
+	 collect_mf/2,
+	 collect_metrics/2,
+	 gather/0
+	]).
 
 -ignore_xref([gather/0, collect_metrics/2]).
 
@@ -44,15 +43,15 @@ collect_mf(_Registry, Callback) ->
 
 mf(Callback, {Name, Type, Help}, Stats) ->
     Callback(create_mf(?METRIC_NAME(Name), Help, Type, ?MODULE,
-                       {Type, fun(S) -> maps:get(Name, S, undefined) end, Stats})),
+		       {Type, fun(S) -> maps:get(Name, S, undefined) end, Stats})),
     ok.
 
 collect_metrics(_, {Type, Fun, Stats}) ->
     case Fun(Stats) of
-        M when is_map(M) ->
-            [metric(Type, Labels, Value) || {Labels, Value} <- maps:to_list(M)];
-        _ ->
-            undefined
+	M when is_map(M) ->
+	    [metric(Type, Labels, Value) || {Labels, Value} <- maps:to_list(M)];
+	_ ->
+	    undefined
     end.
 
 metric(gauge, Labels, Value) ->
@@ -63,15 +62,24 @@ metric(gauge, Labels, Value) ->
 %%%===================================================================
 
 gather() ->
-    maps:fold(fun
-        (Name, #peer{outstanding = Outstanding,
-                     capacity = Capacity,
-                     rate = Rate,
-                     tokens = Tokens}, #{?OUTSTANDING := OutstandingMap, ?TOKENS := RateMap} = Stats) ->
-            Stats#{
-                ?OUTSTANDING := OutstandingMap#{[{name, Name}, {type, limit}] => Capacity, [{name, Name}, {type, used}] => Outstanding},
-                ?TOKENS      := RateMap#{[{name, Name}, {type, limit}] => Rate, [{name, Name}, {type, used}] => Tokens}
-            };
-        (_, _, Stats) ->
-            Stats
-    end, #{?OUTSTANDING => #{}, ?TOKENS => #{}}, ergw_aaa_diameter_srv:get_peers_info()).
+    Init =
+	#{?OUTSTANDING => #{},
+	  ?TOKENS => #{}
+	 },
+    maps:fold(
+      fun(Name, #peer{outstanding = Outstanding,
+		      capacity = Capacity,
+		      rate = Rate,
+		      tokens = Tokens},
+	  #{?OUTSTANDING := OutstandingMap, ?TOKENS := RateMap} = Stats) ->
+	      Limit = [{name, Name}, {type, limit}],
+	      Used = [{name, Name}, {type, used}],
+	      Stats#{
+		     ?OUTSTANDING :=
+			 OutstandingMap#{Limit => Capacity, Used => Outstanding},
+		     ?TOKENS :=
+			 RateMap#{Limit => Rate, Used => Tokens}
+		    };
+	 (_, _, Stats) ->
+	      Stats
+      end, Init, ergw_aaa_diameter_srv:get_peers_info()).
