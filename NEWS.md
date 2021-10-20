@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.1.5 - 20 October 2021
+----------------------------
+
+**Dependencies** :gear:
+* [#175](https://github.com/travelping/ergw_aaa/pull/175) Update [eradius](https://github.com/travelping/regine) to [1.1.0](https://github.com/travelping/regine/releases/tag/1.1.0)
+
 Version 4.1.4 - 7 September 2021
 ----------------------------
 
