@@ -360,7 +360,13 @@ vendor_ituma('WLAN-Station-RSSI ', #{'WLAN-Station-RSSI' := Value}, Attrs) ->
 vendor_ituma('WLAN-AP-RSSI', #{'WLAN-AP-RSSI' := Value}, Attrs) ->
     [{?'IM_UE_Wwan_RSSI', Value}|Attrs];
 vendor_ituma('LI-Location', #{'CAPWAP-GPS-Latitude' := Latitude,
-			      'CAPWAP-GPS-Longitude' := Longitude}, Attrs) ->
+			      'CAPWAP-GPS-Longitude' := Longitude}, Attrs)
+	when is_float(Latitude) andalso is_float(Longitude) ->
+    Loc = iolist_to_binary(io_lib:format("lat:~f;lon:~f", [Latitude, Longitude])),
+    [{?'IM_LI_Location', Loc}|Attrs];
+vendor_ituma('LI-Location', #{'CAPWAP-GPS-Latitude' := Latitude,
+			      'CAPWAP-GPS-Longitude' := Longitude}, Attrs)
+	when is_list(Latitude) andalso is_list(Longitude) ->
     Lat = pos_to_decimal(gps_read_pos(Latitude)),
     Long = pos_to_decimal(gps_read_pos(Longitude)),
     Loc = iolist_to_binary(io_lib:format("lat:~f;lon:~f", [Lat, Long])),
@@ -648,8 +654,12 @@ session_options('CAPWAP-WWAN-Cell-Id', Value, Attrs) ->
 
 session_options('CAPWAP-GPS-Timestamp', Value, Attrs) ->
     [{?TP_CAPWAP_GPS_Timestamp, Value}| Attrs];
+session_options('CAPWAP-GPS-Latitude', Value, Attrs) when is_float(Value) ->
+    [{?TP_CAPWAP_GPS_Latitude, iolist_to_binary(io_lib:format("~f", [Value]))} | Attrs];
 session_options('CAPWAP-GPS-Latitude', Value, Attrs) ->
     [{?TP_CAPWAP_GPS_Latitude, Value} | Attrs];
+session_options('CAPWAP-GPS-Longitude', Value, Attrs) when is_float(Value) ->
+    [{?TP_CAPWAP_GPS_Longitude, iolist_to_binary(io_lib:format("~f", [Value]))} | Attrs];
 session_options('CAPWAP-GPS-Longitude', Value, Attrs) ->
     [{?TP_CAPWAP_GPS_Longitude, Value} | Attrs];
 session_options('CAPWAP-GPS-Altitude', Value, Attrs) ->
