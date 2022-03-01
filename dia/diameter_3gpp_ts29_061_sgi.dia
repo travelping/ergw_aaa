@@ -175,6 +175,11 @@
             * [ Proxy-Info ]
               [ 3GPP-IPv6-DNS-Servers ]
               [ TP-NAT-Pool-Id ]
+              ;; Extensions for User-ID aware TDF
+              [ Calling-Station-Id ]
+              [ 3GPP-IMSI ]
+              [ 3GPP-IMEISV ]
+              ;;
             * [ AVP ]
 
       RAR ::= < Diameter Header: 258, REQ, PXY >

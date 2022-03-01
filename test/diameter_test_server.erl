@@ -255,7 +255,8 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	     'Accounting-Record-Number' => Number},
     case check_3gpp(Msg) of
 	Result when Result =:= ok;
-		    Result =:= {ok, no_imsi} ->
+		    Result =:= {ok, no_imsi};
+			  Result =:= {ok, cgnat} ->
 	    {reply, ['ACA' | ACA]};
 	_ ->
 	    {answer_message, 5005}
@@ -402,6 +403,10 @@ check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
 	     '3GPP-Selection-Mode'    := [<<"0">>]
 	    }) ->
     ok;
+check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
+	     '3GPP-IMEISV'            := [<<82,21,50,96,32,80,30,0>>]
+	    }) ->
+    error_m:return(cgnat);
 check_3gpp(#{'3GPP-IMSI' := [<<"noCheck">>]}) ->
     ok;
 check_3gpp(Msg) ->

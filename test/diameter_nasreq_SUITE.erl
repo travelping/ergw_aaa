@@ -74,6 +74,7 @@
 common() ->
     [compat,
      simple,
+     simple_tdf_userid,
      simple_normal_terminate,
      accounting,
      acct_interim_interval,
@@ -171,6 +172,12 @@ simple() ->
 
 simple(Config) ->
     simple(Config, #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'}).
+
+simple_tdf_userid() ->
+    [{doc, "Simple NASREQ session with UserID info for TDF"}].
+
+simple_tdf_userid(Config) ->
+    simple_tdf_userid(Config, #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'}).
 
 simple_normal_terminate() ->
     [{doc, "Simple terminate NASREQ session with `normal` atom"}].
@@ -366,6 +373,52 @@ simple(Config, TermOpts) ->
 			'NAT-Pool-Id' => <<"nat-A">>}),
 
     {ok, _, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+    ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
+	   Events),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, start, [])),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, interim, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
+
+    ?match({ok, _, _}, ergw_aaa_session:invoke(Session, TermOpts, stop, [])),
+
+    ?equal([{ergw_aaa_nasreq, started, 0}], get_session_stats()),
+
+    Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    ct:pal("Statistics: ~p", [Statistics]),
+    [?equal(Cnt, stats(Msg, Config, Statistics)) ||
+	{Cnt, Msg} <- [{1, 'AAR'}, {1, {'AAA', 2001}},
+		       {3, 'ACR'}, {3, {'ACA', 2001}},
+		       {1, 'STR'}, {1, {'STA', 2001}}
+		      ]],
+
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+simple_tdf_userid(Config, TermOpts) ->
+    Stats0 = get_stats(?SERVICE),
+    Msisdn = <<"543148000012345">>,
+    Imsi = <<"250071234567890">>,
+    Imei = <<82,21,50,96,32,80,30,0>>,
+    {ok, Session} = ergw_aaa_session_sup:new_session(
+		      self(),
+		      #{'Framed-IP-Address' => {10,10,10,10},
+			'Framed-IPv6-Prefix' => {{16#fe80,0,0,0,0,0,0,0}, 64},
+			'Framed-Pool' => <<"pool-A">>,
+			'Framed-IPv6-Pool' => <<"pool-A">>,
+      'Calling-Station-Id' => Msisdn,
+      '3GPP-IMSI' => Imsi,
+      '3GPP-IMEISV' => Imei,
+			'NAT-Pool-Id' => <<"nat-A">>}),
+
+    {ok, SessionUpdates, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
+    ?match(#{'3GPP-IMSI' := Imsi}, SessionUpdates),
+    ?match(#{'3GPP-IMEISV' := Imei}, SessionUpdates),
+    ?match(#{'Calling-Station-Id' := Msisdn}, SessionUpdates),
     ?match([{set, {{accounting, 'IP-CAN', periodic}, {periodic, 'IP-CAN', 1800, []}}}],
 	   Events),
     ?match({ok, _, _}, ergw_aaa_session:invoke(Session, #{}, authorize, [])),
