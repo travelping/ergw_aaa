@@ -105,6 +105,7 @@ initialize_service(_ServiceId, #{function := Function, accounting := AcctModel})
 			   {dictionary, ?DIAMETER_DICT_NASREQ},
 			   {module, ?MODULE}]
 			  | Appl]},
+    ?LOG(debug, "Registering NASREQ service: ~p", [{Function, SvcOpts}]),
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
@@ -276,7 +277,7 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
 handle_answer(#diameter_packet{msg = Msg, errors = Errors},
 	      _Request, SvcName, Peer, _CallOpts)
   when length(Errors) /= 0 ->
-    ?LOG(error, "~p: decode of answer from ~p failed, errors ~p", [SvcName, Peer, Errors]),
+    ?LOG(error, "~p: decode of answer ~p from ~p failed, errors ~p", [SvcName, Msg, Peer, Errors]),
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     case Msg of
 	[_ | #{'Result-Code' := RC}] -> {error, RC};	%% try to handle gracefully
@@ -398,6 +399,12 @@ to_session(_, 'Framed-Pool', [Id], {Session, Events}) ->
     {Session#{'Framed-Pool' => Id}, Events};
 to_session(_, 'Framed-IPv6-Pool', [Id], {Session, Events}) ->
     {Session#{'Framed-IPv6-Pool' => Id}, Events};
+to_session(_, '3GPP-IMSI', [Id], {Session, Events}) ->
+    {Session#{'3GPP-IMSI' => Id}, Events};
+to_session(_, '3GPP-IMEISV', [Id], {Session, Events}) ->
+    {Session#{'3GPP-IMEISV' => Id}, Events};
+to_session(_, 'Calling-Station-Id', [Id], {Session, Events}) ->
+    {Session#{'Calling-Station-Id' => Id}, Events};
 to_session(_, _, _, SessEv) ->
     SessEv.
 
