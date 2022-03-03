@@ -3,6 +3,15 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.2.0 - 3 March 2022
+----------------------------
+
+**Bugfixes** :bug:
+* [#146](https://github.com/travelping/ergw_aaa/pull/173) Fix encoding outgoing requests with Extended fields for bandwidth/bitrates, if high values are received in GTP messages (e.g. in 5G NSA deployments). Such errors will trigger a `critical` trace since it can potentially render charging inoperative. 
+
+**Features** :rocket:
+* [#171](https://github.com/travelping/ergw_aaa/pull/173) Added two new metrics: `ergw_aaa_diameter_no_tokens_available_total` and `ergw_aaa_diameter_no_capacity_left_total`
+
 Version 4.1.5 - 20 October 2021
 ----------------------------
 
