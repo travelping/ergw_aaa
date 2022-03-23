@@ -3,11 +3,11 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
-Version 4.2.0 - 3 March 2022
+Version 4.2.1 - 23 March 2022
 ----------------------------
 
 **Dependencies** :gear:
-* [x](https://github.com/travelping/ergw_aaa/pull/x) Update [erlando](https://github.com/travelping/erlando) to [1.0.4](https://github.com/travelping/erlando/releases/tag/1.0.4)
+* [#181](https://github.com/travelping/ergw_aaa/pull/181) Update [erlando](https://github.com/travelping/erlando) to [1.0.4](https://github.com/travelping/erlando/releases/tag/1.0.4)
 
 Version 4.2.0 - 3 March 2022
 ----------------------------
