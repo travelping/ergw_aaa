@@ -6,6 +6,12 @@ Erlang AAA session implementation for ERGW.
 Version 4.2.0 - 3 March 2022
 ----------------------------
 
+**Dependencies** :gear:
+* [x](https://github.com/travelping/ergw_aaa/pull/x) Update [erlando](https://github.com/travelping/erlando) to [1.0.4](https://github.com/travelping/erlando/releases/tag/1.0.4)
+
+Version 4.2.0 - 3 March 2022
+----------------------------
+
 **Bugfixes** :bug:
 * [#146](https://github.com/travelping/ergw_aaa/pull/173) Fix encoding outgoing requests with Extended fields for bandwidth/bitrates, if high values are received in GTP messages (e.g. in 5G NSA deployments). Such errors will trigger a `critical` trace since it can potentially render charging inoperative. 
 
@@ -16,7 +22,7 @@ Version 4.1.5 - 20 October 2021
 ----------------------------
 
 **Dependencies** :gear:
-* [#175](https://github.com/travelping/ergw_aaa/pull/175) Update [eradius](https://github.com/travelping/regine) to [1.1.0](https://github.com/travelping/regine/releases/tag/1.1.0)
+* [#175](https://github.com/travelping/ergw_aaa/pull/175) Update [regine](https://github.com/travelping/regine) to [1.1.0](https://github.com/travelping/regine/releases/tag/1.1.0)
 
 Version 4.1.4 - 7 September 2021
 ----------------------------
