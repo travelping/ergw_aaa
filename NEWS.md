@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+
+Version 3.6.15 - 30 March 2022
+------------------------------
+
+**Bugfixes** :bug:
+* [#173](https://github.com/travelping/ergw_aaa/pull/173) Encode optional `Extended` QoS fields, add metrics for Diameter rate limitation, add a `critical` log when Diameter outgoing requests cannot be encoded, discount abandoned pending requests due to process exits when sending Diameter requests
+
 Version 3.6.14 - 26 May 2021
 ----------------------------
 
