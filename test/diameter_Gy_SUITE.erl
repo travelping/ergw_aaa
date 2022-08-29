@@ -128,6 +128,7 @@ all() ->
      ocs_hold_initial_timeout,
      ocs_hold_update_timeout,
      ocs_hold_update_timeout_async,
+     ocs_hold_unexpected_session_down,
      ccr_retry,
      % ccr_t_rate_limit,
      rate_limit,
@@ -699,6 +700,8 @@ ocs_hold_initial_timeout(Config) ->
     %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats1)),
 
+    ?equal([{ergw_aaa_ro, ocs_hold, 0}], get_session_stats()),
+
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
@@ -762,6 +765,8 @@ ocs_hold_update_timeout(Config) ->
 
     %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
+
+    ?equal([{ergw_aaa_ro,ocs_hold,0},{ergw_aaa_ro,started,0}], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
@@ -832,6 +837,40 @@ ocs_hold_update_timeout_async(Config) ->
 
     %% Make sure we didn't send anything
     ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats3)),
+
+    ?equal([{ergw_aaa_ro,ocs_hold,0},{ergw_aaa_ro,started,0}], get_session_stats()),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ?CLEAR_TC_INFO(),
+    ok.
+
+ocs_hold_unexpected_session_down(Config) ->
+    %% Time out all requests on the test server to trigger ocs_hold on CCR-I
+    DTRA = fun(_Request, _Svc, _Peers, _Extra) -> discard end,
+    Session = init_session(#{}, Config),
+    GyOpts = #{credits => #{1000 => empty}},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, DiameterSId} = ergw_aaa_session:get(SId, 'Diameter-Session-Id'),
+    set_diameter_session_handler(DiameterSId, DTRA),
+
+    {ok, _Session1, _Events} = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
+
+    ?equal([{ergw_aaa_ro, ocs_hold, 1}], get_session_stats()),
+
+    Stats0 = get_stats(?SERVICE),
+
+    %% pretend we went down
+    SId ! {'DOWN', make_ref(), process, self(), normal},
+    ct:sleep(100),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+
+    %% Make sure we didn't send anything
+    ?equal(0, proplists:get_value({{4, 272, 1}, send}, Stats1)),
+
+    ?equal([{ergw_aaa_ro, ocs_hold, 0}], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),

@@ -156,7 +156,7 @@ invoke(_Service, {_, Procedure}, Session, Events, _Opts, State)
        Procedure =:= 'CCR-Terminate' ->
     {ok, Session, Events, State};
 invoke(_Service, terminate, Session, Events, _Opts, State) ->
-    {ok, Session, Events, State};
+    {ok, Session, Events, State#state{state = stopped}};
 
 invoke(Service, Procedure, Session, Events, _Opts, State) ->
     {{error, {Service, Procedure}}, Session, Events, State}.
