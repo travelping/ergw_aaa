@@ -555,7 +555,7 @@ handle_failure(Config) ->
     ?match({{fail, 3001}, _, _},
 	   ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts)),
 
-    ?equal([], get_session_stats()),
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),
 
@@ -580,7 +580,7 @@ handle_answer_error(Config) ->
     ?match({{error, 3007}, _, _},
 	   ergw_aaa_session:invoke(SId, SOpts, {rf, 'Initial'}, [])),
 
-    ?equal([], get_session_stats()),
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
