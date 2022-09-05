@@ -288,9 +288,9 @@ handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = A
     {ok, Session, Events, State};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events, State#state{state = stopped}};
+    {{fail, Code}, Session, Events, State};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
-    {Result, Session, Events, State#state{state = stopped}}.
+    {Result, Session, Events, State};
 
 init_session_avp_defaults(#{'Acct-Interim-Interval' := Interim}, Avps)
   when not is_map_key('Acct-Interim-Interval', Avps),
