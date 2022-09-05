@@ -299,6 +299,8 @@ handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_timeout := Answer, answers := Answers} = Opts, State) ->
     Avps = apply_answer_config(Answer, Answers),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
+handle_cca({error, timeout} = Result, Session, Events, _Opts, State) ->
+    {Result, Session, [{stop, {?API, req_timeout}} | Events], State#state{state = stopped}};
 handle_cca({error, Reason} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
     {Result, Session, [{stop, {?API, Reason}} | Events], State#state{state = stopped}}.

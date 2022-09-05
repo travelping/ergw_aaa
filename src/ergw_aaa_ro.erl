@@ -355,6 +355,8 @@ handle_cca({error, rate_limit}, Session, Events,
 	   #{answer_if_rate_limit := Answer, answers := Answers} = Opts, State0) ->
     {Avps, State} = apply_answer_config(Answer, Answers, State0),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
+handle_cca({error, timeout} = Result, Session, Events, _Opts, State) ->
+    {Result, Session, [{stop, {?API, req_timeout}} | Events], State#state{state = stopped}};
 handle_cca({error, Reason} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
     {Result, Session, [{stop, {?API, Reason}} | Events], State#state{state = stopped}}.
@@ -512,7 +514,7 @@ from_session(Key, Value, Avps)
     optional([?SI_PSI, '3GPP-User-Location-Info'],
 	     ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps);
 
-%% Add '3GPP-IMSI' to both places commonly used : in the AVP root (e.g. Nokia) and in 
+%% Add '3GPP-IMSI' to both places commonly used : in the AVP root (e.g. Nokia) and in
 %% 'Subscription-Id' (3GPP) then filter out the one you don't need with AVP filter
 from_session('3GPP-IMSI', IMSI, Avps) ->
     SI = #{'Subscription-Id-Type' => ?'DIAMETER_RO_SUBSCRIPTION-ID-TYPE_END_USER_IMSI',
