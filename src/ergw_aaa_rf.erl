@@ -283,14 +283,18 @@ validate_option(Opt, Value) ->
 
 %% handle_aca/5
 handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = Avps],
-	   Session0, Events0, _Opts, State) ->
+	   Session0, Events0, _Opts, State0) ->
+
+    %% reset SDC and TDV only after we successfully delivered them
+    State = State0#state{sdc = [], tdv = []},
+
     {Session, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
     {ok, Session, Events, State};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
     {{fail, Code}, Session, Events, State};
 handle_aca({error, _} = Result, Session, Events, _Opts, State) ->
-    {Result, Session, Events, State};
+    {Result, Session, Events, State}.
 
 init_session_avp_defaults(#{'Acct-Interim-Interval' := Interim}, Avps)
   when not is_map_key('Acct-Interim-Interval', Avps),
@@ -444,17 +448,15 @@ accounting(Base, 'OutOctets', Value, Avps) ->
 %%   [ Traffic-Steering-Policy-Identifier-UL ]
 
 
-service_data(Avps0, #state{sdc = SDC} = State) when length(SDC) /= 0 ->
-    Avps = assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps0),
-    {Avps, State#state{sdc = []}};
-service_data(Avps, State) ->
-    {Avps, State}.
+service_data(Avps, #state{sdc = SDC}) when length(SDC) /= 0 ->
+    assign([?SI_PSI, 'Service-Data-Container'], SDC, Avps);
+service_data(Avps, _State) ->
+    Avps.
 
-traffic_data(Avps0, #state{tdv = TDV} = State) when length(TDV) /= 0 ->
-    Avps = assign([?SI_PSI, 'Traffic-Data-Volumes'], TDV, Avps0),
-    {Avps, State#state{tdv = []}};
-traffic_data(Avps, State) ->
-    {Avps, State}.
+traffic_data(Avps, #state{tdv = TDV}) when length(TDV) /= 0 ->
+    assign([?SI_PSI, 'Traffic-Data-Volumes'], TDV, Avps);
+traffic_data(Avps, _State) ->
+    Avps.
 
 ran_secondary_rat_usage_report(Avps0, #state{sec_rat_reports = Reports} = State)
   when length(Reports) /= 0 ->
@@ -676,9 +678,9 @@ create_ACR(Type, Session, #{now := Now} = Opts, #state{record_number = RecNumber
 			      [#{'PDP-Context-Type' => 0}]}]
 		  },
     Avps2 = stop_indicator(Type, Avps1),
-    {Avps3, State1} = service_data(Avps2, State0),
-    {Avps4, State2} = traffic_data(Avps3, State1),
-    {Avps, State} = ran_secondary_rat_usage_report(Avps4, State2),
+    Avps3 = service_data(Avps2, State0),
+    Avps4 = traffic_data(Avps3, State0),
+    {Avps, State} = ran_secondary_rat_usage_report(Avps4, State0),
     {['ACR' | from_session(Session, Avps)], State#state{record_number = RecNumber + 1}}.
 
 get_state_atom(#state{state = State}) ->
