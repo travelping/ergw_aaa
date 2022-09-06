@@ -3,6 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.3.1 - 6 September 2022
+--------------------------------
+
+**Bugfixes** :bug:
+* [#188](https://github.com/travelping/ergw_aaa/pull/188) Do not mark the session as stopped in the case of CDF connection failures, to prevent stuck sessions. 
+* [#186](https://github.com/travelping/ergw_aaa/pull/186) In some circumstances where terminate is invoked but no outgoing message is sent, the session state was not updated to `stopped`, resulting in wrong figures in metrics.
+
 Version 4.3.0 - 28 March 2022
 -----------------------------
 
