@@ -296,7 +296,7 @@ handle_event(cast, terminate, _State, Data) ->
 
 handle_event(info, {'DOWN', _Ref, process, Owner, normal},
 	     _State, #data{owner = Owner} = Data) ->
-    ?LOG(warning, "Received DOWN information for ~p exiting normally", [Data#data.owner]),
+    ?LOG(info, "Received DOWN information for ~p exiting normally", [Data#data.owner]),
     terminate_action(Data),
     {stop, normal};
 
