@@ -3,7 +3,13 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
-Version 4.3.1 - 6 September 2022
+Version 4.3.2 - 26 September 2022
+---------------------------------
+
+**Bugfixes** :bug:
+* Bump to gtplib 3.2.0
+
+*Version 4.3.1 - 6 September 2022
 --------------------------------
 
 **Bugfixes** :bug:
