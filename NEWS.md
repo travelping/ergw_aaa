@@ -3,7 +3,7 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
-Version 4.3.2 - 20 October 2022
+Version 4.3.2 - 21 October 2022
 ---------------------------------
 
 **Dependencies** :gear:
