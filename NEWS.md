@@ -3,17 +3,18 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
-Version 4.3.2 - 26 September 2022
+Version 4.3.2 - 20 October 2022
 ---------------------------------
 
-**Bugfixes** :bug:
-* Bump to gtplib 3.2.0
+**Dependencies** :gear:
+* [#192](https://github.com/travelping/ergw_aaa/pull/192) Update [eradius](https://github.com/travelping/eradius) to [2.3.0](https://github.com/travelping/eradius/releases/tag/2.3.0)
+* [#191](https://github.com/travelping/ergw_aaa/pull/191) Update [gtplib](https://github.com/travelping/gtplib) to [3.2.0](https://github.com/travelping/gtplib/releases/tag/3.2.0)
 
 *Version 4.3.1 - 6 September 2022
 --------------------------------
 
 **Bugfixes** :bug:
-* [#188](https://github.com/travelping/ergw_aaa/pull/188) Do not mark the session as stopped in the case of CDF connection failures, to prevent stuck sessions. 
+* [#188](https://github.com/travelping/ergw_aaa/pull/188) Do not mark the session as stopped in the case of CDF connection failures, to prevent stuck sessions.
 * [#186](https://github.com/travelping/ergw_aaa/pull/186) In some circumstances where terminate is invoked but no outgoing message is sent, the session state was not updated to `stopped`, resulting in wrong figures in metrics.
 
 Version 4.3.0 - 28 March 2022
@@ -32,7 +33,7 @@ Version 4.2.0 - 3 March 2022
 ----------------------------
 
 **Bugfixes** :bug:
-* [#146](https://github.com/travelping/ergw_aaa/pull/173) Fix encoding outgoing requests with Extended fields for bandwidth/bitrates, if high values are received in GTP messages (e.g. in 5G NSA deployments). Such errors will trigger a `critical` trace since it can potentially render charging inoperative. 
+* [#146](https://github.com/travelping/ergw_aaa/pull/173) Fix encoding outgoing requests with Extended fields for bandwidth/bitrates, if high values are received in GTP messages (e.g. in 5G NSA deployments). Such errors will trigger a `critical` trace since it can potentially render charging inoperative.
 
 **Features** :rocket:
 * [#171](https://github.com/travelping/ergw_aaa/pull/173) Added two new metrics: `ergw_aaa_diameter_no_tokens_available_total` and `ergw_aaa_diameter_no_capacity_left_total`
