@@ -738,7 +738,7 @@ to_session(_, 'Multiple-Services-Credit-Control', Value, AVPs, {Session, Events}
 	     end, [], maps:get(credits, Session, #{})),
     {Session, [{update_credits, MSCC} | Events]};
 to_session({_, 'RAR'}, 'Rating-Group', V, _, {Session, Events}) ->
-    {Session, [Events | {report_rating_group, V}]};
+    {Session, [{report_rating_group, V} | Events]};
 to_session(_, _, _, _, SessEv) ->
     SessEv.
 
