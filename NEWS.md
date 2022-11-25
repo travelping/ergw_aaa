@@ -3,6 +3,12 @@ ergw-aaa
 
 Erlang AAA session implementation for ERGW.
 
+Version 4.3.4 - 25 November 2022
+--------------------------------
+
+**Bugfixes** :bug:
+* [#197](https://github.com/travelping/ergw_aaa/pull/197) Fix list generation for Gy RAR events resulting in an improper list.
+
 Version 4.3.3 - 23 October 2022
 ---------------------------------
 
@@ -16,7 +22,7 @@ Version 4.3.2 - 21 October 2022
 * [#192](https://github.com/travelping/ergw_aaa/pull/192) Update [eradius](https://github.com/travelping/eradius) to [2.3.0](https://github.com/travelping/eradius/releases/tag/2.3.0)
 * [#191](https://github.com/travelping/ergw_aaa/pull/191) Update [gtplib](https://github.com/travelping/gtplib) to [3.2.0](https://github.com/travelping/gtplib/releases/tag/3.2.0)
 
-*Version 4.3.1 - 6 September 2022
+Version 4.3.1 - 6 September 2022
 --------------------------------
 
 **Bugfixes** :bug:
