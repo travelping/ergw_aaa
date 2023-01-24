@@ -303,6 +303,7 @@ handle_failure(Config) ->
 
     ?match({{fail, 3007}, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
+    %% a accounting error is not treated as session stop
     ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
 
     ?match({{fail, 3007}, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
@@ -321,6 +322,7 @@ handle_answer_error(Config) ->
 
     ?match({{error, 3007}, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
+    %% a accounting error is not treated as session stop
     ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
 
     ?match({{error, 3007}, _, _}, ergw_aaa_session:stop(Session, #{}, [])),

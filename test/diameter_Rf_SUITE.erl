@@ -555,6 +555,7 @@ handle_failure(Config) ->
     ?match({{fail, 3001}, _, _},
 	   ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts)),
 
+    %% a session that has been rejected can not be in a `started` state
     ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     Statistics = diff_stats(Stats0, get_stats(?SERVICE)),

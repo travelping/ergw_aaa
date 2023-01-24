@@ -341,7 +341,7 @@ handle_cca(['CCA' | #{'Result-Code' := Code} = Avps],
     {ok, Session, Events, State};
 handle_cca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'CCA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, [{stop, {?API, peer_reject}} | Events], State};
+    {{fail, Code}, Session, [{stop, {?API, peer_reject}} | Events], State#state{state = stopped}};
 handle_cca({error, no_connection}, Session, Events,
 	   #{answer_if_down := Answer, answers := Answers} = Opts, State0) ->
     {Avps, State} =
