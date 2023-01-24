@@ -342,9 +342,9 @@ handle_aaa(['AAA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, St
     {ok, Session, Events, State};
 handle_aaa([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'AAA'; Answer =:= 'answer-message' ->
-    {{fail, Code}, Session, Events, State};
+    {{fail, Code}, Session, Events, State#state{state = stopped}};
 handle_aaa({error, _} = Result, Session, Events, _Opts, State) ->
-    {Result, Session, Events, State}.
+    {Result, Session, Events, State#state{state = stopped}}.
 
 handle_aca(['ACA' | #{'Result-Code' := RC} = Avps], Session0, Events0, _Opts, State)
   when RC < 3000 ->
