@@ -219,6 +219,11 @@ handle_event({call, From}, {set, Values}, _State, Data) ->
 handle_event({call, From}, {unset, Options}, _State, Data = #data{session = Session}) ->
     {keep_state, Data#data{session = maps:without(Options, Session)}, [{reply, From, ok}]};
 
+handle_event(info, {'EXIT', Owner, normal = Reason},
+	     _State, #data{owner = Owner} = Data) ->
+    ?LOG(debug, "Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
+    terminate_action(Data),
+    {stop, normal};
 handle_event(info, {'EXIT', Owner, Reason},
 	     _State, #data{owner = Owner} = Data) ->
     ?LOG(error, "Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
