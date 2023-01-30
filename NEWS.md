@@ -1,7 +1,7 @@
 ergw-aaa
 ========
 
-Version 4.3.5 - 30 January 2022
+Version 4.3.5 - 30 January 2023
 --------------------------------
 
 **Bugfixes** :bug:
