@@ -1,7 +1,11 @@
 ergw-aaa
 ========
 
-Erlang AAA session implementation for ERGW.
+Version 4.3.5 - 30 January 2022
+--------------------------------
+
+**Bugfixes** :bug:
+* [#200](https://github.com/travelping/ergw_aaa/pull/200) Avoid sending CCR-T after DIAMETER errors that invalidate a session.
 
 Version 4.3.4 - 25 November 2022
 --------------------------------
