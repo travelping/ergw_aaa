@@ -4,6 +4,13 @@ ergw-aaa
 Erlang AAA session implementation for ERGW.
 
 
+Version 3.7.0 - 08 February 2023
+--------------------------------
+
+**Features** :rocket:
+* [#199](https://github.com/travelping/ergw_aaa/pull/199) Allow the `CAPWAP-GPS-Latitude` and `CAPWAP-GPS-Longitude` to be
+provided as floats for a decimal value instead of a DMS string value
+
 Version 3.6.15 - 30 March 2022
 ------------------------------
 
