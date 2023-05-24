@@ -58,18 +58,21 @@
 		<<"Rf">> =>
 		    #{handler => 'ergw_aaa_rf'}},
 	  apps =>
-	    #{default =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [],
-		      authorize => [],
-		      start => [],
-		      interim => [],
-		      stop => [],
-		      {rf, 'Initial'}   => [#{service => <<"Rf">>}],
-		      {rf, 'Update'}    => [#{service => <<"Rf">>}],
-		      {rf, 'Terminate'} => [#{service => <<"Rf">>}]
-		     }
-	       }
+	      #{default =>
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+			    authenticate => [],
+			    authorize => [],
+			    start => [],
+			    interim => [],
+			    stop => [],
+			    {rf, 'Initial'}   => [#{service => <<"Rf">>}],
+			    {rf, 'Update'}    => [#{service => <<"Rf">>}],
+			    {rf, 'Terminate'} => [#{service => <<"Rf">>}]
+			  }
+	            }
+	      }
        }).
 
 %%%===================================================================

@@ -82,16 +82,19 @@
 		    #{handler => 'ergw_aaa_ro'}},
 	  apps =>
 	      #{default =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [],
-		      authorize => [],
-		      start => [],
-		      interim => [],
-		      stop => [],
-		      {gy, 'CCR-Initial'} => [#{service => <<"Ro">>}],
-		      {gy, 'CCR-Update'} => [#{service => <<"Ro">>}],
-		      {gy, 'CCR-Terminate'} => [#{service => <<"Ro">>}]}
-	       }
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+			    authenticate => [],
+			    authorize => [],
+			    start => [],
+			    interim => [],
+			    stop => [],
+			    {gy, 'CCR-Initial'} => [#{service => <<"Ro">>}],
+			    {gy, 'CCR-Update'} => [#{service => <<"Ro">>}],
+			    {gy, 'CCR-Terminate'} => [#{service => <<"Ro">>}]}
+		    }
+	      }
 	 }).
 
 %%%===================================================================

@@ -57,14 +57,17 @@
 		    #{handler => 'ergw_aaa_nasreq'}},
 	  apps =>
 	      #{default =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [#{service => <<"NASREQ">>}],
-		      authorize => [#{service => <<"NASREQ">>}],
-		      start => [#{service => <<"NASREQ">>}],
-		      interim => [#{service => <<"NASREQ">>}],
-		      stop => [#{service => <<"NASREQ">>}]
-		     }
-	       }
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+			    authenticate => [#{service => <<"NASREQ">>}],
+			    authorize => [#{service => <<"NASREQ">>}],
+			    start => [#{service => <<"NASREQ">>}],
+			    interim => [#{service => <<"NASREQ">>}],
+			    stop => [#{service => <<"NASREQ">>}]
+			  }
+		    }
+	      }
 	 }).
 
 %%%===================================================================

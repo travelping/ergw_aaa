@@ -94,27 +94,29 @@
 	       },
 	  apps =>
 	      #{default =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [],
-		      authorize => [],
-		      start => [],
-		      interim => [],
-		      stop => [],
-		      {gy, 'CCR-Initial'} =>
-			  [#{service => <<"Ro">>,
-			     tx_timeout => 1000,
-			     max_retries => 2,
-			     answer_if_down => <<"OCS-Hold">>,
-			     answer_if_timeout => <<"OCS-Hold">>}],
-		      {gy, 'CCR-Update'} =>
-			  [#{service => <<"Ro">>,
-			     tx_timeout => 1000,
-			     answer_if_down => <<"OCS-Hold">>,
-			     answer_if_timeout => <<"OCS-Hold">>}],
-		      {gy, 'CCR-Terminate'} =>
-			  [#{service => <<"Ro">>}]}
+		  #{'Origin-Host' => <<"dummy.host">>,
+		    procedures =>
+			#{init => [#{service => <<"Default">>}],
+			  authenticate => [],
+			  authorize => [],
+			  start => [],
+			  interim => [],
+			  stop => [],
+			  {gy, 'CCR-Initial'} =>
+			      [#{service => <<"Ro">>,
+				 tx_timeout => 1000,
+				 max_retries => 2,
+				 answer_if_down => <<"OCS-Hold">>,
+				 answer_if_timeout => <<"OCS-Hold">>}],
+			  {gy, 'CCR-Update'} =>
+			      [#{service => <<"Ro">>,
+				 tx_timeout => 1000,
+				 answer_if_down => <<"OCS-Hold">>,
+				 answer_if_timeout => <<"OCS-Hold">>}],
+			  {gy, 'CCR-Terminate'} =>
+			      [#{service => <<"Ro">>}]}
 	       }
-	 }).
+	 }}).
 
 %%%===================================================================
 %%% Common Test callbacks

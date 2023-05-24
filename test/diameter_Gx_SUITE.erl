@@ -67,16 +67,20 @@
 	       },
 	  apps =>
 	      #{default =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [],
-		      authorize => [],
-		      start => [#{service => <<"NASREQ">>}],
-		      interim => [#{service => <<"NASREQ">>}],
-		      stop => [#{service => <<"NASREQ">>}],
-		      {gx, 'CCR-Initial'}   => [#{service => <<"Gx">>}],
-		      {gx, 'CCR-Update'}    => [#{service => <<"Gx">>}],
-		      {gx, 'CCR-Terminate'} => [#{service => <<"Gx">>}]}}
-	 }).
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+			    authenticate => [],
+			    authorize => [],
+			    start => [#{service => <<"NASREQ">>}],
+			    interim => [#{service => <<"NASREQ">>}],
+			    stop => [#{service => <<"NASREQ">>}],
+			    {gx, 'CCR-Initial'}   => [#{service => <<"Gx">>}],
+			    {gx, 'CCR-Update'}    => [#{service => <<"Gx">>}],
+			    {gx, 'CCR-Terminate'} => [#{service => <<"Gx">>}]}
+		    }
+	      }
+	}).
 
 %%%===================================================================
 %%% Common Test callbacks

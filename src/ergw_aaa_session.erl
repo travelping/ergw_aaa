@@ -433,8 +433,8 @@ services(Procedure, App) ->
     maps:get(Procedure, App, []).
 
 action(Procedure, Opts, #data{application = AppId} = Data) ->
-    App = ergw_aaa:get_application(AppId),
-    Pipeline = services(Procedure, App),
+    #{procedures := Procedures} = ergw_aaa:get_application(AppId),
+    Pipeline = services(Procedure, Procedures),
     pipeline(Procedure, Data, [], Opts, Pipeline).
 
 pipeline(_, Data, Events, _Opts, []) ->
