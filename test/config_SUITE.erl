@@ -102,22 +102,29 @@
 		    maps:put(handler, 'ergw_aaa_ro', ?RF_CONFIG)},
 	  apps =>
 	      #{<<"RADIUS-Application">> =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate =>
-			  [maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS),
-			   #{service => <<"Default">>, defaults => #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
-		      authorize => [],
-		      start => [],
-		      interim => [],
-		      stop => []},
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+		      	    authenticate =>
+				[maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS),
+				 #{service => <<"Default">>, defaults => #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
+			    authorize => [],
+			    start => [],
+		            interim => [],
+		            stop => []},
+		    },
 		<<"DIAMETER-Application">> =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [?DIAMETER_SERVICE_OPTS],
-		      authorize => [],
-		      start => [],
-		      interim => [],
-		      stop => []}}
-	 }).
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+			    authenticate => [?DIAMETER_SERVICE_OPTS],
+			    authorize => [],
+			    start => [],
+			    interim => [],
+			    stop => []}
+		    }
+	      }
+	  }).
 
 %%%===================================================================
 %%% Helpers
@@ -428,28 +435,34 @@ app(_Config)  ->
       end, Services),
 
     RADIUS =
-	#{init => [#{service => <<"Default">>}],
-	  authenticate =>
-	      [maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS),
-	       #{service => <<"Default">>, defaults => #{'TLS-Pre-Shared-Key' => <<"secret">>}}],
-	  authorize => [],
-	  start => [],
-	  interim => [],
-	  stop => []},
+    [
+        {'Origin-Host', <<"dummy.host">>},
+        {procedures, [
+	        {init, [#{service => <<"Default">>}]},
+	        {authenticate, [maps:merge(?RADIUS_AUTH_CONFIG, ?RADIUS_SERVICE_OPTS),
+		                    #{service => <<"Default">>, defaults => #{'TLS-Pre-Shared-Key' => <<"secret">>}}]},
+	        {authorize, []},
+	        {start, []},
+	        {interim, []},
+	        {stop, []}
+        ]}
+    ],
     DIAMETER =
-	#{init => [#{service => <<"Default">>}],
-	  authenticate => [?DIAMETER_SERVICE_OPTS],
-	  authorize => [],
-	  start => [],
-	  interim => [],
-	  stop => []},
+	#{procedures =>
+	    #{init => [#{service => <<"Default">>}],
+	      authenticate => [?DIAMETER_SERVICE_OPTS],
+	      authorize => [],
+	      start => [],
+	      interim => [],
+	      stop => []}
+	},
     ValF = fun ergw_aaa_config:validate_app/2,
 
     ?ok(ValF(<<"RADIUS-Application">>, RADIUS)),
     ?ok(ValF(<<"RADIUS-Application">>, ValF(<<"RADIUS-Application">>, RADIUS))),
 
     %% make sure the handler config is also passed through to the session
-    RadiusOpts = ValF(<<"RADIUS-Application">>, RADIUS),
+    #{procedures := RadiusOpts} = ValF(<<"RADIUS-Application">>, RADIUS),
     ?match_map(?STATIC_CONFIG, get_cfg_value([init, 1], RadiusOpts)),
     ?match_map(maps:merge(?RADIUS_SERVICE_OPTS, ?RADIUS_AUTH_CONFIG),
 	       get_cfg_value([authenticate, 1], RadiusOpts)),
@@ -458,7 +471,7 @@ app(_Config)  ->
     ?ok(ValF(<<"DIAMETER-Application">>, ValF(<<"DIAMETER-Application">>, DIAMETER))),
 
     %% make sure the handler config is also passed through to the session
+    #{procedures := DiameterOpts} = ValF(<<"DIAMETER-Application">>, DIAMETER),
     ?match_map(maps:merge(?DIAMETER_CONFIG, ?DIAMETER_SERVICE_OPTS),
-	       get_cfg_value([authenticate, 1],
-			     ValF(<<"DIAMETER-Application">>, DIAMETER))),
+	       get_cfg_value([authenticate, 1], DiameterOpts)),
     ok.

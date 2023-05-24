@@ -97,19 +97,22 @@
 
 	  apps =>
 	      #{default =>
-		    #{init => [#{service => <<"Default">>}],
-		      authenticate => [],
-		      authorize => [],
-		      start => [],
-		      interim => [],
-		      stop => [],
-		      {gx, 'CCR-Initial'}   => [#{service => <<"Default">>, answer => <<"Initial-Gx">>}],
-		      {gx, 'CCR-Update'}    => [#{service => <<"Default">>, answer => <<"Update-Gx">>}],
-		      {gx, 'CCR-Terminate'} => [#{service => <<"Default">>, answer => <<"Final-Gx">>}],
-		      {gy, 'CCR-Initial'}   => [#{service => <<"Default">>, answer => <<"Initial-Gy">>}],
-		      {gy, 'CCR-Update'}    => [#{service => <<"Default">>, answer => <<"Update-Gy">>}],
-		      {gy, 'CCR-Terminate'} => []
-		      }
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			    #{init => [#{service => <<"Default">>}],
+			      authenticate => [],
+			      authorize => [],
+			      start => [],
+			      interim => [],
+			      stop => [],
+			      {gx, 'CCR-Initial'}   => [#{service => <<"Default">>, answer => <<"Initial-Gx">>}],
+			      {gx, 'CCR-Update'}    => [#{service => <<"Default">>, answer => <<"Update-Gx">>}],
+			      {gx, 'CCR-Terminate'} => [#{service => <<"Default">>, answer => <<"Final-Gx">>}],
+			      {gy, 'CCR-Initial'}   => [#{service => <<"Default">>, answer => <<"Initial-Gy">>}],
+			      {gy, 'CCR-Update'}    => [#{service => <<"Default">>, answer => <<"Update-Gy">>}],
+			      {gy, 'CCR-Terminate'} => []
+			      }
+		    }
 	       }
 	 }).
 

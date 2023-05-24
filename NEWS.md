@@ -1,6 +1,12 @@
 ergw-aaa
 ========
 
+Version 4.4.0 - 1 June 2023
+--------------------------------
+
+**Features** :bug:
+* [#203](https://github.com/travelping/ergw_aaa/pull/203) Allow a configurable `Origin-Host` value per app.
+
 Version 4.3.5 - 30 January 2022
 --------------------------------
 

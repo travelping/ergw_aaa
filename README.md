@@ -182,29 +182,32 @@ Example of possible config.
    {services,
     [{'Default',     [{handler, 'ergw_aaa_static'}]},
      {'RADIUS-Auth', [{handler, 'ergw_aaa_radius'},
-	                  {server, {{127,1,0,1}, 1812, <<"secret">>}}]},
+                      {server, {{127,1,0,1}, 1812, <<"secret">>}}]},
      {'RADIUS-Acct', [{handler, 'ergw_aaa_radius'},
-	                  {server, {{127,2,0,1}, 1813, <<"secret">>}}]},
+                      {server, {{127,2,0,1}, 1813, <<"secret">>}}]},
      {'Rf',          [{handler, 'ergw_aaa_rf'}]},
      {'Gx',          [{handler, 'ergw_aaa_gx'}]}
      {'Gy',          [{handler, 'ergw_aaa_ro'}]}
     ]},
 
    {apps,
-    [{default,
-      [{session, ['Default']},
-       {procedures, [{authenticate, ['RADIUS-Auth']},
-                     {authorize,    ['RADIUS-Auth']},
-                     {start,     ['RADIUS-Acct', 'Rf']},
-                     {interim,   ['RADIUS-Acct', 'Rf']},
-                     {stop,      ['RADIUS-Acct', 'Rf']},
-                     {{gx, 'CCR-Initial'},   ['Gx']},
-                     {{gx, 'CCR-Update'},    ['Gx']},
-                     {{gx, 'CCR-Terminate'}, ['Gx']},
-                     {{gy, 'CCR-Initial'},   ['Gy']},
-                     {{gy, 'CCR-Update'},    ['Gy']},
-                     {{gy, 'CCR-Terminate'}, ['Gy']}]}
-      ]}
+    [ {'Origin-Host', <<"local.host">>},
+      {procedures,
+        [{default,
+          [{session, ['Default']},
+           {procedures, [{authenticate, ['RADIUS-Auth']},
+                         {authorize,    ['RADIUS-Auth']},
+                         {start,     ['RADIUS-Acct', 'Rf']},
+                         {interim,   ['RADIUS-Acct', 'Rf']},
+                         {stop,      ['RADIUS-Acct', 'Rf']},
+                         {{gx, 'CCR-Initial'},   ['Gx']},
+                         {{gx, 'CCR-Update'},    ['Gx']},
+                         {{gx, 'CCR-Terminate'}, ['Gx']},
+                         {{gy, 'CCR-Initial'},   ['Gy']},
+                         {{gy, 'CCR-Update'},    ['Gy']},
+                         {{gy, 'CCR-Terminate'}, ['Gy']}]}
+          ]}
+        ]}
     ]}
   ]},
 ```

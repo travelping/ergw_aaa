@@ -57,13 +57,16 @@
 			    secret => <<"secret">>}}},
 	  apps =>
 	      #{default =>
-		    #{init         => [#{service => <<"Default">>}],
-		      authenticate => [#{service => <<"RADIUS-Auth">>}],
-		      authorize    => [#{service => <<"RADIUS-Auth">>}],
-		      start        => [#{service => <<"RADIUS-Acct">>}],
-		      interim      => [#{service => <<"RADIUS-Acct">>}],
-		      stop         => [#{service => <<"RADIUS-Acct">>}]}
-	       }
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init         => [#{service => <<"Default">>}],
+			    authenticate => [#{service => <<"RADIUS-Auth">>}],
+			    authorize    => [#{service => <<"RADIUS-Auth">>}],
+			    start        => [#{service => <<"RADIUS-Acct">>}],
+			    interim      => [#{service => <<"RADIUS-Acct">>}],
+			    stop         => [#{service => <<"RADIUS-Acct">>}]}
+		    }
+	     }
 	 }).
 
 %%%===================================================================
@@ -408,7 +411,7 @@ set_service_pars(NewOpts) ->
     Apps =
 	lists:foldl(
 	  fun(P, A) ->
-		  maps_update_with([default, P], Upd, A)
+		  maps_update_with([default, procedures, P], Upd, A)
 	  end, Apps0, [authenticate, start, interim, stop]),
     application:set_env(ergw_aaa, apps, Apps),
     Apps0.

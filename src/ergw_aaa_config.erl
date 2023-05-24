@@ -120,14 +120,21 @@ validate_service(Service, Opts)
 validate_service(Service, Opts) ->
     erlang:error(badarg, [Service, Opts]).
 
-validate_app(App, Procedures)
-  when is_map(Procedures) ->
+validate_app(App, AppOptions)
+  when is_map(AppOptions) ->
+    maps:map(validate_app_option(App, _, _ ), AppOptions);
+validate_app(App, AppOptions)
+  when is_list(AppOptions) ->
+    validate_app(App, to_map(AppOptions));
+validate_app(App, AppOptions) ->
+    erlang:error(badarg, [App, AppOptions]).
+
+validate_app_option(_, 'Origin-Host', Host) when is_binary(Host) -> 
+    Host;
+validate_app_option(App, procedures, Procedures) -> 
     validate_options(validate_app_procs_option(App, _, _), Procedures, []);
-validate_app(App, Procedures)
-  when is_list(Procedures) ->
-    validate_app(App, to_map(Procedures));
-validate_app(App, Procedures) ->
-    erlang:error(badarg, [App, Procedures]).
+validate_app_option(App, Opt, Value) ->
+    erlang:error(badarg, [App, Opt, Value]).
 
 validate_app_procs_option(App, Procedure, Services)
   when is_list(Services) ->
