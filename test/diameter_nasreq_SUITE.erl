@@ -286,7 +286,8 @@ attrs_3gpp(Config) ->
     Stats0 = get_stats(?SERVICE),
 
     {ok, Session} = ergw_aaa_session_sup:new_session(self(), Attrs),
-    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+    {ok, SessionAfterAuth, _} = ergw_aaa_session:invoke(Session, #{}, authenticate, [inc_session_id]),
+    ?match(#{'MS-Primary-DNS-Server' := {1,2,3,4}, 'MS-Secondary-DNS-Server' := {5,6,7,8}}, SessionAfterAuth),
     ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
 
     ?equal([{ergw_aaa_nasreq, started, 1}], get_session_stats()),
