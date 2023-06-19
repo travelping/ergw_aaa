@@ -1,0 +1,8 @@
+;; Dictionary for Starent DNS AVPs (used in NASREQ)
+
+@name   diameter_starent_dns
+@vendor 8164 Starent
+
+@avp_types
+   SN-Primary-DNS-Server              5    Address       MV
+   SN-Secondary-DNS-Server            6    Address       MV

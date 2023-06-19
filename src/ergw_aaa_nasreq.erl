@@ -405,6 +405,10 @@ to_session(_, '3GPP-IMEISV', [Id], {Session, Events}) ->
     {Session#{'3GPP-IMEISV' => Id}, Events};
 to_session(_, 'Calling-Station-Id', [Id], {Session, Events}) ->
     {Session#{'Calling-Station-Id' => Id}, Events};
+to_session(_, 'SN-Primary-DNS-Server', [DNS], {Session, Events}) ->
+    {Session#{'MS-Primary-DNS-Server' => DNS}, Events};
+to_session(_, 'SN-Secondary-DNS-Server', [DNS], {Session, Events}) ->
+    {Session#{'MS-Secondary-DNS-Server' => DNS}, Events};
 to_session(_, _, _, SessEv) ->
     SessEv.
 
