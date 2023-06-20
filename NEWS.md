@@ -1,10 +1,16 @@
 ergw-aaa
 ========
 
+Version 4.5.0 - 20 June 2023
+--------------------------------
+
+**Features** :rocket:
+* [#205](https://github.com/travelping/ergw_aaa/pull/205) Add Starent DNS AVPs for the 3GPP TS 29.061 SGi interface.
+
 Version 4.4.0 - 1 June 2023
 --------------------------------
 
-**Features** :bug:
+**Features** :rocket:
 * [#203](https://github.com/travelping/ergw_aaa/pull/203) Allow a configurable `Origin-Host` value per app.
 
 Version 4.3.5 - 30 January 2022
