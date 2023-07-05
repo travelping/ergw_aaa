@@ -385,6 +385,8 @@ to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
     Trigger = ergw_aaa_session:trigger(accounting, 'IP-CAN', periodic, Interim),
     {Session, ergw_aaa_session:ev_set(Trigger, Events)};
 
+to_session(_, Key = 'Framed-MTU', [MTU], {Session, Events}) ->
+    {Session#{Key => MTU}, Events};
 to_session(_, Key = 'Framed-IP-Address', [<<A,B,C,D>>], {Session, Events}) ->
     {Session#{Key => {A,B,C,D}}, Events};
 to_session(_, Key = 'Framed-IPv6-Prefix', [Prefix], {Session, Events}) ->
@@ -547,6 +549,7 @@ from_session(Key, Value, M)
        Key =:= 'Called-Station-Id';
        Key =:= 'Calling-Station-Id';
        Key =:= 'Framed-Interface-Id';
+       Key =:= 'Framed-MTU';
        Key =:= 'Framed-Pool';
        Key =:= 'Framed-IPv6-Pool' ->
     M#{Key => [Value]};
