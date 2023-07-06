@@ -121,7 +121,7 @@
 %%%===================================================================
 
 all() ->
-    [gx_session, gy_session].
+    [gx_session, gy_session, unconfigured_session].
 
 init_per_suite(Config0) ->
     Config = [{handler_under_test, ?HUT} | Config0],
@@ -132,7 +132,6 @@ init_per_suite(Config0) ->
     meck_init(Config),
 
     {ok, _} = application:ensure_all_started(ergw_aaa),
-    ergw_aaa_test_lib:ergw_aaa_init(?CONFIG),
 
     Config.
 
@@ -142,11 +141,16 @@ end_per_suite(Config) ->
     application:unload(ergw_aaa),
     ok.
 
-init_per_testcase(Config) ->
+init_per_testcase(unconfigured_session, Config) ->
+    meck_reset(Config),
+    Config;
+init_per_testcase(_, Config) ->
+    ergw_aaa_test_lib:ergw_aaa_init(?CONFIG),
     meck_reset(Config),
     Config.
 
-end_per_testcase(_Config) ->
+end_per_testcase(_, _Config) ->
+    ergw_aaa_test_lib:clear_app_env(),
     ok.
 
 %%%===================================================================
@@ -285,3 +289,14 @@ gy_session(Config) ->
     %% make sure nothing crashed
     meck_validate(Config),
     ok.
+
+unconfigured_session() ->
+    [{doc, "Session with only defaults"}].
+unconfigured_session(Config) ->
+    Session = init_session(#{}, Config),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+

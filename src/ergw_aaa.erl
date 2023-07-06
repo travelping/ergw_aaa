@@ -112,7 +112,7 @@ get_service(Name) ->
 
 get_application(Name) ->
     Apps = application:get_env(ergw_aaa, ?APP_KEY, #{}),
-    maps:get(Name, Apps, #{}).
+    maps:get(Name, Apps, #{procedures => #{}}).
 
 %%===================================================================
 %% Internal
