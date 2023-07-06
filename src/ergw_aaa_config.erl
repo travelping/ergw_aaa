@@ -122,7 +122,7 @@ validate_service(Service, Opts) ->
 
 validate_app(App, AppOptions)
   when is_map(AppOptions) ->
-    maps:map(validate_app_option(App, _, _ ), AppOptions);
+    maps:map(validate_app_option(App, _, _ ), maps:merge(#{procedures => #{}}, AppOptions));
 validate_app(App, AppOptions)
   when is_list(AppOptions) ->
     validate_app(App, to_map(AppOptions));
