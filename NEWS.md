@@ -1,6 +1,12 @@
 ergw-aaa
 ========
 
+Version 4.5.1 - 10 July 2023
+--------------------------------
+
+**Bugfixes** :bug:
+* [#208](https://github.com/travelping/ergw_aaa/pull/208) Fix default `apps` value.
+
 Version 4.5.0 - 20 June 2023
 --------------------------------
 
