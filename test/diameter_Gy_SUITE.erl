@@ -136,6 +136,7 @@ all() ->
      rate_limit,
      handle_failure,
      handle_answer_error,
+     handle_3xxx_error_async,
      handle_authorization_rejected,
      diameter_metrics,
      terminate].
@@ -928,6 +929,33 @@ handle_answer_error(Config) ->
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     ?match({{error, 3007}, _, _},
 	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, [])),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_3xxx_error_async(Config) ->
+    Session = init_session(#{}, Config),
+    GyOpts =
+	#{'3GPP-IMSI' => <<"FAIL-RC-3002">>,
+	  '3GPP-MSISDN' => <<"FAIL-RC-3002">>,
+	  credits =>
+	      #{1000 => empty,
+		2000 => empty,
+		3000 => empty
+	       }
+	 },
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _} =
+	   ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, #{async => true}),
+    Events1 =
+	receive
+	    {update_session, _, Ev1} -> Ev1
+	after 100 -> ct:fail(timeout)
+	end,
+    ?equal([{stop,{gy,peer_reject}}], Events1),
 
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),

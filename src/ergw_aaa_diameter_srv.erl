@@ -179,8 +179,8 @@ call(App, Request, #{function := Function} = Config, CallOpts) ->
 	    case Error of
 		encode ->
 		    ?LOG(critical, "failed to encode DIAMETER requests: ~0p", [Request]);
-		_ ->
-		    ok
+		Other ->
+		    ?LOG(notice, "non-critical diameter API: ~p", [Other])
 	    end,
 	    SI = diameter:service_info(Function, applications),
 	    handle_plain_error(Result, Request, Function, App, CallOpts, SI);
