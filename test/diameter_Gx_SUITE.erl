@@ -460,6 +460,30 @@ terminate(Config) ->
     meck_validate(Config),
     ok.
 
+handle_3xxx_error_async() ->
+    [{doc, "Error translation in async calls"}].
+handle_3xxx_error_async(Config) ->
+    Session = init_session(#{}, Config),
+    GxOpts =
+	#{'3GPP-IMSI' => <<"FAIL-RC-3002">>,
+	  '3GPP-MSISDN' => <<"FAIL-RC-3002">>
+	 },
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _} =
+	   ergw_aaa_session:invoke(SId, GxOpts, {gx, 'CCR-Initial'}, #{async => true}),
+    Events1 =
+	receive
+	    {update_session, _, Ev1} -> Ev1
+	after 100 -> ct:fail(timeout)
+	end,
+    ?equal([{stop,{gx,peer_reject}}], Events1),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================

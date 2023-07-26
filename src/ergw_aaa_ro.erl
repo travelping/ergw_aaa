@@ -355,6 +355,9 @@ handle_cca({error, rate_limit}, Session, Events,
 	   #{answer_if_rate_limit := Answer, answers := Answers} = Opts, State0) ->
     {Avps, State} = apply_answer_config(Answer, Answers, State0),
     handle_cca(['CCA' | Avps], Session, Events, Opts, State);
+handle_cca({error, Code} = Result, Session, Events, _Opts, State)
+  when is_integer(Code) ->
+    {Result, Session, [{stop, {?API, peer_reject}} | Events], State#state{state = stopped}};
 handle_cca({error, Reason} = Result, Session, Events, _Opts, State) ->
     ?LOG(error, "CCA Result: ~p", [Result]),
     {Result, Session, [{stop, {?API, Reason}} | Events], State#state{state = stopped}}.
