@@ -1,6 +1,12 @@
 ergw-aaa
 ========
 
+Version 4.5.2 - 3 August 2023
+--------------------------------
+
+**Bugfixes** :bug:
+* [#210](https://github.com/travelping/ergw_aaa/pull/210) Fix translation of release cause codes.
+
 Version 4.5.1 - 10 July 2023
 --------------------------------
 
