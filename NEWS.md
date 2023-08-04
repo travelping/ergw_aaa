@@ -1,7 +1,13 @@
 ergw-aaa
 ========
 
-Version 4.5.2 - 3 August 2023
+Version 4.6.0 - 4 August 2023
+--------------------------------
+
+**Features** :rocket:
+* [#207](https://github.com/travelping/ergw_aaa/pull/207) Allow `Framed-MTU` in NASREQ and RADIUS responses.
+
+VVersion 4.5.2 - 3 August 2023
 --------------------------------
 
 **Bugfixes** :bug:
