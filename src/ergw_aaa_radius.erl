@@ -868,6 +868,7 @@ to_session_opts(_Attr, Key, Value, SOpts)
       Key =:= 'Acct-Interim-Interval';
       Key =:= 'Session-Timeout';
       Key =:= 'Idle-Timeout';
+      Key =:= 'Framed-MTU';
       Key =:= 'Framed-IP-Address';
       Key =:= 'Framed-IPv6-Prefix';
       Key =:= 'Framed-Pool';

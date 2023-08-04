@@ -284,6 +284,7 @@ handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extr
  	      'Acct-Interim-Interval' => [InterimAccounting],
 	      'Authorization-Lifetime' => [AuthLifeTime],
 	      'Framed-IP-Address' => FramedIP,
+	      'Framed-MTU' => 1500,
 	      'Auth-Request-Type' => Type,
 	      'Auth-Application-Id' => AppId},
     AAA = if is_map_key('Framed-IPv6-Prefix', Msg) ->

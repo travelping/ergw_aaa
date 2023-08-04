@@ -441,6 +441,7 @@ simple(Config, Opts) ->
 
     {ok, SOut, Events} = ergw_aaa_session:invoke(Session, #{}, authenticate, []),
     ?match(#{'MS-Primary-DNS-Server' := {8,8,8,8}}, SOut),
+    ?match(#{'Framed-MTU' := 1500}, SOut),
 
     ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 

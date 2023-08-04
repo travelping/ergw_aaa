@@ -48,6 +48,7 @@ radius_request(#radius_request{cmd = request, attrs = Attrs} = _Req, _Nasprop, _
 	_ ->
 	    IEs = [{?Acct_Interim_Interval, 1800},
 		   {?MS_Primary_DNS_Server, {8,8,8,8}},
+		   {?Framed_MTU, 1500},
 		   {?Filter_Id, <<"test">>}],
 	    {reply, #radius_request{cmd = accept, attrs = IEs}}
 	end;
