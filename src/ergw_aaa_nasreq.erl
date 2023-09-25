@@ -64,7 +64,7 @@
 			 {accounting, coupled},
 			 {'Destination-Realm', undefined},
 			 {avp_filter, [['Framed-Pool'], ['Framed-IPv6-Pool']]},
-			 {termination_cause_mapping, #{}}]).
+			 {termination_cause_mapping, #{error => 1}}]).
 
 -define(IS_IPv4(X), (is_tuple(X) andalso tuple_size(X) == 4)).
 -define(IS_IPv6(X), (is_tuple(X) andalso tuple_size(X) == 8)).

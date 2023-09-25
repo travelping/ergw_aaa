@@ -490,5 +490,13 @@ get_handler_state(Handler, State) ->
 termination_cause_mapping(#{'Termination-Cause' := Cause} = Session, #{termination_cause_mapping := Config})
   when is_atom(Cause), is_map_key(Cause, Config) ->
     Session#{'Termination-Cause' := maps:get(Cause, Config)};
+termination_cause_mapping(#{'Termination-Cause' := Cause} = Session, _)
+  when is_integer(Cause) andalso Cause > 0 ->
+    %% For backward compatibility, positive integer are allowed as causes
+    %% and do not pass through the mapping table
+    Session#{'Termination-Cause' := Cause};
+termination_cause_mapping(#{'Termination-Cause' := Cause} = Session, #{termination_cause_mapping := Config}) ->
+    ?LOG(notice, "Termination cause ~p not present in the mapping table, mapping to error", [Cause]),
+    Session#{'Termination-Cause' := maps:get(error, Config)};
 termination_cause_mapping(Session, _) ->
     Session.

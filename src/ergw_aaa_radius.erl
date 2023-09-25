@@ -46,7 +46,7 @@
     {peer_restart, 7},
     {'ASR', 6},
     {error, 9},
-    {req_timeout, 4},
+    {timeout, 4},
     {conn_error, 10},
     {rate_limit, 10},
     {ocs_hold_end, 10},
@@ -59,7 +59,7 @@
 			 {retries, 3},
 			 {avp_filter, []},
 			 {vendor_dicts, []},
-			 {termination_cause_mapping, #{}}
+			 {termination_cause_mapping, #{error => 9}}
 			]).
 
 %%===================================================================
@@ -284,8 +284,7 @@ validate_option(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
 validate_termination_cause_mapping(Opts) when ?is_opts(Opts) ->
-    ergw_aaa_config:validate_options(
-      fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING);
+    ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING);
 validate_termination_cause_mapping(Opts) ->
     erlang:error(badarg, [termination_cause_mapping, Opts]).
 

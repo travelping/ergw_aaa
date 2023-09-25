@@ -53,7 +53,7 @@
 
 -define(DefaultOptions, [{function, undefined},
 			 {'Destination-Realm', undefined},
-			 {termination_cause_mapping, #{}}]).
+			 {termination_cause_mapping, #{error => 1}}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
