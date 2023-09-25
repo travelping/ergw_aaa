@@ -78,6 +78,8 @@ all() ->
      simple,
      simple_normal_terminate,
      disconnect_request,
+     disconnect_request_wrong_cause,
+     disconnect_request_timeout,
      accounting,
      accounting_async,
      attrs_3gpp,
@@ -189,6 +191,78 @@ disconnect_request(Config) ->
     ?match(#radius_request{cmd=discack}, get_async_disconnect_response(DiscPid)),
 
     ?match({ok, _, _}, ergw_aaa_session:stop(Session, #{}, [])),
+
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
+disconnect_request_wrong_cause() ->
+	[{doc, "Check if we can terminate a session with a disconnect request"}].
+disconnect_request_wrong_cause(Config) ->
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
+						     #{'Framed-IP-Address' => {10,10,10,10}}),
+
+    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
+
+    ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
+
+    DiscPid = send_async_disconnect(Session),
+
+    %% simulate handling of ASR in ergw context
+    receive
+        #aaa_request{procedure = {_, 'ASR'}} = Request ->
+        ergw_aaa_session:response(Request, ok, #{}, #{})
+    after
+        1000 ->
+            ct:fail("no disconnect")
+    end,
+
+    ?match(#radius_request{cmd=discack}, get_async_disconnect_response(DiscPid)),
+
+    ?match({ok, #{'Termination-Cause' := 9}, _}, ergw_aaa_session:stop(Session, #{'Termination-Cause' => dummy}, [])),
+
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
+
+    %% make sure nothing crashed
+    meck_validate(Config),
+    ok.
+
+disconnect_request_timeout() ->
+	[{doc, "Check if we can terminate a session with a disconnect request"}].
+disconnect_request_timeout(Config) ->
+
+    {ok, Session} = ergw_aaa_session_sup:new_session(self(),
+						     #{'Framed-IP-Address' => {10,10,10,10}}),
+
+    ?equal(success, ergw_aaa_session:authenticate(Session, #{})),
+
+    ?equal(0, get_session_stats(ergw_aaa_radius, started)),
+
+    ?match({ok, _, _}, ergw_aaa_session:start(Session, #{}, [])),
+
+    ?equal(1, get_session_stats(ergw_aaa_radius, started)),
+
+    DiscPid = send_async_disconnect(Session),
+
+    %% simulate handling of ASR in ergw context
+    receive
+        #aaa_request{procedure = {_, 'ASR'}} = Request ->
+        ergw_aaa_session:response(Request, ok, #{}, #{})
+    after
+        1000 ->
+            ct:fail("no disconnect")
+    end,
+
+    ?match(#radius_request{cmd=discack}, get_async_disconnect_response(DiscPid)),
+
+    ?match({ok, #{'Termination-Cause' := 4}, _}, ergw_aaa_session:stop(Session, #{'Termination-Cause' => timeout}, [])),
 
     ?equal(0, get_session_stats(ergw_aaa_radius, started)),
 

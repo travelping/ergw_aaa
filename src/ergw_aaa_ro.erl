@@ -58,7 +58,7 @@
 			 {answer_if_down, reject},
 			 {answer_if_timeout, reject},
 			 {avp_filter, [['3GPP-IMSI']]},
-			 {termination_cause_mapping, #{}}]).
+			 {termination_cause_mapping, #{error => 1}}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 

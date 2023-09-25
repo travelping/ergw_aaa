@@ -55,7 +55,7 @@
 
 -define(DefaultOptions, [{function, undefined},
 			 {'Destination-Realm', undefined},
-			 {termination_cause_mapping, #{}}]).
+			 {termination_cause_mapping, #{error => 1}}]).
 
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
@@ -632,12 +632,6 @@ to_session(_, 'Charging-Rule-Remove', V, {Session, Events}) ->
     {Session, [{pcc, remove, V} | Events]};
 to_session(_, _, _, SessEv) ->
     SessEv.
-
-%% make_request(Type, #{sid := SId, cc_req_number := ReqNum}) ->
-%%     #{'Session-Id'          => SId,
-%%       'Auth-Application-Id' => ?DIAMETER_APP_ID_GX,
-%%       'CC-Request-Type'     => Type,
-%%       'CC-Request-Number'   => ReqNum}.
 
 termination_cause(Session, Avps) ->
     Cause = maps:get('Termination-Cause', Session, ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'),

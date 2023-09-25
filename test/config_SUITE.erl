@@ -303,6 +303,8 @@ radius_handler(_Config)  ->
 
     % termination cause mapping tests config
     ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{wrong_mapped_value => some_atom}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{"improper_key" => 1}, Cfg))),
     ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
     ok.
 
@@ -327,6 +329,8 @@ nasreq_handler(_Config)  ->
 
     % termination cause mapping tests config
     ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{wrong_mapped_value => some_atom}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{"improper_key" => 1}, Cfg))),
     ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
     ok.
 
@@ -344,6 +348,8 @@ rf_handler(_Config)  ->
 
     % termination cause mapping tests config
     ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{wrong_mapped_value => some_atom}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{"improper_key" => 1}, Cfg))),
     ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
     ok.
 
@@ -361,6 +367,8 @@ ro_handler(_Config)  ->
 
     % termination cause mapping tests config
     ?ok(ValF(set_cfg_value([termination_cause_mapping], #{normal => 1}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{wrong_mapped_value => some_atom}, Cfg))),
+    ?bad(ValF(set_cfg_value([termination_cause_mapping], #{"improper_key" => 1}, Cfg))),
     ?bad(ValF(set_cfg_value([termination_cause_mapping], invalid, Cfg))),
     ok.
 

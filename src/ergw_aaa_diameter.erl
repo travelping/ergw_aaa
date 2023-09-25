@@ -36,7 +36,7 @@
     {peer_restart, 1},           % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {'ASR', 1},                  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {error, 1},                  % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
-    {req_timeout, 1},            % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
+    {timeout, 1},                % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {conn_error, 1},             % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {rate_limit, 1},             % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
     {ocs_hold_end, 1},           % ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT'
@@ -114,6 +114,8 @@ initialize_transport(Id, #{connect_to :=
 %%% Options Validation
 %%%===================================================================
 
+-define(is_opts(X), (is_list(X) orelse is_map(X))).
+
 validate_capability('Origin-Host', {Host, Addr} = Value)
   when is_binary(Host), ?IS_IP(Addr) ->
     Value;
@@ -180,7 +182,7 @@ validate_transport(Opt, Value) ->
 validate_transport_error(Opt, Value) ->
     erlang:error(badarg, [Opt, Value]).
 
-validate_termination_cause_mapping(Opts) when is_list(Opts); is_map(Opts) ->
+validate_termination_cause_mapping(Opts) when ?is_opts(Opts) ->
     ergw_aaa_config:validate_options(fun validate_termination_cause_mapping/2, Opts, ?DEFAULT_TERMINATION_CAUSE_MAPPING);
 validate_termination_cause_mapping(Opts) ->
     erlang:error(badarg, [termination_cause_mapping, Opts]).
