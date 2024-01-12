@@ -240,26 +240,31 @@ handle_request(#diameter_packet{
 
 handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
-    InterimAccounting = 1,
-    #diameter_caps{origin_host = {OH, _},
-		   origin_realm = {OR, _}} = Caps,
-    #{'Session-Id' := Id,
-      'Accounting-Record-Type' := Type,
-      'Accounting-Record-Number' := Number} = Msg,
-    ACA =  #{'Session-Id' => Id,
-	     'Result-Code' => 2001,
-	     'Origin-Host' => OH,
-	     'Origin-Realm' => OR,
-	     'Acct-Interim-Interval' => [InterimAccounting],
-	     'Accounting-Record-Type' => Type,
-	     'Accounting-Record-Number' => Number},
-    case check_3gpp(Msg) of
-	Result when Result =:= ok;
-		    Result =:= {ok, no_imsi};
-			  Result =:= {ok, cgnat} ->
-	    {reply, ['ACA' | ACA]};
-	_ ->
-	    {answer_message, 5005}
+    case discard_msg(Msg) of
+	true -> discard;
+	false ->
+	    InterimAccounting = 1,
+	    #diameter_caps{origin_host = {OH, _},
+			   origin_realm = {OR, _}} = Caps,
+	    #{'Session-Id' := Id,
+	      'Accounting-Record-Type' := Type,
+	      'Accounting-Record-Number' := Number} = Msg,
+	    ct:pal("Received msg: ~p", [Msg]),
+	    ACA =  #{'Session-Id' => Id,
+		     'Result-Code' => 2001,
+		     'Origin-Host' => OH,
+		     'Origin-Realm' => OR,
+		     'Acct-Interim-Interval' => [InterimAccounting],
+		     'Accounting-Record-Type' => Type,
+		     'Accounting-Record-Number' => Number},
+	    case check_3gpp(Msg) of
+		Result when Result =:= ok;
+			    Result =:= {ok, no_imsi};
+				  Result =:= {ok, cgnat} ->
+		    {reply, ['ACA' | ACA]};
+		_ ->
+		    {answer_message, 5005}
+	    end
     end;
 
 handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extra)
@@ -583,6 +588,12 @@ default_transport() ->
 			  {reuseaddr, true},
 			  {ip, {127,0,0,1}}]}
      ]].
+
+discard_msg(#{'Service-Information' :=
+		[#{'Subscription-Id' := Ids}]}) ->
+    lists:member(#{'Subscription-Id-Type' => 1,'Subscription-Id-Data' => <<"999999999999999">>}, Ids);
+discard_msg(_) ->
+    false.	    
 
 fail_answer(<<"FAIL-BROKEN-ANSWER">>, Pkt) ->
     broken_answer(Pkt);

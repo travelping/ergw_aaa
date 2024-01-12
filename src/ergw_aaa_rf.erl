@@ -405,13 +405,6 @@ dynamic_address_flag(#{'3GPP-PDP-Type' := 'IPv6',
 dynamic_address_flag(_Session, Avps) ->
     Avps.
 
-%% 'InOctets'
-accounting(Base, 'InOctets', Value, Avps) ->
-    optional(Base ++ ['Accounting-Input-Octets'], Value, Avps);
-%% 'OutOctets'
-accounting(Base, 'OutOctets', Value, Avps) ->
-    optional(Base ++ ['Accounting-Output-Octets'], Value, Avps).
-
 %% Service-Data-Container
 
 %%   [ AF-Correlation-Information ]
@@ -633,12 +626,6 @@ from_session('Accounting-Stop', Value, Avps) ->
 %% 'Unused-Quota-Timer'
 
 %% 'Traffic-Data-Volumes' ========================
-
-%% 'InOctets'
-%% 'OutOctets'
-from_session(Key, Value, Avps)
-  when Key =:= 'InOctets'; Key =:= 'OutOctets' ->
-    accounting([?SI_PSI, 'Traffic-Data-Volumes'], Key, Value, Avps);
 
 from_session('Acct-Interim-Interval' = Key, Value, Avps) ->
     optional(Key, Value, Avps);

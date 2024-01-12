@@ -82,6 +82,7 @@
 all() ->
     [simple_session,
      multi_event_session,
+     inoctets_crash,
      async,
      secondary_rat_usage_data_report,
      handle_failure,
@@ -302,6 +303,81 @@ multi_event_session(Config) ->
 
     RfUpdCont = #{service_data => SDC},
     RfUpdCDR  = #{service_data => SDC, traffic_data => TD},
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCDR, {rf, 'Update'},
+				SOpts#{'gy_event' => cdr_closure}),
+
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC, traffic_data => TD},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    {ok, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+inoctets_crash() ->
+    [{doc, "Rf session with in octets clashing with the TDVs"}].
+inoctets_crash(Config) ->
+    Session = init_session(#{}, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
+
+    TD =
+	[#{'3GPP-Charging-Id' => [123456],
+	   'Accounting-Input-Octets' => [1],
+	   'Accounting-Output-Octets' => [2],
+	   'Change-Condition' => [4],
+	   'Change-Time'      => [{{2020,2,20},{13,30,00}}]},
+	  #{'3GPP-Charging-Id' => [123456],
+	   'Accounting-Input-Octets' => [1],
+	   'Accounting-Output-Octets' => [2],
+	   'Change-Condition' => [0],
+	   'Change-Time'      => [{{2020,2,20},{13,34,00}}]}],
+
+    RfUpdCont = #{service_data => SDC},
+    RfUpdCDR  = #{'InOctets' => 1, 'OutOctets' => 1, service_data => SDC, traffic_data => TD},
     {ok, _, _} =
 	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
 				SOpts#{'gy_event' => container_closure}),
