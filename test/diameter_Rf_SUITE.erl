@@ -89,7 +89,8 @@ all() ->
      handle_answer_error,
      terminate,
      rate_limit,
-     encode_error
+     encode_error,
+     plmn_change
     ].
 
 init_per_suite(Config0) ->
@@ -124,12 +125,20 @@ init_per_testcase(secondary_rat_usage_data_report, Config) ->
     meck_reset(Config),
     meck:new(diameter_test_server, [passthrough, no_link]),
     Config;
+init_per_testcase(plmn_change, Config) ->
+    reset_session_stats(),
+    meck_reset(Config),
+    meck:new(diameter_test_server, [passthrough, no_link]),
+    Config;
 init_per_testcase(_, Config) ->
     reset_session_stats(),
     meck_reset(Config),
     Config.
 
 end_per_testcase(secondary_rat_usage_data_report, _Config) ->
+    meck:unload(diameter_test_server),
+    ok;
+end_per_testcase(plmn_change, _Config) ->
     meck:unload(diameter_test_server),
     ok;
 end_per_testcase(_, _Config) ->
@@ -777,6 +786,125 @@ encode_error(Config) ->
     %% make sure nothing crashed
     meck_validate(Config),
     ok.
+
+plmn_change() ->
+    [{doc, "Rf session with PLMN change event"}].
+plmn_change(Config) ->
+    Session = init_session(#{}, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    SDC =
+	[#{'Rating-Group'	      => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'	      => 4,
+	   'Change-Time'	      => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'	      => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'	      => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'		      => 60},
+	 #{'Rating-Group'	      => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'	      => 4,
+	   'Change-Time'	      => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'	      => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'	      => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'		      => 60},
+	 #{'Rating-Group'	      => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'	      => 4,
+	   'Change-Time'	      => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'	      => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'	      => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'		      => 60}
+	],
+
+    TD =
+	[#{'3GPP-Charging-Id' => [123456],
+	   'Accounting-Input-Octets' => [1],
+	   'Accounting-Output-Octets' => [2],
+	   'Change-Condition' => [4],
+	   'Change-Time'      => [{{2020,2,20},{13,34,00}}]}],
+
+    SessionUpdate =
+	#{'Change-Condition'        => 6,
+          '3GPP-RAT-Type'	    => 2,
+	  '3GPP-SGSN-Address'	    => {192,168,100,1},
+	  '3GPP-SGSN-MCC-MNC'	    => {<<"901">>,<<"01">>},
+	  'User-Location-Info' =>
+	      #{'ext-macro-eNB' =>
+		    #ext_macro_enb{plmn_id = {<<"901">>, <<"01">>},
+				   id = rand:uniform(16#1fffff)},
+		'TAI' =>
+		    #tai{plmn_id = {<<"001">>, <<"01">>},
+			 tac = rand:uniform(16#ffff)}}
+	  },
+    ergw_aaa_session:set(SId, SessionUpdate),
+
+    RfUpdCDR  = #{service_data => SDC, traffic_data => TD},
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCDR, {rf, 'Update'},
+				SOpts#{'gy_event' => cdr_closure}),
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC, traffic_data => TD},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    {ok, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+
+    DReqs = lists:foldr(
+	      fun({_, {_, handle_request,
+		       [#diameter_packet{
+			   msg = ['ACR' |
+				  #{'Accounting-Record-Type' := Type} = Msg]}, _, _, _]
+		      }, _}, A) ->
+		      maps:update_with(Type, fun(X) -> [Msg|X] end, [Msg], A);
+		 (_, A) -> A
+	      end, #{}, meck:history(diameter_test_server)),
+    ?equal(true, maps:is_key(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD', DReqs)),
+    ?equal(true, maps:is_key(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD', DReqs)),
+    ?equal(true, maps:is_key(?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD', DReqs)),
+
+    #{?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_START_RECORD' := [StartR],
+      ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_INTERIM_RECORD' := [InterimR],
+      ?'DIAMETER_RF_ACCOUNTING-RECORD-TYPE_STOP_RECORD' := [StopR]} = DReqs,
+
+    DiamGet = fun DiamGet([K|T], [V]) when is_map(V) ->
+		      DiamGet(T, maps:get(K, V, undefined));
+		  DiamGet([K|T], V) when is_map(V) ->
+		      DiamGet(T, maps:get(K, V, undefined));
+		  DiamGet(_, V) -> V
+	      end,
+    PsKey = ['Service-Information', 'PS-Information'],
+    ?match([#{'3GPP-SGSN-MCC-MNC' := [<<"26201">>]}], DiamGet(PsKey, StartR)),
+    ?match([#{'3GPP-SGSN-MCC-MNC' := [<<"90101">>]}], DiamGet(PsKey, InterimR)),
+    ?match([#{'3GPP-SGSN-MCC-MNC' := [<<"90101">>]}], DiamGet(PsKey, StopR)),
+
+    PrevKey = ['Service-Information', 'TP-Previous-PS-Information'],
+    ?match(undefined, DiamGet(PrevKey, StartR)),
+    ?match([#{'3GPP-SGSN-MCC-MNC' := [<<"26201">>]}], DiamGet(PrevKey, InterimR)),
+    ?match([#{'3GPP-SGSN-MCC-MNC' := [<<"90101">>]}], DiamGet(PrevKey, StopR)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
 %%%======================================================================
 %%% Rate limit test helper to generate the requests in separate processes
 %%%======================================================================
