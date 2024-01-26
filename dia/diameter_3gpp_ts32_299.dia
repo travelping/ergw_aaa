@@ -354,7 +354,7 @@
    Served-Party-IP-Address                                       848          Address     MV
    Service-Data-Container                                       2040          Grouped     MV
    Service-Id                                                    855       UTF8String     MV
-   Service-Information                                           873          Grouped     MV
+;; Service-Information                                           873          Grouped     MV
    Service-Mode                                                 2032       Unsigned32     MV
    Service-Specific-Data                                         863       UTF8String     MV
    Service-Specific-Info                                        1249          Grouped     MV
@@ -1171,25 +1171,26 @@
 ;;         [ Traffic-Steering-Policy-Identifier-DL ]
 ;;         [ Traffic-Steering-Policy-Identifier-UL ]
 
-   Service-Information ::= < AVP Header: 873>
-
-         * [ Subscription-Id ]
-           [ AoC-Information ]
-           [ PS-Information ]
-           [ IMS-Information ]
-           [ MMS-Information ]
-           [ LCS-Information ]
-           [ PoC-Information ]
-           [ MBMS-Information ]
-           [ SMS-Information ]
-           [ VCS-Information ]
-           [ MMTel-Information ]
-           [ ProSe-Information ]
+;; Service-Information ::= < AVP Header: 873>
+;;
+;;       * [ Subscription-Id ]
+;;         [ AoC-Information ]
+;;         [ PS-Information ]
+;;         [ TP-Previous-PS-Information ]
+;;         [ IMS-Information ]
+;;         [ MMS-Information ]
+;;         [ LCS-Information ]
+;;         [ PoC-Information ]
+;;         [ MBMS-Information ]
+;;         [ SMS-Information ]
+;;         [ VCS-Information ]
+;;         [ MMTel-Information ]
+;;         [ ProSe-Information ]
 ;;         [ Service-Generic-Information ]
 ;;         [ IM-Information ]
 ;;         [ DCD-Information ]
 ;;         [ M2M-Information ]
-           [ CPDT-Information ]
+;;         [ CPDT-Information ]
 
    Service-Specific-Info  ::= < AVP Header: 1249 >
 

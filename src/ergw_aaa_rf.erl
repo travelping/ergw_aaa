@@ -58,6 +58,7 @@
 -define(IS_IP(X), (is_tuple(X) andalso (tuple_size(X) == 4 orelse tuple_size(X) == 8))).
 
 -define(SI_PSI, 'Service-Information', 'PS-Information').
+-define(SI_TP_PREV_PSI, 'Service-Information', 'TP-Previous-PS-Information').
 
 -record(state, {pending = undefined :: 'undefined' | reference(),
 		state = init        :: atom(),
@@ -288,7 +289,8 @@ handle_aca(['ACA' | #{'Result-Code' := ?'DIAMETER_BASE_RESULT-CODE_SUCCESS'} = A
     %% reset SDC and TDV only after we successfully delivered them
     State = State0#state{sdc = [], tdv = []},
 
-    {Session, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
+    {Session1, Events} = to_session({?APP, 'ACA'}, {Session0, Events0}, Avps),
+    Session = save_prev_request_session_info(Session1),
     {ok, Session, Events, State};
 handle_aca([Answer | #{'Result-Code' := Code}], Session, Events, _Opts, State)
   when Answer =:= 'ACA'; Answer =:= 'answer-message' ->
@@ -315,6 +317,18 @@ to_session(_, 'Acct-Interim-Interval', [Interim], {Session, Events})
     {Session, ergw_aaa_session:ev_set(Trigger, Events)};
 to_session(_, _, _, SessEv) ->
     SessEv.
+
+save_prev_request_session_info(Session) ->
+    PrevSessInfoKeys =
+	['QoS-Information',
+	 '3GPP-SGSN-Address',
+	 '3GPP-SGSN-IPv6-Address',
+	 '3GPP-SGSN-MCC-MNC',
+	 '3GPP-MS-TimeZone',
+	 '3GPP-RAT-Type',
+	 'User-Location-Info',
+	 '3GPP-User-Location-Info'],
+    Session#{'Prev-Session-Info' => maps:with(PrevSessInfoKeys, Session)}.
 
 %%%===================================================================
 
@@ -634,12 +648,50 @@ from_session('Acct-Interim-Interval' = Key, Value, Avps) ->
 from_session(monitors, Monitors, Avps) ->
     maps:fold(fun monitors_from_session/3, Avps, Monitors);
 
+%% 'TP-Previous-PS-Information'
+from_session('Prev-Session-Info', Values, Avps) ->
+    from_prev_session(Values, Avps);
+
 from_session(_Key, _Value, M) ->
     M.
 
 from_session(Session, Avps0) ->
     Avps = dynamic_address_flag(Session, Avps0),
     maps:fold(fun from_session/3, Avps, Session).
+
+%% 'TP-Previous-PS-Information' ========================
+
+%% 'QoS-Information'
+from_prev_session('QoS-Information' = Key, Value, Avps) ->
+    optional([?SI_TP_PREV_PSI, Key], ergw_aaa_diameter:qos_from_session(Value), Avps);
+
+%% 'SGSN-Address'
+from_prev_session(Key, IP, Avps)
+  when Key =:= '3GPP-SGSN-Address';
+       Key =:= '3GPP-SGSN-IPv6-Address' ->
+    repeated([?SI_TP_PREV_PSI, 'SGSN-Address'], IP, Avps);
+
+%% '3GPP-SGSN-MCC-MNC'
+%% '3GPP-MS-TimeZone'
+%% '3GPP-RAT-Type'
+from_prev_session(Key, Value, Avps)
+  when Key =:= '3GPP-SGSN-MCC-MNC';
+       Key =:= '3GPP-MS-TimeZone';
+       Key =:= '3GPP-RAT-Type' ->
+    optional([?SI_TP_PREV_PSI, Key], ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps);
+
+%% '3GPP-User-Location-Info'
+from_prev_session(Key, Value, Avps)
+  when Key =:= 'User-Location-Info';
+       Key =:= '3GPP-User-Location-Info' ->
+    optional([?SI_TP_PREV_PSI, '3GPP-User-Location-Info'],
+	     ergw_aaa_diameter:'3gpp_from_session'(Key, Value), Avps);
+
+from_prev_session(_Key, _Value, M) ->
+    M.
+
+from_prev_session(Values, Avps) ->
+    maps:fold(fun from_prev_session/3, Avps, Values).
 
 context_id(_Session) ->
     %% TODO: figure out what servive we are.....
