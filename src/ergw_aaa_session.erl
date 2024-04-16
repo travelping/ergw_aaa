@@ -301,7 +301,10 @@ handle_event(cast, terminate, _State, Data) ->
 
 handle_event(info, {'DOWN', _Ref, process, Owner, Info},
 	     _State, #data{owner = Owner} = Data) ->
-    ?LOG(error, "Received DOWN information for ~p with info ~p", [Data#data.owner, Info]),
+    case Info of
+	normal -> ok;
+	_ -> ?LOG(error, "Received DOWN information for ~p with info ~p", [Data#data.owner, Info])
+    end,
     terminate_action(Data),
     {stop, normal};
 
