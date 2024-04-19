@@ -80,9 +80,7 @@ event(Session, Event, EvOpts, SessionOpts) when is_map(SessionOpts) ->
 %%===================================================================
 
 start_link(Owner, SessionData) ->
-    Opts = [{hibernate_after, 500},
-	    {spawn_opt,[{fullsweep_after, 0}]}],
-    gen_statem:start_link(?MODULE, [Owner, SessionData], Opts).
+    proc_lib:start_link(?MODULE, init, [[Owner, SessionData]], infinity, [{fullsweep_after, 0}]).
 
 invoke_compat_async(Session, SessionOpts, Procedure) ->
     case invoke(Session, SessionOpts, Procedure, #{async => true}) of
@@ -170,6 +168,7 @@ callback_mode() -> handle_event_function.
 
 init([Owner, SessionOpts]) ->
     process_flag(trap_exit, true),
+    proc_lib:init_ack({ok, self()}),
 
     AppId = maps:get('AAA-Application-Id', SessionOpts, default),
     SessionId = ergw_aaa_session_seq:inc(AppId),
@@ -190,7 +189,7 @@ init([Owner, SessionOpts]) ->
     ergw_aaa_session_reg:register(SessionId),
     ergw_aaa_session_reg:register(DiamSessionId),
 
-    Data = #data{
+    Data0 = #data{
 	      owner         = Owner,
 	      owner_monitor = MonRef,
 	      application   = AppId,
@@ -198,8 +197,8 @@ init([Owner, SessionOpts]) ->
 	      session       = DefaultSessionOpts
 	      },
     State = #state{},
-    {Reply, DataOut, _Events} = exec(init, SessionOpts, #{}, Data),
-    {Reply, State, DataOut}.
+    {ok, Data, _Events} = exec(init, SessionOpts, #{}, Data0),
+    gen_statem:enter_loop(?MODULE, [{hibernate_after, 500}], State, Data).
 
 handle_event({call, From}, get, _State, Data) ->
     {keep_state_and_data, [{reply, From, Data#data.session}]};
