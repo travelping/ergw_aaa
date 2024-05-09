@@ -1,13 +1,38 @@
 ergw-aaa
 ========
 
+
+Version 4.6.4 - 19 April 2024
+--------------------------------
+
+**Bugfixes** :bug:
+* [#217](https://github.com/travelping/ergw_aaa/pull/217) Mute normal end process monitor events.
+
+Version 4.6.3 - 26 January 2024
+--------------------------------
+
+**Bugfixes** :bug:
+* [#216](https://github.com/travelping/ergw_aaa/pull/216) Copy some PS-Information into followup requests.
+
+Version 4.6.2 - 17 January 2024
+--------------------------------
+
+**Bugfixes** :bug:
+* [#215](https://github.com/travelping/ergw_aaa/pull/215) Fix session crash due to TDV building.
+
+Version 4.6.1 - 26 September 2023
+--------------------------------
+
+**Bugfixes** :bug:
+* [#213](https://github.com/travelping/ergw_aaa/pull/213) Require error entry in term mapping, map unknown causes to error.
+
 Version 4.6.0 - 4 August 2023
 --------------------------------
 
 **Features** :rocket:
 * [#207](https://github.com/travelping/ergw_aaa/pull/207) Allow `Framed-MTU` in NASREQ and RADIUS responses.
 
-VVersion 4.5.2 - 3 August 2023
+Version 4.5.2 - 3 August 2023
 --------------------------------
 
 **Bugfixes** :bug:
