@@ -35,7 +35,7 @@
 	 terminate/2, code_change/3]).
 
 -ifdef(TEST).
--export([peers/0]).
+-export([peers/0, pick_connection/2, pick_peer_h/3]).
 -endif.
 
 -include_lib("kernel/include/logger.hrl").
@@ -327,43 +327,49 @@ get_peer(Host, Peers) ->
     update_bucket(Peer).
 
 %% relative_connection_load/3
-connection_load({PeerRef, _} = Peer, CM, Peers) ->
-    Cnt = maps:get(PeerRef, Peers, 0),
-    maps:update_with(-Cnt, [Peer|_], [Peer], CM).
+connection_load({PeerRef, _} = Peer, {Load, Cands} = State, Peers) ->
+    PeerLoad = maps:get(PeerRef, Peers, 0),
+    if PeerLoad < Load ->   {PeerLoad, [Peer]};
+       PeerLoad =:= Load -> {Load, [Peer|Cands]};
+       true -> State
+    end.
 
 %% pick_connection/2
 pick_connection(Connections, Peers) ->
-    CMap =
-	lists:foldl(
-	  connection_load(_, _, Peers), #{}, Connections),
-    {_, Cands} = hd(lists:keysort(1, maps:to_list(CMap))),
+    {_, Cands} = lists:foldl(connection_load(_, _, Peers), {infinity, []}, Connections),
     N = rand:uniform(length(Cands)),
     lists:nth(N, Cands).
 
 %% relative_peer_load/4
-relative_peer_load(Host, _, LM, Peers) ->
-    Peer = get_peer(Host, Peers),
+relative_peer_load(OH, _, {Load, Cands} = State, Peers) ->
     #peer{outstanding = Cnt,
 	  capacity    = Cap,
-	  rate        = Rate,
-	  tokens      = Tokens} = Peer,
-    Load =
+	  rate	      = Rate,
+	  tokens      = Tokens} = get_peer(OH, Peers),
+    PeerLoad =
 	erlang:floor((Cnt / Cap) * ?LoadBuckets) +
 	erlang:floor(((1.0 - Tokens / Rate) * ?LoadBuckets)),
-    maps:update_with(Load, [Host|_], [Host], LM).
+    if PeerLoad < Load ->   {PeerLoad, [OH]};
+       PeerLoad =:= Load -> {Load, [OH|Cands]};
+       true -> State
+    end.
+
+pick_peers(CandidateMap, Peers) ->
+    {_, Cands} = maps:fold(relative_peer_load(_, _, _, Peers), {infinity, []}, CandidateMap),
+    N = rand:uniform(length(Cands)),
+    OH = lists:nth(N, Cands),
+    maps:get(OH, CandidateMap).
 
 %% pick_peer_h/3
 pick_peer_h([], _SvcName, _Peers) ->
     false;
 pick_peer_h(Candidates, _SvcName, Peers) ->
-    CandMap = lists:foldl(
-		fun({_, #diameter_caps{origin_host = {_, OH}}} = Peer, CM) ->
-			maps:update_with(OH, [Peer|_], [Peer], CM)
-		end, #{}, Candidates),
-    LoadMap = maps:fold(relative_peer_load(_, _, _, Peers), #{}, CandMap),
-    [{_, Cands} | _] = lists:keysort(1, maps:to_list(LoadMap)),
-    N = rand:uniform(length(Cands)),
-    Connection = pick_connection(maps:get(lists:nth(N, Cands), CandMap), Peers),
+    CandidateMap =
+	maps:groups_from_list(
+	  fun({_, #diameter_caps{origin_host = {_, OH}}}) -> OH end,
+	  Candidates),
+    PeerCandidateList = pick_peers(CandidateMap, Peers),
+    Connection = pick_connection(PeerCandidateList, Peers),
     {ok, Connection}.
 
 inc_element(Element, Stats) ->

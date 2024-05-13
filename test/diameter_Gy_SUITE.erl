@@ -17,6 +17,7 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
+-include("ergw_aaa_internal.hrl").
 
 -define(HUT, ergw_aaa_ro).
 -define(SERVICE, <<"diam-test">>).
@@ -123,7 +124,8 @@
 %%%===================================================================
 
 all() ->
-    [simple_session,
+    [diameter_srv,
+     simple_session,
      simple_session_async,
      abort_session_request,
      tarif_time_change,
@@ -271,6 +273,45 @@ wait_for_outstanding_reqs(Cnt) ->
 %%%===================================================================
 %%% Test cases
 %%%===================================================================
+
+diameter_srv() ->
+    [{doc, "Test some diameter_srv functions"}].
+diameter_srv(_Config) ->
+    Ref0 = make_ref(),
+    Ref1 = make_ref(),
+
+    ?equal({Ref0, 'conn-0'},
+	   ergw_aaa_diameter_srv:pick_connection(
+	     [{Ref1, 'conn-1'}, {Ref0, 'conn-0'}],
+	     #{Ref0 => 0, Ref1 => 1})),
+
+    ?match({_, 'conn-0'},
+	   ergw_aaa_diameter_srv:pick_connection(
+	     [{Ref1, 'conn-1'}, {Ref0, 'conn-0'}, {make_ref(), 'conn-0'}],
+	     #{Ref0 => 0, Ref1 => 1})),
+
+    ?match({ok, {Ref0, _}},
+	   ergw_aaa_diameter_srv:pick_peer_h(
+	     [{Ref0, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}},
+	      {Ref1, #diameter_caps{origin_host = {undefined, <<"conn-1">>}}}],
+	     undefined,
+	     #{<<"conn-0">> => #peer{outstanding =  0, capacity = 100, rate = 100, tokens = 100},
+	       <<"conn-1">> => #peer{outstanding = 50, capacity = 100, rate = 100, tokens = 100}})),
+    ?match({ok, {Ref1, _}},
+	   ergw_aaa_diameter_srv:pick_peer_h(
+	     [{Ref0, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}},
+	      {Ref1, #diameter_caps{origin_host = {undefined, <<"conn-1">>}}}],
+	     undefined,
+	     #{<<"conn-0">> => #peer{outstanding = 50, capacity = 100, rate = 100, tokens = 100},
+	       <<"conn-1">> => #peer{outstanding =  0, capacity = 100, rate = 100, tokens = 100}})),
+    ?match({ok, {Ref1, _}},
+	   ergw_aaa_diameter_srv:pick_peer_h(
+	     [{Ref0, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}},
+	      {Ref1, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}}],
+	     undefined,
+	     #{Ref0 => 10,
+	       <<"conn-0">> => #peer{outstanding = 0, capacity = 100, rate = 100, tokens = 100}})),
+    ok.
 
 simple_session() ->
     [{doc, "Simple Gy session"}].
