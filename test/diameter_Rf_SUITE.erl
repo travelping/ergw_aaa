@@ -47,7 +47,7 @@
 
 -define(CONFIG,
 	#{rate_limits =>
-	      #{default => #{outstanding_requests => 3, rate => 20}},
+	      #{default => #{outstanding_requests => 20, rate => 20}},
 	  functions => ?DIAMETER_FUNCTION,
 	  handlers =>
 	      #{ergw_aaa_static => ?STATIC_CONFIG,
