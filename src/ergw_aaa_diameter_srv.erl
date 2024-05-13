@@ -250,8 +250,8 @@ handle_call({start_request, SvcName, Peer, RPid}, _From, #state{peers = Peers0} 
     {reply, Reply, State#state{peers = Peers}};
 
 handle_call({finish_request, SvcName, Peer, RPid}, _From, #state{peers = Peers0} = State) ->
-    {Reply, Peers} = finish_request_h(SvcName, Peer, RPid, Peers0),
-    {reply, Reply, State#state{peers = Peers}};
+    Peers = finish_request_h(SvcName, Peer, RPid, Peers0),
+    {reply, ok, State#state{peers = Peers}};
 
 handle_call(peers_info, _, #state{peers = Peers} = State) ->
     {reply, Peers, State}.
@@ -268,15 +268,7 @@ handle_info({'DOWN', MRef, _Type, Pid, Info}, #state{peers = Peers0} = State)
 	 [Info, maps:get(MRef, Peers0), Pid]),
 
     {_, _, PeerRef, Caps} = maps:get(MRef, Peers0),
-    {Result, Peers} = release_peer(PeerRef, Caps, maps:without([Pid, MRef], Peers0)),
-    case Result of
-	{error, Error} ->
-	    ?LOG(critical, "release peer failed with ~0p", [Error]),
-	    ct:fail("release peer failed with ~0p", [Error]),
-	    ok;
-	ok ->
-	    ok
-    end,
+    Peers = release_peer(PeerRef, Caps, maps:without([Pid, MRef], Peers0)),
     ets:match_delete(?MODULE, {{'_', Pid}, MRef}),
     {noreply, State#state{peers = Peers}};
 
@@ -418,9 +410,10 @@ release_peer_oh(#diameter_caps{origin_host = {_, OH}}, Peers) ->
     case Peer of
 	#peer{outstanding = Cnt} when Cnt > 0 ->
 	    ?LOG(debug, "outstanding dec #1: ~p", [Cnt - 1]),
-	    {ok, Peers#{OH => Peer#peer{outstanding = Cnt - 1}}};
+	    Peers#{OH => Peer#peer{outstanding = Cnt - 1}};
 	_ ->
-	    {{error, underflow}, Peers#{OH => Peer}}
+	    ?LOG(emergency, "reference counting underflow for Diameter peer ~0tp", [OH]),
+	    Peers#{OH => Peer}
     end.
 
 release_peer(PeerRef, Caps, Peers) ->
