@@ -180,7 +180,7 @@ call(App, Request, #{function := Function} = Config, CallOpts) ->
 		encode ->
 		    ?LOG(critical, "failed to encode DIAMETER requests: ~0p", [Request]);
 		Other ->
-		    ?LOG(notice, "non-critical diameter API: ~p", [Other])
+		    ?LOG(notice, "non-critical diameter API return: ~p", [Other])
 	    end,
 	    SI = diameter:service_info(Function, applications),
 	    handle_plain_error(Result, Request, Function, App, CallOpts, SI);
@@ -264,8 +264,8 @@ handle_cast(stop, State) ->
 
 handle_info({'DOWN', MRef, _Type, Pid, Info}, #state{peers = Peers0} = State)
   when is_map_key(MRef, Peers0) ->
-    ?LOG(alert, "got down for pending request ~0p (~p) with ~p",
-	 [maps:get(MRef, Peers0), Pid, Info]),
+    ?LOG(alert, "Diameter request process terminated unexpected with ~0tp (req: ~0tp, pid: ~0p)",
+	 [Info, maps:get(MRef, Peers0), Pid]),
 
     {_, _, PeerRef, Caps} = maps:get(MRef, Peers0),
     {Result, Peers} = release_peer(PeerRef, Caps, maps:without([Pid, MRef], Peers0)),
@@ -285,7 +285,8 @@ handle_info({'DOWN', MRef, _Type, Pid, _Info}, State) ->
     {noreply, State};
 
 handle_info(Info, State) ->
-    ?LOG(warning, "handle_info: ~p", [Info]),
+    ?LOG(alert, "unexpected info message, something important might have been missed: ~p",
+         [Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -389,11 +390,13 @@ start_request_h(SvcName, {PeerRef,  #diameter_caps{origin_host = {_, OH}} = Caps
 	  capacity    = Cap,
 	  tokens      = Tokens} = Peer,
     if Cnt >= Cap ->
-	    ?LOG(debug, "peer ~0p over capacity (~p > ~p)", [OH, Cnt, Cap]),
-	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_tokens, Peer)}};
-       Tokens == 0 ->
-	    ?LOG(debug, "peer ~0p over rate", [OH]),
+	    ?LOG(notice,
+		 "Diameter peer ~0p traffic is over the configured outstanding request capacity (~p > ~p)",
+		 [OH, Cnt, Cap]),
 	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_capacity, Peer)}};
+       Tokens == 0 ->
+	    ?LOG(notice, "Diameter peer ~0p traffic is over the configured rate", [OH]),
+	    {{discard, rate_limit}, Peers0#{OH => inc_stats(no_tokens, Peer)}};
        true ->
 	    ?LOG(debug, "outstanding inc: ~p", [Cnt + 1]),
 	    Peers1 =

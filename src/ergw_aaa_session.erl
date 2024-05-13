@@ -311,12 +311,13 @@ handle_event(info, {'$reply', Promise, Handler, Msg, Opts} = _Info,
     update_session(SessOut, EvsOut, Data),
     {keep_state, Data};
 
-handle_event(Type, Event, _State, _Data) ->
-    ?LOG(warning, "unhandled event ~p:~p", [Type, Event]),
+handle_event(info, Info, State, _) ->
+    ?LOG(alert, "unexpected info message in state ~p, something important might have been missed: ~p",
+         [State, Info]),
     keep_state_and_data.
 
 terminate(Reason, Data) ->
-    ?LOG(error, "ctld Session terminating with state ~p with reason ~p", [Data, Reason]),
+    ?LOG(debug, "terminating with state ~p with reason ~p", [Data, Reason]),
     ok.
 
 code_change(_OldVsn, Data, _Extra) ->

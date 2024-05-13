@@ -105,7 +105,7 @@ initialize_service(_ServiceId, #{function := Function, accounting := AcctModel})
 			   {dictionary, ?DIAMETER_DICT_NASREQ},
 			   {module, ?MODULE}]
 			  | Appl]},
-    ?LOG(debug, "Registering NASREQ service: ~p", [{Function, SvcOpts}]),
+    ?LOG(info, "Registering NASREQ service: ~p", [{Function, SvcOpts}]),
     ergw_aaa_diameter_srv:register_service(Function, SvcOpts),
     {ok, []}.
 
@@ -150,7 +150,6 @@ invoke(_Service, interim, Session, Events, Opts, #state{state = started} = State
 invoke(_Service, Procedure, Session, Events, Opts,
        #state{state = started, authorized = Authorized} = State0)
   when Procedure =:= stop; Procedure =:= terminate ->
-    ?LOG(debug, "Session ~s: ~p", [Procedure, Session]),
     State1 = inc_record_number(State0#state{state = stopped}),
     RecType = ?'DIAMETER_SGI_ACCOUNTING-RECORD-TYPE_STOP_RECORD',
     App = acct_app_alias(Opts),
@@ -209,14 +208,14 @@ handle_response('STR', Msg, Session, Events, Opts, State) ->
 %%===================================================================
 
 %% peer_up/3
-peer_up(_SvcName, _Peer, State) ->
-    ?LOG(debug, "peer_up: ~p~n", [_Peer]),
+peer_up(_SvcName, {_, #diameter_caps{origin_host = {OH, _}}}, State) ->
+    ?LOG(info, "Diameter peer FSM for ~p changed to state UP", [OH]),
     State.
 
 %% peer_down/3
-peer_down(SvcName, Peer, State) ->
+peer_down(SvcName, {_, #diameter_caps{origin_host = {OH, _}}} = Peer, State) ->
     ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
-    ?LOG(debug, "peer_down: ~p~n", [Peer]),
+    ?LOG(info, "Diameter peer FSM for ~p changed to state DOWN", [OH]),
     State.
 
 %% pick_peer/5
@@ -275,9 +274,11 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
 
 %% handle_answer/5
 handle_answer(#diameter_packet{msg = Msg, errors = Errors},
-	      _Request, SvcName, Peer, _CallOpts)
+	      _Request, SvcName, {_, #diameter_caps{origin_host = {OH, _}}} = Peer, _CallOpts)
   when length(Errors) /= 0 ->
-    ?LOG(error, "~p: decode of answer ~p from ~p failed, errors ~p", [SvcName, Msg, Peer, Errors]),
+    %% the exact content of Errors is a bit unclear, dumping them is best we can do
+    ?LOG(error, "~0tp: decode of Diameter answer ~0tp from ~0tp failed, errors ~0tp",
+         [SvcName, Msg, OH, Errors]),
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     case Msg of
 	[_ | #{'Result-Code' := RC}] -> {error, RC};	%% try to handle gracefully
@@ -299,8 +300,10 @@ handle_error(Reason, _Request, SvcName, Peer, CallOpts) ->
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->
     handle_common_request(Command, Avps, Peer);
-handle_request(_Packet, _SvcName, _Peer) ->
-    erlang:error({unexpected, ?MODULE, ?LINE}).
+handle_request(Packet, SvcName, {_, #diameter_caps{origin_host = {OH, _}}}) ->
+    ?LOG(error, "~0tp: unsupported Diameter request from peer ~p, raw request ~0tp",
+		[SvcName, OH, Packet]),
+    {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
 %%%===================================================================
 %%% Options Validation
@@ -619,7 +622,7 @@ handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, C
 		    'Session-Id' => SessionId},
     ReplyCode = diameter_reply_code(Command),
     ReplyAvps = diameter_reply_avps(Result, ReplyAvps2),
-    ?LOG(error, "~p reply Avps: ~p", [Command, ReplyAvps]),
+    ?LOG(debug, "~p reply Avps: ~p", [Command, ReplyAvps]),
     {reply, [ReplyCode | ReplyAvps]}.
 
 filter_reply_avps('RAR', Avps) ->

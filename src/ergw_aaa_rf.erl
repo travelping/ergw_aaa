@@ -190,14 +190,14 @@ handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
 %%===================================================================
 
 %% peer_up/3
-peer_up(_SvcName, _Peer, State) ->
-    ?LOG(debug, "peer_up: ~p~n", [_Peer]),
+peer_up(_SvcName, {_, #diameter_caps{origin_host = {OH, _}}}, State) ->
+    ?LOG(info, "Diameter peer FSM for ~p changed to state UP", [OH]),
     State.
 
 %% peer_down/3
-peer_down(SvcName, Peer, State) ->
+peer_down(SvcName, {_, #diameter_caps{origin_host = {OH, _}}} = Peer, State) ->
     ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
-    ?LOG(debug, "peer_down: ~p~n", [Peer]),
+    ?LOG(info, "Diameter peer FSM for ~p changed to state DOWN", [OH]),
     State.
 
 %% pick_peer/5
@@ -231,9 +231,11 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
 
 %% handle_answer/5
 handle_answer(#diameter_packet{msg = Msg, errors = Errors},
-	      _Request, SvcName, Peer, _CallOpts)
+	      _Request, SvcName, {_, #diameter_caps{origin_host = {OH, _}}} = Peer, _CallOpts)
   when length(Errors) /= 0 ->
-    ?LOG(error, "~p: decode of answer from ~p failed, errors ~p", [SvcName, Peer, Errors]),
+    %% the exact content of Errors is a bit unclear, dumping them is best we can do
+    ?LOG(error, "~0tp: decode of Diameter answer ~0tp from ~0tp failed, errors ~0tp",
+         [SvcName, Msg, OH, Errors]),
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     case Msg of
 	[_ | #{'Result-Code' := RC}] -> {error, RC};	%% try to handle gracefully

@@ -107,7 +107,8 @@ handle_response({API, _}, #{'Result-Code' := Code}, Session, Events, State) ->
 handle_response(Procedure, #{'Result-Code' := Code}, Session, Events, State) ->
     {{fail, Code}, Session, [{stop, {Procedure, peer_reject}} | Events], State};
 handle_response(_Procedure, Response, Session, Events, State) ->
-    ?LOG(error, "Response: ~p", [Response]),
+    ?LOG(alert, "unexpected Diameter response, something important might have been missed: ~p",
+         [Response]),
     {Response, Session, Events, State}.
 
 get_state_atom(_) ->

@@ -37,9 +37,9 @@ radius_request(#radius_request{cmd = discreq, attrs = Attrs} = Req, _NasProp, _A
         end,
     {reply, Req#radius_request{cmd = Cmd}};
 
-radius_request(#radius_request{} = Request, _NasProp, _Args) ->
-    ?LOG(warning, "Unhandled radius request: ~p", [Request]),
-    {reply, Request}.
+radius_request(#radius_request{}, _NasProp, _Args) ->
+    %% unsupported requests, eradius_server will logs the `noreply` as an error, no need to duplicate that
+    noreply.
 
 to_session_id(HexSessionId) ->
     H = fun(N) when N < 58  -> N - 48;
