@@ -219,4 +219,4 @@ Example of possible config.
 [gh badge]: https://img.shields.io/github/workflow/status/travelping/ergw_aaa/CI?style=flat-square
 [coveralls]: https://coveralls.io/github/travelping/ergw_aaa
 [coveralls badge]: https://img.shields.io/coveralls/travelping/ergw_aaa/master.svg?style=flat-square
-[erlang version badge]: https://img.shields.io/badge/erlang-20.3%20to%2024.0.2-blue.svg?style=flat-square
+[erlang version badge]: https://img.shields.io/badge/erlang-26.2%20to%2026.2-blue.svg?style=flat-square
