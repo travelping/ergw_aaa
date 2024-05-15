@@ -65,7 +65,7 @@
 
 -define(CONFIG,
 	#{rate_limits =>
-	      #{default => #{outstanding_requests => 1, rate => 10}},
+	      #{default => #{outstanding_requests => 10, rate => 10}},
 	  functions => ?DIAMETER_FUNCTION,
 	  handlers =>
 	      #{ergw_aaa_static => ?STATIC_CONFIG,
@@ -142,6 +142,9 @@ all() ->
      terminate].
 
 init_per_suite(Config0) ->
+    %% the overhead of logging interfers with the rate limit tests
+    logger:set_primary_config(level, none),
+
     Config = [{handler_under_test, ?HUT} | Config0],
 
     application:load(ergw_aaa),

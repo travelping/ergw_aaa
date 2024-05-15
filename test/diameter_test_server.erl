@@ -249,7 +249,6 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	    #{'Session-Id' := Id,
 	      'Accounting-Record-Type' := Type,
 	      'Accounting-Record-Number' := Number} = Msg,
-	    ct:pal("Received msg: ~p", [Msg]),
 	    ACA =  #{'Session-Id' => Id,
 		     'Result-Code' => 2001,
 		     'Origin-Host' => OH,

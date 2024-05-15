@@ -219,17 +219,6 @@ handle_event({call, From}, {set, Values}, _State, Data) ->
 handle_event({call, From}, {unset, Options}, _State, Data = #data{session = Session}) ->
     {keep_state, Data#data{session = maps:without(Options, Session)}, [{reply, From, ok}]};
 
-handle_event(info, {'EXIT', Owner, normal = Reason},
-	     _State, #data{owner = Owner} = Data) ->
-    ?LOG(debug, "Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
-    terminate_action(Data),
-    {stop, normal};
-handle_event(info, {'EXIT', Owner, Reason},
-	     _State, #data{owner = Owner} = Data) ->
-    ?LOG(error, "Received EXIT signal for ~p with reason ~p", [Owner, Reason]),
-    terminate_action(Data),
-    {stop, normal};
-
 handle_event(info, {'EXIT', _From, _Reason}, _State, _Data) ->
     %% ignore EXIT from eradius client
     keep_state_and_data;
@@ -294,17 +283,21 @@ handle_event({call, From}, {invoke, SessionOpts, Procedure, Opts},
 	    {keep_state, Data, [{reply, From, Reply}]}
     end;
 
-handle_event(cast, terminate, _State, Data) ->
-    ?LOG(info, "Handling terminate request: ~p", [Data]),
+handle_event(cast, terminate, _State, #data{owner_monitor = MonRef} = Data) ->
+    ?LOG(debug, "handling terminate request: ~p", [Data]),
+    demonitor(MonRef, [flush]),
     terminate_action(Data),
     {stop, normal};
 
-handle_event(info, {'DOWN', _Ref, process, Owner, Info},
+handle_event(info, {'DOWN', _Ref, process, Owner, normal},
 	     _State, #data{owner = Owner} = Data) ->
-    case Info of
-	normal -> ok;
-	_ -> ?LOG(error, "Received DOWN information for ~p with info ~p", [Data#data.owner, Info])
-    end,
+    ?LOG(debug, "AAA session owner exited normally, terminating"),
+    terminate_action(Data),
+    {stop, normal};
+handle_event(info, {'DOWN', _Ref, process, Owner, Info},
+	     _State, #data{owner = Owner, session = Session} = Data) ->
+    ?LOG(debug, "AAA session owner exited with ~p, terminating. Session state: ~0tp",
+	 [Info, Session]),
     terminate_action(Data),
     {stop, normal};
 
@@ -318,12 +311,13 @@ handle_event(info, {'$reply', Promise, Handler, Msg, Opts} = _Info,
     update_session(SessOut, EvsOut, Data),
     {keep_state, Data};
 
-handle_event(Type, Event, _State, _Data) ->
-    ?LOG(warning, "unhandled event ~p:~p", [Type, Event]),
+handle_event(info, Info, State, _) ->
+    ?LOG(alert, "unexpected info message in state ~p, something important might have been missed: ~p",
+         [State, Info]),
     keep_state_and_data.
 
 terminate(Reason, Data) ->
-    ?LOG(error, "ctld Session terminating with state ~p with reason ~p", [Data, Reason]),
+    ?LOG(debug, "terminating with state ~p with reason ~p", [Data, Reason]),
     ok.
 
 code_change(_OldVsn, Data, _Extra) ->

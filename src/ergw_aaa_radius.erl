@@ -213,7 +213,8 @@ validate_host(Opt, Host)
 	{ok, #hostent{h_addr_list = [IP | _]}} ->
 	    IP;
 	_ ->
-	    ?LOG(error, "can't resolve remote RADIUS server name '~s'", [Host]),
+	    ?LOG(emergency, "unable to resolve remote RADIUS server name '~s' to IPv4 address",
+		 [Host]),
 	    erlang:error(badarg, [Opt, Host])
     end;
 validate_host(_Opt, {_,_,_,_} = IP) ->
@@ -810,16 +811,16 @@ to_session_opts({#attribute{name = "X_" ++ Name} = Attr, Value}, SOpts) ->
 to_session_opts({#attribute{name = Name} = Attr, Value}, SOpts) ->
     to_session_opts(Attr, catch (list_to_existing_atom(Name)), Value, SOpts);
 to_session_opts({Attr, Value}, SOpts) ->
-    ?LOG(debug, "unhandled undecoded reply AVP: ~0p: ~0p", [Attr, Value]),
+    ?LOG(warning, "unsupported, undecoded AVP in reply: ~0tp: ~0tp", [Attr, Value]),
     SOpts.
 
 %% Service-Type = Framed-User
 to_session_opts(_Attr, 'Service-Type', 2, SOpts) ->
     SOpts#{'Service-Type' => 'Framed-User'};
 
-to_session_opts(_Attr, 'Service-Type', Value, _SOpts) ->
-    ?LOG(debug, "unexpected Value in Service-Type: ~p", [Value]),
-    throw(?AAA_ERR(?FATAL));
+to_session_opts(_Attr, 'Service-Type', Value, SOpts) ->
+    ?LOG(warning, "unsupported value for RADIUS Service-Type in reply: ~p", [Value]),
+    SOpts;
 
 %% Framed-Protocol = PPP
 to_session_opts(_Attr, 'Framed-Protocol', 1, SOpts) ->
@@ -827,9 +828,9 @@ to_session_opts(_Attr, 'Framed-Protocol', 1, SOpts) ->
 %% Framed-Protocol = GPRS-PDP-Context
 to_session_opts(_Attr, 'Framed-Protocol', 7, SOpts) ->
     SOpts#{'Framed-Protocol' => 'GPRS-PDP-Context'};
-to_session_opts(_Attr, 'Framed-Protocol', Value, _SOpts) ->
-    ?LOG(debug, "unexpected Value in Framed-Protocol: ~p", [Value]),
-    throw(?AAA_ERR(?FATAL));
+to_session_opts(_Attr, 'Framed-Protocol', Value, SOpts) ->
+    ?LOG(warning, "unsupported value for RADIUS Framed-Protocol in reply: ~p", [Value]),
+    SOpts;
 
 %% Alc-Primary-Dns
 to_session_opts(_Attr, 'Alc-Primary-DNS', DNS, SOpts) ->

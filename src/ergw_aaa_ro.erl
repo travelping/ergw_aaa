@@ -190,14 +190,14 @@ handle_response(_Promise, _Msg, Session, Events, _Opts, State) ->
 %%===================================================================
 
 %% peer_up/3
-peer_up(_SvcName, _Peer, State) ->
-    ?LOG(debug, "peer_up: ~p~n", [_Peer]),
+peer_up(_SvcName, {_, #diameter_caps{origin_host = {OH, _}}}, State) ->
+    ?LOG(info, "Diameter peer FSM for ~p changed to state UP", [OH]),
     State.
 
 %% peer_down/3
-peer_down(SvcName, Peer, State) ->
+peer_down(SvcName, {_, #diameter_caps{origin_host = {OH, _}}} = Peer, State) ->
     ergw_aaa_diameter_srv:peer_down(?MODULE, SvcName, Peer),
-    ?LOG(debug, "peer_down: ~p~n", [Peer]),
+    ?LOG(info, "Diameter peer FSM for ~p changed to state DOWN", [OH]),
     State.
 
 %% pick_peer/5
@@ -232,9 +232,11 @@ prepare_retransmit(_Pkt, _SvcName, _Peer, _CallOpts) ->
 
 %% handle_answer/5
 handle_answer(#diameter_packet{msg = Msg, errors = Errors},
-	      _Request, SvcName, Peer, CallOpts)
+	      _Request, SvcName, {_, #diameter_caps{origin_host = {OH, _}}} = Peer, CallOpts)
   when length(Errors) /= 0 ->
-    ?LOG(error, "~p: decode of answer from ~p failed, errors ~p", [SvcName, Peer, Errors]),
+    %% the exact content of Errors is a bit unclear, dumping them is best we can do
+    ?LOG(error, "~0tp: decode of Diameter answer ~0tp from ~0tp failed, errors ~0tp",
+         [SvcName, Msg, OH, Errors]),
     ok = ergw_aaa_diameter_srv:finish_request(SvcName, Peer),
     Code =
 	case Msg of
@@ -276,9 +278,9 @@ maybe_retry(Reason, SvcName, Peer, CallOpts) ->
 handle_request(#diameter_packet{msg = [Command | Avps]}, _SvcName, Peer)
   when Command =:= 'ASR'; Command =:= 'RAR' ->
     handle_common_request(Command, Avps, Peer);
-handle_request(_Packet, _SvcName, {_PeerRef, _Caps} = _Peer) ->
-    ?LOG(error, "~p:handle_request(~p, ~p, ~p)",
-		[?MODULE, _Packet, _SvcName, _Caps]),
+handle_request(Packet, SvcName, {_, #diameter_caps{origin_host = {OH, _}}}) ->
+    ?LOG(error, "~0tp: unsupported Diameter request from peer ~p, raw request ~0tp",
+		[SvcName, OH, Packet]),
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
 %%%===================================================================
@@ -359,7 +361,6 @@ handle_cca({error, Code} = Result, Session, Events, _Opts, State)
   when is_integer(Code) ->
     {Result, Session, [{stop, {?API, peer_reject}} | Events], State#state{state = stopped}};
 handle_cca({error, Reason} = Result, Session, Events, _Opts, State) ->
-    ?LOG(error, "CCA Result: ~p", [Result]),
     {Result, Session, [{stop, {?API, Reason}} | Events], State#state{state = stopped}}.
 
 handle_common_request(Command, #{'Session-Id' := SessionId} = Avps, {_PeerRef, Caps}) ->
@@ -768,11 +769,9 @@ request_credits(Session, MSCC) ->
     Credits = maps:get(credits, Session, #{}),
     maps:fold(
       fun(RatingGroup, empty, Request) ->
-	      ?LOG(warning, "Ro Charging Key: ~p", [RatingGroup]),
 	      RSU = [{'Requested-Service-Unit', #{}}],
 	      merge_mscc(RatingGroup, RSU, Request);
-	 (RatingGroup, _, Request) ->
-	      ?LOG(error, "unknown Ro Rating Group: ~p", [RatingGroup]),
+	 (_, _, Request) ->
 	      Request
       end, MSCC, Credits).
 
