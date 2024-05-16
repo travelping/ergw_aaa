@@ -409,7 +409,7 @@ simple(Config, TermOpts) ->
 
 simple_tdf_userid(Config, TermOpts) ->
     Stats0 = get_stats(?SERVICE),
-    Msisdn = <<"543148000012345">>,
+    Msisdn = ?MSISDN_FOR_IMEI_SV,
     Imsi = <<"250071234567890">>,
     Imei = <<82,21,50,96,32,80,30,0>>,
     {ok, Session} = ergw_aaa_session_sup:new_session(

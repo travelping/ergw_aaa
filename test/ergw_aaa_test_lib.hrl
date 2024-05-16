@@ -30,3 +30,5 @@
 			    outstanding_reqs/0, get_session_stats/0, get_session_stats/2, wait_for_session/4,
 			    reset_session_stats/0]).
 -endif.
+
+-define(MSISDN_FOR_IMEI_SV, "AAAAAAAAAAAAAAA").

@@ -103,6 +103,8 @@
               [ 3GPP-CAMEL-Charging-Info ]
               [ 3GPP-Negotiated-DSCP ]
               [ 3GPP-Allocate-IP-Type ]
+              ;; Added for consistency with RADIUS
+              [ 3GPP-IMEISV ]
               [ TP-NAT-Pool-Id ]
             * [ AVP ]
 

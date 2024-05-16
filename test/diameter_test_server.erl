@@ -18,6 +18,7 @@
 -include("../include/diameter_3gpp_ts29_212.hrl").
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/diameter_3gpp_ts32_299_ro.hrl").
+-include("ergw_aaa_test_lib.hrl").
 
 -export([start/0, start/2,
 	 start_nasreq/0, start_nasreq/2,
@@ -275,30 +276,35 @@ handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extr
     #{'Session-Id' := Id,
       'Auth-Request-Type' := Type,
       'Auth-Application-Id' := AppId} = Msg,
+    ct:pal("AAR received: ~p", [Msg]),
     FramedIP = case maps:get('Framed-IP-Address', Msg, [<<0,0,0,0>>]) of
 		   [<<0,0,0,0>>] -> [<<10,106,14,227>>];
 		   FramedIPReq -> FramedIPReq
 	       end,
     AAA0 =  #{'Session-Id' => Id,
-	      'Result-Code' => 2001,
-	      'Origin-Host' => OH,
-	      'Origin-Realm' => OR,
-  	      'SN-Primary-DNS-Server' => [{1,2,3,4}],
-	      'SN-Secondary-DNS-Server' => [{5,6,7,8}],
- 	      'Acct-Interim-Interval' => [InterimAccounting],
-	      'Authorization-Lifetime' => [AuthLifeTime],
-	      'Framed-IP-Address' => FramedIP,
-	      'Framed-MTU' => 1500,
-	      'Auth-Request-Type' => Type,
-	      'Auth-Application-Id' => AppId},
+              'Result-Code' => 2001,
+              'Origin-Host' => OH,
+              'Origin-Realm' => OR,
+              'SN-Primary-DNS-Server' => [{1,2,3,4}],
+              'SN-Secondary-DNS-Server' => [{5,6,7,8}],
+              'Acct-Interim-Interval' => [InterimAccounting],
+              'Authorization-Lifetime' => [AuthLifeTime],
+              'Framed-IP-Address' => FramedIP,
+              'Framed-MTU' => 1500,
+              'Auth-Request-Type' => Type,
+              'Auth-Application-Id' => AppId},
     AAA = if is_map_key('Framed-IPv6-Prefix', Msg) ->
-		  AAA0#{'3GPP-IPv6-DNS-Servers' =>
-			    ergw_aaa_3gpp_dict:encode('3GPP-IPv6-DNS-Servers',
-						      [{16#fe80,0,0,0,0,0,0,1},
-						       {16#fe80,0,0,0,0,0,0,2}])};
-	     true -> AAA0
-	  end,
-    {reply, ['AAA' | AAA]};
+        AAA0#{'3GPP-IPv6-DNS-Servers' =>
+    	    ergw_aaa_3gpp_dict:encode('3GPP-IPv6-DNS-Servers',
+    				      [{16#fe80,0,0,0,0,0,0,1},
+    				       {16#fe80,0,0,0,0,0,0,2}])};
+    	    true -> AAA0
+    end,
+    case Msg of
+	#{'Calling-Station-Id' := ?MSISDN_FOR_IMEI_SV, '3GPP-IMEISV' := _} -> {reply, ['AAA' | AAA]};
+	#{'Calling-Station-Id' := ?MSISDN_FOR_IMEI_SV} -> {answer_message, 5005};
+	_ -> {reply, ['AAA' | AAA]}
+    end;
 
 handle_request(#diameter_packet{msg = ['STR' | Msg]}, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
@@ -592,7 +598,7 @@ discard_msg(#{'Service-Information' :=
 		[#{'Subscription-Id' := Ids}]}) ->
     lists:member(#{'Subscription-Id-Type' => 1,'Subscription-Id-Data' => <<"999999999999999">>}, Ids);
 discard_msg(_) ->
-    false.	    
+    false.
 
 fail_answer(<<"FAIL-BROKEN-ANSWER">>, Pkt) ->
     broken_answer(Pkt);
