@@ -1,6 +1,15 @@
 ergw-aaa
 ========
 
+Version 4.7.0 - 27 May 2024
+--------------------------------
+
+**Features** :rocket:
+* [#221](https://github.com/travelping/ergw_aaa/pull/221) Add `3GPP-IMEISV` in NASREQ requests.
+* [#219](https://github.com/travelping/ergw_aaa/pull/219) Improve and clean up logging.
+
+**Dependencies** :gear:
+* [#220](https://github.com/travelping/ergw_aaa/pull/220) Upgrade dependencies and OTP (now OTP 26.2).
 
 Version 4.6.4 - 19 April 2024
 --------------------------------
