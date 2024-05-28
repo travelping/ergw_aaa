@@ -17,6 +17,7 @@
 -include("../include/diameter_3gpp_ts32_299.hrl").
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
+-include("ergw_aaa_internal.hrl").
 
 -define(HUT, ergw_aaa_ro).
 -define(SERVICE, <<"diam-test">>).
@@ -123,7 +124,8 @@
 %%%===================================================================
 
 all() ->
-    [simple_session,
+    [diameter_srv,
+     simple_session,
      simple_session_async,
      abort_session_request,
      tarif_time_change,
@@ -271,6 +273,45 @@ wait_for_outstanding_reqs(Cnt) ->
 %%%===================================================================
 %%% Test cases
 %%%===================================================================
+
+diameter_srv() ->
+    [{doc, "Test some diameter_srv functions"}].
+diameter_srv(_Config) ->
+    Ref0 = make_ref(),
+    Ref1 = make_ref(),
+
+    ?equal({Ref0, 'conn-0'},
+	   ergw_aaa_diameter_srv:pick_connection(
+	     [{Ref1, 'conn-1'}, {Ref0, 'conn-0'}],
+	     #{Ref0 => 0, Ref1 => 1})),
+
+    ?match({_, 'conn-0'},
+	   ergw_aaa_diameter_srv:pick_connection(
+	     [{Ref1, 'conn-1'}, {Ref0, 'conn-0'}, {make_ref(), 'conn-0'}],
+	     #{Ref0 => 0, Ref1 => 1})),
+
+    ?match({ok, {Ref0, _}},
+	   ergw_aaa_diameter_srv:pick_peer_h(
+	     [{Ref0, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}},
+	      {Ref1, #diameter_caps{origin_host = {undefined, <<"conn-1">>}}}],
+	     undefined,
+	     #{<<"conn-0">> => #peer{outstanding =  0, capacity = 100, rate = 100, tokens = 100},
+	       <<"conn-1">> => #peer{outstanding = 50, capacity = 100, rate = 100, tokens = 100}})),
+    ?match({ok, {Ref1, _}},
+	   ergw_aaa_diameter_srv:pick_peer_h(
+	     [{Ref0, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}},
+	      {Ref1, #diameter_caps{origin_host = {undefined, <<"conn-1">>}}}],
+	     undefined,
+	     #{<<"conn-0">> => #peer{outstanding = 50, capacity = 100, rate = 100, tokens = 100},
+	       <<"conn-1">> => #peer{outstanding =  0, capacity = 100, rate = 100, tokens = 100}})),
+    ?match({ok, {Ref1, _}},
+	   ergw_aaa_diameter_srv:pick_peer_h(
+	     [{Ref0, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}},
+	      {Ref1, #diameter_caps{origin_host = {undefined, <<"conn-0">>}}}],
+	     undefined,
+	     #{Ref0 => 10,
+	       <<"conn-0">> => #peer{outstanding = 0, capacity = 100, rate = 100, tokens = 100}})),
+    ok.
 
 simple_session() ->
     [{doc, "Simple Gy session"}].
@@ -596,14 +637,25 @@ ccr_retry(Config) ->
     ok.
 
 rate_limit(_Config) ->
+    %% With 4 peers, a rate limit at 10 req/s and 2 retries (= 3 attempts max) we should
+    %% be able to get 40 requests through,
+    %% However, the peer selection based on relative load and the actual reduction of the token
+    %% happens in different places. That means that a select peer can have exceed its token
+    %% limit when we try to use it. The actual amount successful requests will therefor be
+    %% lower than the configured rate.
+
     Self = self(),
 
+    TriggerFun =
+        fun(SRefs, Action) ->
+                lists:foreach(fun({Pid, Ref}) -> Pid ! {Ref, Action} end, SRefs)
+        end,
     CollectFun =
 	fun CollectFun(_, [], Acc) ->
 		Acc;
-	    CollectFun(Key, [H|T], Acc) ->
+	    CollectFun(Key, [{_Pid, Ref}|T], Acc) ->
 		receive
-		    {H, Key, {R, _, _}} ->
+		    {Ref, Key, {R, _, _}} ->
 			maps:update_with(R, fun(X) -> X + 1 end, 1, CollectFun(Key, T, Acc))
 		end
 	end,
@@ -611,26 +663,54 @@ rate_limit(_Config) ->
     %% make sure the token bucket is completely filled, previous test might have drained it
     ct:sleep(2000),
 
-    %% with 4 peers, a rate limit at 10 req/s and 2 retries (= 3 attempts max) we should
-    %% be able to get 40 requests through
-    SRefs = [begin Ref = make_ref(), spawn(?MODULE, async_session, [Self, Ref]), Ref end
-	     || _ <- lists:seq(1, 60)],
+    ct:pal("Peers-#0: ~p", [ergw_aaa_diameter_srv:get_peers_info()]),
+    StartT = erlang:monotonic_time(),
 
+    SRefs = [begin
+                 Ref = make_ref(),
+                 Pid = spawn(?MODULE, async_session, [Self, Ref]),
+                 {Pid, Ref}
+             end || _ <- lists:seq(1, 60)],
+
+    TriggerFun(SRefs, start),
     CCRi = CollectFun('CCR-Initial', SRefs, #{}),
+    InitT = erlang:monotonic_time(),
+    ct:pal("Peers-#1: ~p", [ergw_aaa_diameter_srv:get_peers_info()]),
+
+    %% wait long enough to refill all token buckets
+    ct:sleep(1100),
+
+    TriggerFun(SRefs, terminate),
     CCRt = CollectFun('CCR-Terminate', SRefs, #{}),
+    TermT = erlang:monotonic_time(),
+    ct:pal("Peers-#2: ~p", [ergw_aaa_diameter_srv:get_peers_info()]),
 
     %% make sure to refill the token buckets, so that the following tests don't fail
     ct:sleep(1100),
 
-    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
-	     when OkayI >= 40 andalso
-		  LimitI /= 0 andalso
-		  OkayI + LimitI =:= 60, CCRi),
-    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
-	     when OkayT >= 40 andalso
-		  LimitT /= 0 andalso
-		  OkayT + LimitT =:= 60, CCRt),
-    ok.
+    Ms = erlang:convert_time_unit(1, millisecond, native),
+    ct:pal("Test duration~nCCT-I: ~.4f ms ~nCCT-T: ~.4f ms",
+           [(InitT - StartT) / Ms, (TermT - InitT) / Ms]),
+
+    InitMaxT = erlang:convert_time_unit(200, millisecond, native),
+    TermMaxT = erlang:convert_time_unit(1300, millisecond, native),
+
+    if InitT - StartT > InitMaxT orelse
+       TermT - InitT > TermMaxT ->
+	    %% test took too long
+	    {skip, "Test took too long, runner is too slow"};
+       true ->
+	    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
+		   when OkayI >= 20 andalso
+			LimitI /= 0 andalso
+			OkayI + LimitI =:= 60, CCRi),
+	    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
+		   when OkayT >= 20 andalso
+			LimitT /= 0 andalso
+			OkayT + LimitT =:= 60, CCRt),
+	    ok
+    end.
+
 ccr_t_rate_limit() ->
     [{doc, "older version of the rate limit test, does not work, keep for reference"}].
 ccr_t_rate_limit(Config) ->
@@ -1074,16 +1154,15 @@ basic_session(CCR_I_T_Delay) ->
     set_test_info(ccr_t_rate_limit, {session, SId}, Result).
 
 async_session(Owner, Ref) ->
-    async_session(Owner, Ref, 1100).
-
-async_session(Owner, Ref, Delay) ->
     Session = init_session(#{}, []),
     {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
     GyOpts = #{credits => #{1000 => empty}},
+
+    receive {Ref, start} -> ok end,
+
     IResult = ergw_aaa_session:invoke(SId, GyOpts, {gy, 'CCR-Initial'}, []),
     Owner ! {Ref, 'CCR-Initial', IResult},
 
-    timer:sleep(Delay),
     UsedCredits =
 	[{1000, #{'CC-Input-Octets'  => [0],
 		  'CC-Output-Octets' => [0],
@@ -1095,6 +1174,9 @@ async_session(Owner, Ref, Delay) ->
     GyTerm = #{'Termination-Cause' =>
 		   ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
 	       used_credits => UsedCredits},
+
+    receive {Ref, terminate} -> ok end,
+
     TResult = ergw_aaa_session:invoke(SId, GyTerm, {gy, 'CCR-Terminate'}, []),
     Owner ! {Ref, 'CCR-Terminate', TResult},
 
