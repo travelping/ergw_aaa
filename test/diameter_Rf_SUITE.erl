@@ -726,26 +726,43 @@ rate_limit(_Config) ->
     %% make sure the token bucket is completely filled, previous test might have drained it
     ct:sleep(2000),
 
+    StartT = erlang:monotonic_time(),
+
     %% with 1 peers, a rate limit at 20 req/s and 2 retries (= 3 attempts max) we should
     %% be able to get 20 requests through
     SRefs = [begin Ref = make_ref(), spawn(?MODULE, async_session, [Self, Ref]), Ref end
 	     || _ <- lists:seq(1, 60)],
 
     CCRi = CollectFun('Initial', SRefs, #{}),
+    InitT = erlang:monotonic_time(),
     CCRt = CollectFun('Terminate', SRefs, #{}),
+    TermT = erlang:monotonic_time(),
 
     %% make sure to refill the token buckets, so that the following tests don't fail
     ct:sleep(1100),
 
-    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
-	     when OkayI >= 20 andalso
-		  LimitI /= 0 andalso
-		  OkayI + LimitI =:= 60, CCRi),
-    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
-	     when OkayT >= 20 andalso
-		  LimitT /= 0 andalso
-		  OkayT + LimitT =:= 60, CCRt),
-    ok.
+    Ms = erlang:convert_time_unit(1, millisecond, native),
+    ct:pal("Test duration~nCCT-I: ~.4f ms ~nCCT-T: ~.4f ms",
+           [(InitT - StartT) / Ms, (TermT - InitT) / Ms]),
+
+    InitMaxT = erlang:convert_time_unit(200, millisecond, native),
+    TermMaxT = erlang:convert_time_unit(1300, millisecond, native),
+
+    if InitT - StartT > InitMaxT orelse
+       TermT - InitT > TermMaxT ->
+	    %% test took too long
+	    {skip, "Test took too long, runner is too slow"};
+       true ->
+	    ?match(#{ok := OkayI, {error,rate_limit} := LimitI}
+		   when OkayI >= 20 andalso
+			LimitI /= 0 andalso
+			OkayI + LimitI =:= 60, CCRi),
+	    ?match(#{ok := OkayT, {error,rate_limit} := LimitT}
+		   when OkayT >= 20 andalso
+			LimitT /= 0 andalso
+			OkayT + LimitT =:= 60, CCRt),
+	    ok
+    end.
 
 encode_error() ->
     [{doc, "Check that a message encode error does not leave the "
