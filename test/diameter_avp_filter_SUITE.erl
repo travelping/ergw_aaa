@@ -105,6 +105,8 @@ all() -> [default_filter,
 	  simple_root,
 	  simple_path,
 	  conditional_instance,
+	  conditional_instance_value_match,
+	  conditional_instance_ip_match,
 	  ignore_single_condition_path].
 
 init_per_suite(Config0) ->
@@ -211,7 +213,7 @@ simple_path(_Config) ->
 %%====================================================================
 conditional_instance(_Config) ->
     Filter = [
-	['Subscription-Id', [{'Subscription-Id-Type', 1}]]
+	['Subscription-Id', [{'Subscription-Id-Type', <<"1">>}]]
     ],
     {Before, After} = do_filter_test(Filter),
 
@@ -219,6 +221,47 @@ conditional_instance(_Config) ->
     ?equal(2, length(maps:get('Subscription-Id', Before))),
 
     ?match(#{'3GPP-IMSI' := [_], 'Subscription-Id' := [#{'Subscription-Id-Type' := 0}]}, After),
+    ok.
+    
+%%====================================================================
+%% Conditionally filter multiple instance AVP : delete the AVP
+%% '3GPP-User-Location-Info' from 'PS-Information' if the 'SGSN-Address'
+%% value matches. The SGSN-Address is optional and also it is provided
+%% in tuple format. This test confirms IP address match when the filter
+%% is provided in binary format. Also verifies condition in map format.
+%%====================================================================
+conditional_instance_ip_match(_Config) ->
+    Filter = [
+	[
+	    'Service-Information',
+	    'PS-Information',
+	    #{'SGSN-Address' => <<"192.168.1.1">>},
+	    '3GPP-User-Location-Info'
+	]
+    ],
+    {Before, After} = do_filter_test(Filter),
+
+    ?match(#{'Service-Information' := [#{'PS-Information' := [#{'3GPP-User-Location-Info' := _ }]}]}, Before),
+
+    #{'Service-Information' := [#{'PS-Information' := [PSInfoAfter]}]} = After,
+    ?equal(undefined, maps:get('3GPP-User-Location-Info', PSInfoAfter, undefined)),
+
+    ok.
+
+%%====================================================================
+%% Conditionally filter multiple instance AVP : delete the MSCC
+%% instance, based on the 'Rating-Group' value, defined in binary
+%% value = <<"1000">> and being optional in the AVP tree
+%%====================================================================
+conditional_instance_value_match(_Config) ->
+    Filter = [
+	['Multiple-Services-Credit-Control', [{'Rating-Group', <<"1000">>}]]
+    ],
+    {Before, After} = do_filter_test(Filter),
+
+    ?match(#{'Multiple-Services-Credit-Control' := [_]}, Before),
+    ?equal(undefined, maps:get('Multiple-Services-Credit-Control', After, undefined)),
+
     ok.
 
 %%====================================================================

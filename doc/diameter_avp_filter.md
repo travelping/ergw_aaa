@@ -74,6 +74,7 @@ It is also possible to use conditions on the top level, conditioning the deletio
 
 NOTE: Of course removing an AVP marked as positional/mandatory in the dictionary definion will result in encoding failure. I.e. we are not referring to the M bit in the AVP definition, but APVs marked `<avp>` or `{avp}` in the ABNF definition of the messages. 
 
+To prepare for not Erlang native configuration inputs, the matching of AVP values in the conditions are made somewhat flexible. The value matching will attempt to match the condition to the type of the AVP value including the single element list OTP diameter uses for optional AVP values. E.g. an IP address condition given in binary `<<"192.168.0.1">>` format is going to match with AVP values in formats `<<"192.168.0.1">>`, `{192,168,0,1}` or in case of optional AVP `[<<"192.168.0.1">>]`, `[{192,168,0,1}]`. Currently matching string, integer and IP address types are supported.
 
 Configuration
 -------------
