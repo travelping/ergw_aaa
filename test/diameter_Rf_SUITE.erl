@@ -81,12 +81,14 @@
 
 all() ->
     [simple_session,
+     failing_update,
      multi_event_session,
      inoctets_crash,
      async,
      secondary_rat_usage_data_report,
      handle_failure,
      handle_answer_error,
+     handle_diameter_server_dead,
      terminate,
      rate_limit,
      encode_error,
@@ -123,26 +125,40 @@ end_per_suite(Config) ->
     diameter_test_server:stop(),
     ok.
 
+init_per_testcase('$default', Config) ->
+    reset_session_stats(),
+    meck_reset(Config),
+    ct:pal("Starting Diameter services: ~p", [diameter:services()]),
+    Config;
 init_per_testcase(secondary_rat_usage_data_report, Config) ->
-    reset_session_stats(),
-    meck_reset(Config),
+    Config1 = init_per_testcase('$default', Config),
     meck:new(diameter_test_server, [passthrough, no_link]),
-    Config;
+    Config1;
 init_per_testcase(plmn_change, Config) ->
-    reset_session_stats(),
-    meck_reset(Config),
+    Config1 = init_per_testcase('$default', Config),
     meck:new(diameter_test_server, [passthrough, no_link]),
-    Config;
+    Config1;
+init_per_testcase(handle_diameter_server_dead, Config) ->
+    Config1 = init_per_testcase('$default', Config),
+    diameter_test_server:stop_service(),
+    Config1;
 init_per_testcase(_, Config) ->
-    reset_session_stats(),
-    meck_reset(Config),
-    Config.
+    init_per_testcase('$default', Config).
 
 end_per_testcase(secondary_rat_usage_data_report, _Config) ->
     meck:unload(diameter_test_server),
     ok;
 end_per_testcase(plmn_change, _Config) ->
     meck:unload(diameter_test_server),
+    ok;
+end_per_testcase(handle_diameter_server_dead, _Config) ->
+    diameter_test_server:start(),
+    ct:pal("(1) Diameter services: ~p", [diameter:services()]),
+    ct:pal("--> ~p", [diameter:service_info(?SERVICE, connections)]),
+    {ok, _} = application:ensure_all_started(ergw_aaa),
+    ok = wait_for_diameter(?SERVICE, 500),
+    ct:pal("(2) Diameter services: ~p", [diameter:services()]),
+    ct:pal("--> ~p", [diameter:service_info(?SERVICE, connections)]),
     ok;
 end_per_testcase(_, _Config) ->
     ok.
@@ -351,6 +367,96 @@ multi_event_session(Config) ->
     meck_validate(Config),
     ok.
 
+failing_update() ->
+    [{doc, "Rf session with failure during update"}].
+failing_update(Config) ->
+    Session = init_session(#{}, Config),
+    Stats0 = get_stats(?SERVICE),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Change-Condition'         => 4,
+	   'Change-Time'              => {{2018,11,30},{13,22,00}},
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
+
+    TD =
+	[#{'3GPP-Charging-Id' => [123456],
+	   'Accounting-Input-Octets' => [1],
+	   'Accounting-Output-Octets' => [2],
+	   'Change-Condition' => [4],
+	   'Change-Time'      => [{{2020,2,20},{13,34,00}}]}],
+
+    RfUpdCont = #{service_data => SDC},
+    RfUpdCDR  = #{service_data => SDC, traffic_data => TD},
+
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+    {{fail,5012}, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCDR#{'3GPP-IMSI' => <<"FAIL-RC-5012">>,
+						'3GPP-MSISDN' => <<"FAIL-RC-5012">>},
+				{rf, 'Update'},
+				SOpts#{'gy_event' => cdr_closure}),
+
+    {ok, _, _} =
+	ergw_aaa_session:invoke(SId, RfUpdCont, {rf, 'Update'},
+				SOpts#{'gy_event' => container_closure}),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC, traffic_data => TD},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    {{fail,5012}, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
+
+    Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
+    ct:pal("Stats: ~p~n", [Stats1]),
+    ?equal(1, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
+    ?equal(2, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',5012}}, Stats1)),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
 inoctets_crash() ->
     [{doc, "Rf session with in octets clashing with the TDVs"}].
 inoctets_crash(Config) ->
@@ -488,6 +594,7 @@ async(Config) ->
 
     ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
 
+    ct:sleep(500),
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ?equal(3, proplists:get_value({{3, 271, 0}, recv, {'Result-Code',2001}}, Stats1)),
 
@@ -679,6 +786,51 @@ handle_answer_error(Config) ->
     meck_validate(Config),
     ok.
 
+handle_diameter_server_dead(Config) ->
+    Session = init_session(#{}, Config),
+
+    SOpts = #{now => erlang:monotonic_time()},
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    {ok, _Session1, _} =
+	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
+    ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    SDC =
+	[#{'Rating-Group'             => 3000,
+	   'Accounting-Input-Octets'  => 1092,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 2000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60},
+	 #{'Rating-Group'             => 1000,
+	   'Accounting-Input-Octets'  => 0,
+	   'Accounting-Output-Octets' => 0,
+	   'Time-First-Usage'         => {{2018,11,30},{13,20,00}},
+	   'Time-Last-Usage'          => {{2018,11,30},{13,21,00}},
+	   'Time-Usage'               => 60}
+	],
+
+    RfTerm = #{'Termination-Cause' => ?'DIAMETER_BASE_TERMINATION-CAUSE_LOGOUT',
+	       service_data => SDC},
+    ergw_aaa_session:invoke(SId, #{}, stop, SOpts),
+    {{error, no_connection}, _Session2, _} =
+	ergw_aaa_session:invoke(SId, RfTerm, {rf, 'Terminate'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
 terminate() ->
     [{doc, "Simulate unexpected owner termination"}].
 terminate(Config) ->
@@ -696,6 +848,7 @@ terminate(Config) ->
     ?match(ok, ergw_aaa_session:terminate(SId)),
     wait_for_session(ergw_aaa_rf, started, 0, 10),
 
+    ct:sleep(500),
     Stats1 = diff_stats(Stats0, get_stats(?SERVICE)),
     ct:pal("Stats: ~p~n", [Stats1]),
     ?equal(2, proplists:get_value(stats({'ACR', send}), Stats1)),

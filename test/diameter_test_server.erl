@@ -23,6 +23,7 @@
 -export([start/0, start/2,
 	 start_nasreq/0, start_nasreq/2,
 	 stop/0,
+	 stop_service/0,
 	 abort_session_request/4,
 	 re_auth_request/5]).
 
@@ -147,6 +148,9 @@ stop() ->
     diameter:stop_service(?MODULE),
     application:stop(diameter).
 
+stop_service() ->
+    diameter:stop_service(?MODULE).
+
 re_auth_request(gx, SessionId, DH, DR, AVPs)
   when is_map(AVPs) ->
     RAR = AVPs#{'Session-Id' => SessionId,
@@ -184,10 +188,11 @@ abort_session_request(nasreq, SessionId, DH, DR) ->
 %%===================================================================
 
 peer_up(_SvcName, _Peer, State, _Extra) ->
-    ?LOG(debug, "peer_up: ~p, ~p~n", [_Peer, _Extra]),
+    ct:pal("peer_up: ~p, ~p~n", [_Peer, _Extra]),
     State.
 
 peer_down(_SvcName, _Peer, State, _Extra) ->
+    ct:pal("peer_down: ~p, ~p~n", [_Peer, _Extra]),
     State.
 
 pick_peer([Peer|_], _RemoteCandidates, _SvcName, _State, _Extra) ->
@@ -221,6 +226,7 @@ handle_error(_Reason, _Request, _SvcName, _Peer, _Extra) ->
 handle_request(#diameter_packet{
 		  msg = [_ | #{'Called-Station-Id' := [<<"FAIL", _/binary>> = How]}]
 		 } = Pkt, _SvcName, _, _Extra) ->
+    ct:pal("--> Got:1 ~p", [Pkt]),
     fail_answer(How, Pkt);
 
 handle_request(#diameter_packet{
@@ -228,6 +234,7 @@ handle_request(#diameter_packet{
 			 #{'Subscription-Id' :=
 			       [#{'Subscription-Id-Data' := <<"FAIL", _/binary>> = How}|_]}]
 		 } = Pkt, _SvcName, _, _Extra) ->
+    ct:pal("--> Got:2 ~p", [Pkt]),
     fail_answer(How, Pkt);
 
 handle_request(#diameter_packet{
@@ -237,10 +244,12 @@ handle_request(#diameter_packet{
 				      [#{'Subscription-Id-Data' :=
 					     <<"FAIL", _/binary>> = How}|_]}]}]
 		 } = Pkt, _SvcName, _, _Extra) ->
+    ct:pal("--> Got:3 ~p", [Pkt]),
     fail_answer(How, Pkt);
 
-handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extra)
+handle_request(#diameter_packet{msg = ['ACR' | Msg]} = Pkt, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
+    ct:pal("--> Got:4 ~p", [Pkt]),
     case discard_msg(Msg) of
 	true -> discard;
 	false ->
@@ -267,8 +276,9 @@ handle_request(#diameter_packet{msg = ['ACR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	    end
     end;
 
-handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extra)
+handle_request(#diameter_packet{msg = ['AAR' | Msg]} = Pkt, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
+    ct:pal("--> Got:5 ~p", [Pkt]),
     InterimAccounting = 1800,
     AuthLifeTime = 3600,
     #diameter_caps{origin_host = {OH, _},
@@ -306,8 +316,9 @@ handle_request(#diameter_packet{msg = ['AAR' | Msg]}, _SvcName, {_, Caps}, _Extr
 	_ -> {reply, ['AAA' | AAA]}
     end;
 
-handle_request(#diameter_packet{msg = ['STR' | Msg]}, _SvcName, {_, Caps}, _Extra)
+handle_request(#diameter_packet{msg = ['STR' | Msg]} = Pkt, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
+    ct:pal("--> Got:6 ~p", [Pkt]),
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _}} = Caps,
     #{'Session-Id' := Id} = Msg,
@@ -318,7 +329,8 @@ handle_request(#diameter_packet{msg = ['STR' | Msg]}, _SvcName, {_, Caps}, _Extr
     {reply, ['STA' | STA]};
 
 
-handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, gx) ->
+handle_request(#diameter_packet{msg = ['CCR' | Msg]} = Pkt, _SvcName, {_, Caps}, gx) ->
+    ct:pal("--> Got:7 ~p", [Pkt]),
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _}} = Caps,
     #{'Session-Id' := Id,
@@ -355,8 +367,9 @@ handle_request(#diameter_packet{msg = ['CCR' | Msg]}, _SvcName, {_, Caps}, gx) -
 handle_request(#diameter_packet{
 		  msg = ['CCR' |
 			 #{'Service-Information' :=
-			       [#{'PS-Information' := [PS]}]} = Msg]},
+			       [#{'PS-Information' := [PS]}]} = Msg]} = Pkt,
 	       _SvcName, {_, Caps}, gy) ->
+    ct:pal("--> Got:8 ~p", [Pkt]),
     #diameter_caps{origin_host = {OH, _},
 		   origin_realm = {OR, _}} = Caps,
     #{'Session-Id' := Id,
@@ -398,7 +411,8 @@ handle_request(#diameter_packet{
 	    {answer_message, 3001}
     end;
 
-handle_request(#diameter_packet{msg = _Msg}, _SvcName, _, _Extra) ->
+handle_request(#diameter_packet{msg = _Msg} = Pkt, _SvcName, _, _Extra) ->
+    ct:pal("--> Got:9 ~p", [Pkt]),
     {answer_message, 3001}.  %% DIAMETER_COMMAND_UNSUPPORTED
 
 check_3gpp(#{'3GPP-IMSI'              := [<<"250071234567890">>],
@@ -591,6 +605,7 @@ default_transport() ->
     [[{transport_module, diameter_tcp},
       {transport_config, [
 			  {reuseaddr, true},
+			  {reuseport, true},
 			  {ip, {127,0,0,1}}]}
      ]].
 
