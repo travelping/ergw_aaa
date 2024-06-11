@@ -18,9 +18,11 @@
 -include("../include/diameter_3gpp_ts32_299_rf.hrl").
 -include("../include/ergw_aaa_session.hrl").
 -include("ergw_aaa_test_lib.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -define(HUT, ergw_aaa_rf).
 -define(SERVICE, <<"diam-test">>).
+-define(PEER_SERVICE, <<"peer-diam-test">>).
 
 -define('Origin-Host', <<"127.0.0.1">>).
 -define('Origin-Realm', <<"example.com">>).
@@ -34,6 +36,9 @@
 -define(DIAMETER_TRANSPORT,
 	#{connect_to => <<"aaa://127.0.0.1">>}).
 
+-define(PEER_DIAMETER_TRANSPORT,
+	#{connect_to => <<"aaa://127.0.0.2">>}).
+
 -define(DIAMETER_FUNCTION,
 	#{?SERVICE =>
 	      #{handler => ergw_aaa_diameter,
@@ -41,8 +46,19 @@
 		'Origin-Realm' => ?'Origin-Realm',
 		transports => [?DIAMETER_TRANSPORT]}}).
 
+-define(PEER_DIAMETER_FUNCTION,
+	#{?PEER_SERVICE =>
+	      #{handler => ergw_aaa_diameter,
+		'Origin-Host' => ?'Origin-Host',
+		'Origin-Realm' => ?'Origin-Realm',
+		transports => [?PEER_DIAMETER_TRANSPORT]}}).
+
 -define(DIAMETER_RF_CONFIG,
 	#{function => ?SERVICE,
+	  'Destination-Realm' => <<"test-srv.example.com">>}).
+
+-define(PEER_DIAMETER_RF_CONFIG,
+	#{function => ?PEER_SERVICE,
 	  'Destination-Realm' => <<"test-srv.example.com">>}).
 
 -define(CONFIG,
@@ -52,6 +68,36 @@
 	  handlers =>
 	      #{ergw_aaa_static => ?STATIC_CONFIG,
 		ergw_aaa_rf => ?DIAMETER_RF_CONFIG},
+	  services =>
+	      #{<<"Default">> =>
+		    #{handler => 'ergw_aaa_static'},
+		<<"Rf">> =>
+		    #{handler => 'ergw_aaa_rf'}},
+	  apps =>
+	      #{default =>
+		    #{'Origin-Host' => <<"dummy.host">>,
+		      procedures =>
+			  #{init => [#{service => <<"Default">>}],
+			    authenticate => [],
+			    authorize => [],
+			    start => [],
+			    interim => [],
+			    stop => [],
+			    {rf, 'Initial'}   => [#{service => <<"Rf">>}],
+			    {rf, 'Update'}    => [#{service => <<"Rf">>}],
+			    {rf, 'Terminate'} => [#{service => <<"Rf">>}]
+			  }
+	            }
+	      }
+       }).
+
+-define(PEER_CONFIG,
+	#{rate_limits =>
+	      #{default => #{outstanding_requests => 20, rate => 20}},
+	  functions => ?DIAMETER_FUNCTION,
+	  handlers =>
+	      #{ergw_aaa_static => ?STATIC_CONFIG,
+		ergw_aaa_rf => ?PEER_DIAMETER_RF_CONFIG},
 	  services =>
 	      #{<<"Default">> =>
 		    #{handler => 'ergw_aaa_static'},
@@ -88,7 +134,9 @@ all() ->
      secondary_rat_usage_data_report,
      handle_failure,
      handle_answer_error,
+     handle_discard,
      handle_diameter_server_dead,
+     %% separate_diameter_server,
      terminate,
      rate_limit,
      encode_error,
@@ -740,6 +788,8 @@ secondary_rat_usage_data_report(Config) ->
     meck_validate(Config),
     ok.
 
+handle_failure() ->
+    [{doc, "Handle failure RCs"}].
 handle_failure(Config) ->
     SOpts =
 	#{now => erlang:monotonic_time(),
@@ -768,6 +818,31 @@ handle_failure(Config) ->
     meck_validate(Config),
     ok.
 
+handle_discard() ->
+    [{doc, "Handle Diameter message discard"}].
+handle_discard(Config) ->
+    SOpts =
+	#{now => erlang:monotonic_time(),
+	  '3GPP-IMSI' => <<"IGNORE">>,
+	  '3GPP-MSISDN' => <<"IGNORE">>},
+    Session = init_session(SOpts, Config),
+
+    Stats0 = get_stats(?SERVICE),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{error, timeout}, _, _},
+	   ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts)),
+
+    %% a session that has been rejected can not be in a `started` state
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+handle_answer_error() ->
+    [{doc, "Handle broken answers"}].
 handle_answer_error(Config) ->
     SOpts =
 	#{now => erlang:monotonic_time(),
@@ -786,6 +861,8 @@ handle_answer_error(Config) ->
     meck_validate(Config),
     ok.
 
+handle_diameter_server_dead() ->
+    [{doc, "Handle a dead diameter server"}].
 handle_diameter_server_dead(Config) ->
     Session = init_session(#{}, Config),
 
@@ -794,6 +871,52 @@ handle_diameter_server_dead(Config) ->
     {ok, _Session1, _} =
 	ergw_aaa_session:invoke(SId, #{}, start, SOpts),
     ergw_aaa_session:invoke(SId, #{}, {rf, 'Initial'}, SOpts),
+
+    ?equal([{ergw_aaa_rf, started, 0}], get_session_stats()),
+
+    %% make sure nothing crashed
+    ?match(0, outstanding_reqs()),
+    meck_validate(Config),
+    ok.
+
+
+
+
+
+
+
+
+
+
+separate_diameter_server(Config) ->
+    logger:update_primary_config(#{level => debug}),
+    {ok, Peer, Node} = ?CT_PEER(#{name => ?CT_PEER_NAME(altrf), args => ["-pa"|code:get_path()]}),
+    %% extra setup needed for multiple test cases
+
+    logger:update_primary_config(#{level => all}),
+    ct:log("Executing remotely"),
+
+    StartTestServer = fun() ->
+	Transports = [[{transport_module, diameter_tcp},
+		       {transport_config, [
+			  {reuseaddr, true},
+			  {reuseport, true},
+			  {ip, {127,0,0,2}}]}
+	]],
+	ok = diameter_test_server:start(#{}, Transports)
+    end,
+
+    ok = erpc:call(Node, StartTestServer, 5000),
+
+    SOpts =
+	#{now => erlang:monotonic_time()},
+    Session = init_session(SOpts, Config),
+
+    {ok, SId} = ergw_aaa_session_sup:new_session(self(), Session),
+    ?match({{error, 3007}, _, _},
+	   ergw_aaa_session:invoke(SId, SOpts, {rf, 'Initial'}, [])),
+
+    ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
     ?equal([{ergw_aaa_rf, started, 1}], get_session_stats()),
 
@@ -829,7 +952,20 @@ handle_diameter_server_dead(Config) ->
     %% make sure nothing crashed
     ?match(0, outstanding_reqs()),
     meck_validate(Config),
+
+    peer:stop(Peer),
     ok.
+
+
+
+
+
+
+
+
+
+
+
 
 terminate() ->
     [{doc, "Simulate unexpected owner termination"}].

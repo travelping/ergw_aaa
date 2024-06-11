@@ -247,6 +247,24 @@ handle_request(#diameter_packet{
     ct:pal("--> Got:3 ~p", [Pkt]),
     fail_answer(How, Pkt);
 
+handle_request(#diameter_packet{
+		  msg = [_ |
+			 #{'Subscription-Id' :=
+			       [#{'Subscription-Id-Data' := <<"IGNORE", _/binary>> = How}|_]}]
+		 } = Pkt, _SvcName, _, _Extra) ->
+    ct:pal("--> Got:2b ~p", [Pkt]),
+    discard;
+
+handle_request(#diameter_packet{
+		  msg = [_ |
+			 #{'Service-Information' :=
+			       [#{'Subscription-Id' :=
+				      [#{'Subscription-Id-Data' :=
+					     <<"IGNORE", _/binary>> = How}|_]}]}]
+		 } = Pkt, _SvcName, _, _Extra) ->
+    ct:pal("--> Got:3b ~p", [Pkt]),
+    discard;
+
 handle_request(#diameter_packet{msg = ['ACR' | Msg]} = Pkt, _SvcName, {_, Caps}, _Extra)
   when is_map(Msg) ->
     ct:pal("--> Got:4 ~p", [Pkt]),
